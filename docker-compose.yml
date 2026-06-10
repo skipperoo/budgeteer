@@ -1,0 +1,85 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend/src
+      dockerfile: Dockerfile
+    secrets:
+      - jwt_secret
+      - db_password
+      - smtp_password
+      - redis_password
+    environment:
+      - DB_HOST=postgres
+      - DB_USER=budgeteer
+      - DB_NAME=budgeteer
+      - REDIS_HOST=redis
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_FROM=${SMTP_FROM:-noreply@budgeteer.app}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    secrets:
+      - db_password
+    environment:
+      - POSTGRES_USER=budgeteer
+      - POSTGRES_DB=budgeteer
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./backend/src/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U budgeteer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    secrets:
+      - redis_password
+    command: >
+      sh -c 'redis-server --requirepass "$$(cat /run/secrets/redis_password)"'
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+secrets:
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  db_password:
+    file: ./secrets/db_password.txt
+  smtp_password:
+    file: ./secrets/smtp_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+
+volumes:
+  pg_data:
+    driver: local
+  redis_data:
+    driver: local

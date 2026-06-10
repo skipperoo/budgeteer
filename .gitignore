@@ -1,0 +1,10 @@
+# Secrets (real values, never commit)
+secrets/
+.env
+# Local data volumes
+pg_data/
+redis_data/
+# Node
+node_modules/
+# Build output
+dist/
