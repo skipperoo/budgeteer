@@ -30,7 +30,7 @@ export default function RegisterPage() {
         method: "POST",
         body: JSON.stringify({
           email,
-          password_hash: password,
+          password,
           public_key: keyPair.publicKey,
           encrypted_private_key: encryptedPrivateKey,
         }),

@@ -15,7 +15,7 @@ type User struct {
 
 type RegisterRequest struct {
 	Email               string `json:"email"`
-	PasswordHash        string `json:"password_hash"`
+	Password            string `json:"password"`
 	PublicKey           string `json:"public_key"`
 	EncryptedPrivateKey string `json:"encrypted_private_key"`
 }
