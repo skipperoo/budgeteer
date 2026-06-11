@@ -9,7 +9,6 @@ import {
 import { useAuthStore } from "@/stores/auth-store";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
-import { ThemeToggle } from "@/components/shared/ThemeToggle";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -49,12 +48,6 @@ export function BottomNav() {
             <span className="truncate">{item.label}</span>
           </NavLink>
         ))}
-
-        {/* Theme toggle */}
-        <div className="flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-md text-xs font-medium text-muted-foreground min-w-0">
-          <ThemeToggle />
-          <span className="truncate">Theme</span>
-        </div>
 
         {/* Logout */}
         <button

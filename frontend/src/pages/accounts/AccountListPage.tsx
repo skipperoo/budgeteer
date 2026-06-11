@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -10,47 +11,113 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useAccountStore } from "@/stores/account-store";
-
-const CURRENCIES = [
-  { code: "EUR", symbol: "€", name: "Euro" },
-  { code: "USD", symbol: "$", name: "US Dollar" },
-  { code: "GBP", symbol: "£", name: "British Pound" },
-  { code: "CHF", symbol: "Fr", name: "Swiss Franc" },
-  { code: "JPY", symbol: "¥", name: "Japanese Yen" },
-  { code: "CAD", symbol: "CA$", name: "Canadian Dollar" },
-  { code: "AUD", symbol: "A$", name: "Australian Dollar" },
-  { code: "BRL", symbol: "R$", name: "Brazilian Real" },
-  { code: "CNY", symbol: "¥", name: "Chinese Yuan" },
-  { code: "SEK", symbol: "kr", name: "Swedish Krona" },
-  { code: "NOK", symbol: "kr", name: "Norwegian Krone" },
-  { code: "DKK", symbol: "kr", name: "Danish Krone" },
-  { code: "PLN", symbol: "zł", name: "Polish Zloty" },
-  { code: "CZK", symbol: "Kč", name: "Czech Koruna" },
-  { code: "HUF", symbol: "Ft", name: "Hungarian Forint" },
-  { code: "INR", symbol: "₹", name: "Indian Rupee" },
-  { code: "MXN", symbol: "Mex$", name: "Mexican Peso" },
-] as const;
+import { useAuthStore } from "@/stores/auth-store";
+import { apiFetch } from "@/lib/api";
+import { ENDPOINTS } from "@/lib/constants";
+import { generateAccountKey, encryptAccountKeyForRecipient, bytesToBase64 } from "@/lib/crypto";
+import { encryptTransactionPayload } from "@/lib/crypto-transaction";
+import { getAccountKey, fetchAndDecryptTransactions } from "@/lib/decrypt-transactions";
+import { formatDate, CURRENCIES, getCurrencySymbol } from "@/lib/format";
+import type { CreateTransactionRequest } from "@/types";
 
 type AccountType = "personal" | "joint" | "savings";
 
 export default function AccountListPage() {
   const navigate = useNavigate();
   const { accounts, fetchAccounts, createAccount, deleteAccount } = useAccountStore();
+  const user = useAuthStore((s) => s.user);
+  const plaintextPrivateKey = useAuthStore((s) => s.plaintextPrivateKey);
+  const privKeyBase64 = plaintextPrivateKey
+    ? bytesToBase64(new Uint8Array(plaintextPrivateKey))
+    : null;
+
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [currency, setCurrency] = useState("EUR");
   const [type, setType] = useState<AccountType>("personal");
 
+  // --- Initial balance after account creation ---
+  const [initialBalance, setInitialBalance] = useState("");
+  const [balType, setBalType] = useState<"income" | "expense">("income");
+  const [isCreating, setIsCreating] = useState(false);
+
+  // --- Balances state ---
+  const [balances, setBalances] = useState<Record<string, number>>({});
+  const [loadingBalances, setLoadingBalances] = useState(false);
+
   useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
 
+  // Fetch and calculate balances whenever accounts change
+  const fetchBalances = useCallback(async () => {
+    if (accounts.length === 0) return;
+    setLoadingBalances(true);
+    const newBalances: Record<string, number> = {};
+
+    await Promise.all(
+      accounts.map(async (acc) => {
+        try {
+          const decrypted = await fetchAndDecryptTransactions(
+            acc.id,
+            privKeyBase64 ?? undefined,
+            user?.public_key
+          );
+          const bal = decrypted.reduce((sum, tx) => sum + tx.payload.amount, 0);
+          newBalances[acc.id] = bal;
+        } catch {
+          newBalances[acc.id] = 0;
+        }
+      })
+    );
+    setBalances(newBalances);
+    setLoadingBalances(false);
+  }, [accounts, privKeyBase64, user]);
+
+  useEffect(() => {
+    fetchBalances();
+  }, [fetchBalances]);
+
   const handleCreate = async () => {
-    await createAccount(name, currency, type);
-    setOpen(false);
-    setName("");
-    setCurrency("EUR");
-    setType("personal");
+    if (!name) return;
+    setIsCreating(true);
+    try {
+      const created = await createAccount(name, currency, type);
+      
+      // Handle initial balance if provided
+      const rawAmount = parseFloat(initialBalance);
+      if (created?.id && !isNaN(rawAmount) && rawAmount > 0) {
+        const amount = balType === "income" ? rawAmount : -rawAmount;
+        const accountKey = await getAccountKey(created.id, privKeyBase64 ?? undefined, user?.public_key);
+
+        const encryptedPayload = await encryptTransactionPayload(
+          { amount, category: "Opening Balance", notes: "Initial balance", counterparty: "" },
+          accountKey
+        );
+
+        await apiFetch(ENDPOINTS.transactions(created.id), {
+          method: "POST",
+          body: JSON.stringify({ 
+            time: new Date().toISOString(), 
+            encrypted_payload: encryptedPayload 
+          } as CreateTransactionRequest),
+        });
+      }
+
+      setOpen(false);
+      setName("");
+      setCurrency("EUR");
+      setType("personal");
+      setInitialBalance("");
+      setBalType("income");
+      
+      // Trigger balance refresh
+      fetchBalances();
+    } catch (err) {
+      console.error("Failed to create account or initial balance:", err);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -76,34 +143,80 @@ export default function AccountListPage() {
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Currency</label>
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                >
-                  {CURRENCIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.code} — {c.symbol} {c.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Currency</label>
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  >
+                    {CURRENCIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} — {c.symbol} {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Type</label>
+                  <select
+                    value={type}
+                    onChange={(e) => setType(e.target.value as AccountType)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  >
+                    <option value="personal">Personal</option>
+                    <option value="joint">Joint</option>
+                    <option value="savings">Savings</option>
+                  </select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Type</label>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value as AccountType)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                >
-                  <option value="personal">Personal</option>
-                  <option value="joint">Joint</option>
-                  <option value="savings">Savings</option>
-                </select>
+
+              <div className="space-y-2 pt-2 border-t border-border/50">
+                <label className="text-sm font-medium">Opening Balance (Optional)</label>
+                <div className="flex gap-2">
+                  <div className="flex rounded-md border border-input overflow-hidden shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setBalType("income")}
+                      className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                        balType === "income"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Deposit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBalType("expense")}
+                      className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                        balType === "expense"
+                          ? "bg-destructive text-destructive-foreground"
+                          : "bg-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Credit
+                    </button>
+                  </div>
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
+                      {balType === "expense" ? "-" : "+"}
+                    </span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={initialBalance}
+                      onChange={(e) => setInitialBalance(e.target.value)}
+                      placeholder="0.00"
+                      className="pl-7 h-9"
+                    />
+                  </div>
+                </div>
               </div>
-              <Button onClick={handleCreate} className="w-full">
-                Create
+
+              <Button onClick={handleCreate} className="w-full mt-4" disabled={isCreating || !name}>
+                {isCreating ? "Creating..." : "Create Account"}
               </Button>
             </div>
           </DialogContent>
@@ -127,9 +240,24 @@ export default function AccountListPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  Created {new Date(account.created_at).toLocaleDateString()}
-                </span>
+                <div className="flex flex-col">
+                  <span className={`text-2xl font-bold ${(balances[account.id] ?? 0) < 0 ? "text-destructive" : ""}`}>
+                    {loadingBalances && !balances[account.id] ? (
+                      "..."
+                    ) : (
+                      <>
+                        {getCurrencySymbol(account.currency)}
+                        {(balances[account.id] ?? 0).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </>
+                    )}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Created {formatDate(account.created_at)}
+                  </span>
+                </div>
                 <Button
                   variant="destructive"
                   size="sm"

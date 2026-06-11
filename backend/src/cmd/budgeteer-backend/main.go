@@ -87,6 +87,7 @@ func main() {
 		AddHandler("DELETE /v1/accounts/{id}/users/{uid}",   handler.RemoveAccountUser).
 		AddHandler("GET    /v1/accounts/{id}/transactions",  handler.ListTransactions).
 		AddHandler("POST   /v1/accounts/{id}/transactions",  handler.CreateTransaction).
+		AddHandler("PUT    /v1/transactions/{id}",           handler.UpdateTransaction).
 		AddHandler("DELETE /v1/transactions/{id}",           handler.DeleteTransaction)
 
 	router.AddSubroute("/api/", protected.Finalize())

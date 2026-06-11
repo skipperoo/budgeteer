@@ -43,6 +43,14 @@ func (r *TransactionRepository) FindByID(ctx context.Context, id string) (*model
 	return t, nil
 }
 
+func (r *TransactionRepository) Update(ctx context.Context, t *model.Transaction) error {
+	query := `UPDATE transactions SET time = $1, encrypted_payload = $2, version = $3, updated_at = $4
+	          WHERE id = $5 AND deleted_at IS NULL`
+	_, err := database.Pool.Exec(ctx, query,
+		t.Time, t.EncryptedPayload, t.Version, t.UpdatedAt, t.ID)
+	return err
+}
+
 func (r *TransactionRepository) ListByAccountID(ctx context.Context, accountID string, limit, offset int) ([]*model.Transaction, error) {
 	query := `SELECT id, time, account_id, created_by, encrypted_payload, version, created_at, updated_at, deleted_at
 	          FROM transactions WHERE account_id = $1 AND deleted_at IS NULL

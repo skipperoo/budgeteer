@@ -35,6 +35,7 @@ export default function DashboardPage() {
 
   // Create transaction dialog state
   const [createOpen, setCreateOpen] = useState(false);
+  const [txType, setTxType] = useState<"income" | "expense">("expense");
   const [txAmount, setTxAmount] = useState("");
   const [txCategory, setTxCategory] = useState("");
   const [txNotes, setTxNotes] = useState("");
@@ -45,7 +46,7 @@ export default function DashboardPage() {
   const [txCreateError, setTxCreateError] = useState("");
 
   // Category combobox state
-  const { getCategories, addCategory } = useCategoryStore();
+  const { getCategories, addCategory, version: _catVersion } = useCategoryStore();
   const [showCategoryInput, setShowCategoryInput] = useState(false);
   const [newCategory, setNewCategory] = useState("");
 
@@ -62,42 +63,51 @@ export default function DashboardPage() {
   }, [loadData]);
 
   // Fetch and decrypt transactions when accounts are loaded
-  useEffect(() => {
-    if (!privKeyBase64 || accounts.length === 0) return;
+  const refreshTransactions = useCallback(async () => {
+    if (accounts.length === 0) return;
 
     let accountCounts = 0;
     const allDecrypted: DecryptedTransaction[] = [];
 
-    Promise.all(
+    await Promise.all(
       accounts.map(async (acc) => {
         try {
-          // Try to decrypt — fetchAndDecryptTransactions calls getAccountKey internally
           const decrypted = await fetchAndDecryptTransactions(
             acc.id,
-            privKeyBase64,
+            privKeyBase64 ?? undefined,
             user?.public_key
           );
           allDecrypted.push(...decrypted);
           accountCounts += decrypted.length;
         } catch {
-          // Skip accounts we can't decrypt (no key yet, etc.)
+          // Skip accounts we can't decrypt
         }
       })
-    ).then(() => {
-      setRawTxCount(accountCounts);
-      allDecrypted.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-      setAllTxs(allDecrypted);
-    });
+    );
+
+    setRawTxCount(accountCounts);
+    allDecrypted.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    setAllTxs(allDecrypted);
   }, [accounts, privKeyBase64, user]);
 
-  const recentTxs = allTxs.slice(0, 10);
-  const avgAmount =
-    allTxs.length > 0
-      ? allTxs.reduce((sum, tx) => sum + Math.abs(tx.payload.amount), 0) / allTxs.length
-      : 0;
+  useEffect(() => {
+    refreshTransactions();
+  }, [refreshTransactions]);
 
+  const recentTxs = allTxs.slice(0, 10);
+  const currencyMap = Object.fromEntries(accounts.map((a) => [a.id, a.currency]));
+
+  // Balance computations
+  const totalBalance = allTxs.reduce((sum, tx) => sum + tx.payload.amount, 0);
+  const totalIncome = allTxs
+    .filter((tx) => tx.payload.amount > 0)
+    .reduce((sum, tx) => sum + tx.payload.amount, 0);
+  const totalExpenses = allTxs
+    .filter((tx) => tx.payload.amount < 0)
+    .reduce((sum, tx) => sum + Math.abs(tx.payload.amount), 0);
   const incomeCount = allTxs.filter((tx) => tx.payload.amount > 0).length;
   const expenseCount = allTxs.filter((tx) => tx.payload.amount < 0).length;
+  const avgAmount = allTxs.length > 0 ? totalBalance / allTxs.length : 0;
 
   // Handle category selection
   const handleSelectCategory = (cat: string) => {
@@ -125,10 +135,12 @@ export default function DashboardPage() {
     setTxCreating(true);
 
     try {
-      const amount = parseFloat(txAmount);
-      if (isNaN(amount)) {
+      const rawAmount = parseFloat(txAmount);
+      if (isNaN(rawAmount)) {
         throw new Error("Invalid amount");
       }
+      // Apply sign based on income/expense toggle
+      const amount = txType === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
 
       // Fetch (or retrieve from cache) the account key for the selected account.
       // getAccountKey now checks sessionStorage first, so it can work even
@@ -139,8 +151,11 @@ export default function DashboardPage() {
         user?.public_key
       );
 
+      const category = txCategory || "general";
+      if (txAccountId) addCategory(txAccountId, category);
+
       const encryptedPayload = await encryptTransactionPayload(
-        { amount, category: txCategory || "general", notes: txNotes, counterparty: txCounterparty },
+        { amount, category, notes: txNotes, counterparty: txCounterparty },
         accountKeyBase64
       );
 
@@ -152,12 +167,14 @@ export default function DashboardPage() {
       });
 
       setCreateOpen(false);
+      setTxType("expense");
       setTxAmount("");
       setTxCategory("");
       setTxNotes("");
       setTxCounterparty("");
       setTxDate(new Date().toISOString().slice(0, 10));
       setShowCategoryInput(false);
+      refreshTransactions();
     } catch (err: any) {
       setTxCreateError(err.message);
     } finally {
@@ -209,14 +226,46 @@ export default function DashboardPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Amount</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={txAmount}
-                  onChange={(e) => setTxAmount(e.target.value)}
-                  placeholder="0.00 (negative for expense)"
-                  required
-                />
+                <div className="flex gap-2">
+                  <div className="flex rounded-md border border-input overflow-hidden shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setTxType("expense")}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                        txType === "expense"
+                          ? "bg-destructive text-destructive-foreground"
+                          : "bg-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Expense
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTxType("income")}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                        txType === "income"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Income
+                    </button>
+                  </div>
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
+                      {txType === "expense" ? "-" : "+"}
+                    </span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={txAmount}
+                      onChange={(e) => setTxAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="pl-7"
+                      required
+                    />
+                  </div>
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Date</label>
@@ -391,6 +440,7 @@ export default function DashboardPage() {
                     time: tx.time,
                     payload: tx.payload,
                   }}
+                  currency={currencyMap[tx.account_id]}
                   onClick={() => navigate(`/accounts/${tx.account_id}`)}
                   compact
                 />

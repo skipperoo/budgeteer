@@ -19,17 +19,8 @@ import { bytesToBase64, encryptAccountKeyForRecipient, generateAccountKey } from
 import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
 import { getAccountKey } from "@/lib/decrypt-transactions";
 import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
+import { CURRENCIES, getCurrencySymbol } from "@/lib/format";
 import type { Transaction, CreateTransactionRequest } from "@/types";
-
-const CURRENCIES = [
-  { code: "EUR", symbol: "€", name: "Euro" },
-  { code: "USD", symbol: "$", name: "US Dollar" },
-  { code: "GBP", symbol: "£", name: "British Pound" },
-  { code: "CHF", symbol: "Fr", name: "Swiss Franc" },
-  { code: "JPY", symbol: "¥", name: "Japanese Yen" },
-  { code: "CAD", symbol: "CA$", name: "Canadian Dollar" },
-  { code: "BRL", symbol: "R$", name: "Brazilian Real" },
-];
 
 const ACCOUNT_TYPES = ["personal", "joint", "savings"] as const;
 
@@ -68,6 +59,7 @@ export default function AccountDetailPage() {
 
   // --- Create transaction state ---
   const [createOpen, setCreateOpen] = useState(false);
+  const [txType, setTxType] = useState<"income" | "expense">("expense");
   const [txAmount, setTxAmount] = useState("");
   const [txCategory, setTxCategory] = useState("");
   const [txNotes, setTxNotes] = useState("");
@@ -76,8 +68,22 @@ export default function AccountDetailPage() {
   const [txCreating, setTxCreating] = useState(false);
   const [txCreateError, setTxCreateError] = useState("");
 
+  // --- Edit transaction state ---
+  const [editTxOpen, setEditTxOpen] = useState(false);
+  const [editTxId, setEditTxId] = useState<string | null>(null);
+  const [editTxType, setEditTxType] = useState<"income" | "expense">("expense");
+  const [editTxAmount, setEditTxAmount] = useState("");
+  const [editTxCategory, setEditTxCategory] = useState("");
+  const [editTxNotes, setEditTxNotes] = useState("");
+  const [editTxCounterparty, setEditTxCounterparty] = useState("");
+  const [editTxDate, setEditTxDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [editTxSaving, setEditTxSaving] = useState(false);
+  const [editTxError, setEditTxError] = useState("");
+  const [editTxShowCategoryInput, setEditTxShowCategoryInput] = useState(false);
+  const [editTxNewCategory, setEditTxNewCategory] = useState("");
+
   // Category combobox state
-  const { getCategories, addCategory } = useCategoryStore();
+  const { getCategories, addCategory, version: _catVersion } = useCategoryStore();
   const [showCategoryInput, setShowCategoryInput] = useState(false);
   const [newCategory, setNewCategory] = useState("");
 
@@ -255,6 +261,82 @@ export default function AccountDetailPage() {
     setNewCategory("");
   };
 
+  // --- Edit transaction ---
+  const openEditTx = (txId: string) => {
+    const tx = transactions.find((t) => t.id === txId);
+    if (!tx || !tx.payload) return;
+    setEditTxId(txId);
+    setEditTxType(tx.payload.amount >= 0 ? "income" : "expense");
+    setEditTxAmount(String(Math.abs(tx.payload.amount)));
+    setEditTxCategory(tx.payload.category ?? "");
+    setEditTxNotes(tx.payload.notes ?? "");
+    setEditTxCounterparty(tx.payload.counterparty ?? "");
+    setEditTxDate(new Date(tx.time).toISOString().slice(0, 10));
+    setEditTxShowCategoryInput(false);
+    setEditTxNewCategory("");
+    setEditTxError("");
+    setEditTxOpen(true);
+  };
+
+  const handleUpdateTransaction = async () => {
+    if (!editTxId) return;
+    if (!accountKeyBase64) {
+      setEditTxError("Account key not available. Try re-encrypting the key.");
+      return;
+    }
+    setEditTxError("");
+    setEditTxSaving(true);
+
+    try {
+      const rawAmount = parseFloat(editTxAmount);
+      if (isNaN(rawAmount)) {
+        throw new Error("Invalid amount");
+      }
+      const amount = editTxType === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+
+      const category = editTxCategory || "general";
+      if (id) addCategory(id, category);
+
+      const encryptedPayload = await encryptTransactionPayload(
+        { amount, category, notes: editTxNotes, counterparty: editTxCounterparty },
+        accountKeyBase64
+      );
+
+      const time = new Date(editTxDate + "T12:00:00Z").toISOString();
+
+      await apiFetch(ENDPOINTS.transaction(editTxId), {
+        method: "PUT",
+        body: JSON.stringify({
+          time,
+          encrypted_payload: encryptedPayload,
+        } as CreateTransactionRequest),
+      });
+
+      setEditTxOpen(false);
+      setEditTxId(null);
+      await fetchTransactions();
+    } catch (err: any) {
+      setEditTxError(err.message);
+    } finally {
+      setEditTxSaving(false);
+    }
+  };
+
+  const handleEditSelectCategory = (cat: string) => {
+    setEditTxCategory(cat);
+    setEditTxShowCategoryInput(false);
+    setEditTxNewCategory("");
+  };
+
+  const handleEditAddNewCategory = () => {
+    const cat = editTxNewCategory.trim();
+    if (!cat) return;
+    if (id) addCategory(id, cat);
+    setEditTxCategory(cat);
+    setEditTxShowCategoryInput(false);
+    setEditTxNewCategory("");
+  };
+
   // --- Create transaction ---
   const handleCreateTransaction = async () => {
     if (!id) return;
@@ -266,10 +348,12 @@ export default function AccountDetailPage() {
     setTxCreating(true);
 
     try {
-      const amount = parseFloat(txAmount);
-      if (isNaN(amount)) {
+      const rawAmount = parseFloat(txAmount);
+      if (isNaN(rawAmount)) {
         throw new Error("Invalid amount");
       }
+      // Apply sign based on income/expense toggle
+      const amount = txType === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
 
       const category = txCategory || "general";
       if (id) addCategory(id, category);
@@ -290,6 +374,7 @@ export default function AccountDetailPage() {
       });
 
       setCreateOpen(false);
+      setTxType("expense");
       setTxAmount("");
       setTxCategory("");
       setTxNotes("");
@@ -325,6 +410,10 @@ export default function AccountDetailPage() {
     );
   }
 
+  const totalBalance = transactions
+    .filter((tx) => tx.payload)
+    .reduce((sum, tx) => sum + (tx.payload?.amount || 0), 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -335,7 +424,20 @@ export default function AccountDetailPage() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold">{account.name || account.currency}</h1>
-            <p className="text-sm text-muted-foreground capitalize">{account.type} account</p>
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-xl font-semibold ${
+                  totalBalance < 0 ? "text-destructive" : "text-primary"
+                }`}
+              >
+                {getCurrencySymbol(account.currency)}
+                {totalBalance.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+              <span className="text-sm text-muted-foreground capitalize">• {account.type} account</span>
+            </div>
           </div>
           <Button variant="outline" size="sm" onClick={openEdit}>
             Edit
@@ -354,14 +456,46 @@ export default function AccountDetailPage() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Amount</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={txAmount}
-                    onChange={(e) => setTxAmount(e.target.value)}
-                    placeholder="0.00"
-                    required
-                  />
+                  <div className="flex gap-2">
+                    <div className="flex rounded-md border border-input overflow-hidden shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setTxType("expense")}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          txType === "expense"
+                            ? "bg-destructive text-destructive-foreground"
+                            : "bg-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Expense
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTxType("income")}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          txType === "income"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Income
+                      </button>
+                    </div>
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
+                        {txType === "expense" ? "-" : "+"}
+                      </span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={txAmount}
+                        onChange={(e) => setTxAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="pl-7"
+                        required
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Date</label>
@@ -443,6 +577,141 @@ export default function AccountDetailPage() {
                 {txCreateError && <p className="text-sm text-destructive">{txCreateError}</p>}
                 <Button onClick={handleCreateTransaction} className="w-full" disabled={txCreating}>
                   {txCreating ? "Creating..." : "Create"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Transaction Dialog */}
+          <Dialog open={editTxOpen} onOpenChange={setEditTxOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Edit Transaction</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Amount</label>
+                  <div className="flex gap-2">
+                    <div className="flex rounded-md border border-input overflow-hidden shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setEditTxType("expense")}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          editTxType === "expense"
+                            ? "bg-destructive text-destructive-foreground"
+                            : "bg-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Expense
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditTxType("income")}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          editTxType === "income"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Income
+                      </button>
+                    </div>
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
+                        {editTxType === "expense" ? "-" : "+"}
+                      </span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={editTxAmount}
+                        onChange={(e) => setEditTxAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="pl-7"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Date</label>
+                  <Input
+                    type="date"
+                    value={editTxDate}
+                    onChange={(e) => setEditTxDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Category</label>
+                  {!editTxShowCategoryInput ? (
+                    <div className="flex gap-2">
+                      <select
+                        value={editTxCategory}
+                        onChange={(e) => {
+                          if (e.target.value === "__new__") {
+                            setEditTxShowCategoryInput(true);
+                          } else {
+                            setEditTxCategory(e.target.value);
+                          }
+                        }}
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                      >
+                        <option value="">Select category...</option>
+                        {id &&
+                          getCategories(id).map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                        <option value="__new__">+ Add new category...</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        value={editTxNewCategory}
+                        onChange={(e) => setEditTxNewCategory(e.target.value)}
+                        placeholder="New category name"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleEditAddNewCategory();
+                          }
+                        }}
+                      />
+                      <Button type="button" size="sm" onClick={handleEditAddNewCategory}>
+                        Add
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditTxShowCategoryInput(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Counterparty</label>
+                  <Input
+                    value={editTxCounterparty}
+                    onChange={(e) => setEditTxCounterparty(e.target.value)}
+                    placeholder="e.g. Store name, employer"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Notes</label>
+                  <Input
+                    value={editTxNotes}
+                    onChange={(e) => setEditTxNotes(e.target.value)}
+                    placeholder="Optional notes"
+                  />
+                </div>
+                {editTxError && <p className="text-sm text-destructive">{editTxError}</p>}
+                <Button onClick={handleUpdateTransaction} className="w-full" disabled={editTxSaving}>
+                  {editTxSaving ? "Saving..." : "Save"}
                 </Button>
               </div>
             </DialogContent>
@@ -589,7 +858,9 @@ export default function AccountDetailPage() {
                 <TransactionCard
                   key={tx.id}
                   transaction={tx}
+                  currency={account.currency}
                   onDelete={handleDeleteTransaction}
+                  onEdit={tx.payload ? openEditTx : undefined}
                 />
               ))}
             </div>

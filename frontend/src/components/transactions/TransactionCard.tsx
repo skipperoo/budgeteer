@@ -8,6 +8,8 @@
 
 import { Button } from "@/components/ui/button";
 import type { TransactionPayload } from "@/lib/crypto-transaction";
+import { formatDate, formatCurrency } from "@/lib/format";
+import { ArrowUpRight, ArrowDownLeft, Lock, Pencil, Trash2 } from "lucide-react";
 
 export interface TransactionDisplay {
   id: string;
@@ -20,37 +22,35 @@ export interface TransactionDisplay {
 
 interface TransactionCardProps {
   transaction: TransactionDisplay;
+  /** The currency code (e.g., "USD", "EUR") */
   currency?: string;
   /** Navigate to the account detail page on click. */
   onClick?: () => void;
   /** Show a delete button. */
   onDelete?: (id: string) => void;
+  /** Show an edit button. */
+  onEdit?: (id: string) => void;
   /** Indicates this card is in a "recent transactions" list (smaller). */
   compact?: boolean;
 }
 
 export function TransactionCard({
   transaction,
+  currency = "EUR", // Fallback to EUR if not provided
   onClick,
   onDelete,
+  onEdit,
   compact = false,
 }: TransactionCardProps) {
   const { payload, time } = transaction;
   const isIncome = payload ? payload.amount >= 0 : null;
 
-  const formattedAmount = payload
-    ? `${isIncome ? "+" : ""}${payload.amount.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })}`
-    : null;
-
   return (
     <div
       className={`
-        flex items-center justify-between rounded-lg border
-        ${compact ? "p-2" : "p-3"}
-        ${onClick ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}
+        group relative flex items-center justify-between rounded-xl border border-border bg-card 
+        ${compact ? "p-3" : "p-4"}
+        ${onClick ? "cursor-pointer hover:bg-accent/40 transition-all duration-200" : ""}
       `}
       onClick={onClick}
       role={onClick ? "button" : undefined}
@@ -66,63 +66,111 @@ export function TransactionCard({
           : undefined
       }
     >
-      <div className="flex items-center gap-3 min-w-0">
-        {/* Amount */}
-        {payload ? (
-          <span
-            className={`${compact ? "text-xs" : "text-sm"} font-semibold tabular-nums ${
-              isIncome ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"
-            }`}
-          >
-            {formattedAmount}
-          </span>
-        ) : (
-          <span className="text-xs font-mono text-muted-foreground italic">
-            {transaction.decryptError ?? "Could not decrypt"}
-          </span>
-        )}
+      <div className="flex items-center gap-4 min-w-0">
+        {/* Type Icon */}
+        <div 
+          className={`
+            flex items-center justify-center rounded-full shrink-0
+            ${compact ? "h-8 w-8" : "h-10 w-10"}
+            ${payload 
+              ? isIncome 
+                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" 
+                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+              : "bg-muted text-muted-foreground"
+            }
+          `}
+        >
+          {payload ? (
+            isIncome ? (
+              <ArrowUpRight className={compact ? "h-4 w-4" : "h-5 w-5"} />
+            ) : (
+              <ArrowDownLeft className={compact ? "h-4 w-4" : "h-5 w-5"} />
+            )
+          ) : (
+            <Lock className={compact ? "h-4 w-4" : "h-5 w-5"} />
+          )}
+        </div>
 
-        {/* Category pill */}
-        {payload?.category && (
-          <span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full shrink-0">
-            {payload.category}
+        {/* Details */}
+        <div className="flex flex-col min-w-0">
+          <span className="font-semibold text-foreground truncate leading-tight">
+            {payload?.counterparty || (payload ? "Unknown Counterparty" : "Encrypted Transaction")}
           </span>
-        )}
-
-        {/* Counterparty */}
-        {payload?.counterparty && (
-          <span className="text-sm text-muted-foreground truncate hidden sm:inline">
-            {payload.counterparty}
-          </span>
-        )}
-
-        {/* Date */}
-        <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-          {new Date(time).toLocaleDateString()}
-        </span>
-
-        {/* Notes */}
-        {payload?.notes && (
-          <span className="text-xs text-muted-foreground truncate hidden md:inline italic max-w-32">
-            {payload.notes}
-          </span>
-        )}
+          <div className="flex items-center gap-2 mt-1">
+            {payload?.category && (
+              <span className="text-[10px] uppercase font-bold tracking-wider bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded">
+                {payload.category}
+              </span>
+            )}
+            {payload?.notes && (
+              <span className="text-xs text-muted-foreground truncate italic opacity-80">
+                {payload.notes}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Delete button */}
-      {onDelete && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(transaction.id);
-          }}
-        >
-          Delete
-        </Button>
-      )}
+      <div className="flex items-center gap-4">
+        {/* Amount and Date */}
+        <div className="flex flex-col items-end shrink-0">
+          {payload ? (
+            <span
+              className={`
+                ${compact ? "text-sm" : "text-base"} 
+                font-bold tabular-nums leading-none
+                ${isIncome ? "text-green-600 dark:text-green-400" : "text-foreground"}
+              `}
+            >
+              {formatCurrency(payload.amount, currency, true)}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground italic">
+              {transaction.decryptError ?? "Decryption required"}
+            </span>
+          )}
+          <span className="text-[10px] text-muted-foreground mt-1.5 font-medium uppercase tracking-tight opacity-70">
+            {formatDate(time, { month: "short", day: "numeric", year: compact ? undefined : "numeric" })}
+          </span>
+        </div>
+
+        {/* Actions - only visible on hover if not compact or if they are explicitly passed */}
+        {(onEdit || onDelete) && (
+          <div className={`
+            flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200
+            ${compact ? "absolute -right-2 top-1/2 -translate-y-1/2 bg-card p-1 shadow-lg rounded-lg border border-border" : ""}
+          `}>
+            {onEdit && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(transaction.id);
+                }}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                <span className="sr-only">Edit</span>
+              </Button>
+            )}
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(transaction.id);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="sr-only">Delete</span>
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

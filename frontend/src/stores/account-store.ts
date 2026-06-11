@@ -49,11 +49,12 @@ export const useAccountStore = create<AccountState>((set, get) => ({
         encryptedAccountKey = `${enc.ephemeralPublicKey}:${enc.ciphertext}`;
       }
 
-      await apiFetch(ENDPOINTS.accounts, {
+      const created = await apiFetch<Account>(ENDPOINTS.accounts, {
         method: "POST",
         body: JSON.stringify({ name, currency, type, encrypted_account_key: encryptedAccountKey } as CreateAccountRequest),
       });
       await get().fetchAccounts();
+      return created ?? undefined;
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }

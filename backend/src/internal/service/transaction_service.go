@@ -71,6 +71,38 @@ func (s *TransactionService) ListByAccount(ctx context.Context, accountID, userI
 	return s.TransactionRepo.ListByAccountID(ctx, accountID, limit, offset)
 }
 
+// Update modifies an existing encrypted transaction (time, encrypted_payload).
+func (s *TransactionService) Update(ctx context.Context, transactionID, userID string, req *model.CreateTransactionRequest) (*model.Transaction, error) {
+	t, err := s.TransactionRepo.FindByID(ctx, transactionID)
+	if err != nil {
+		return nil, fmt.Errorf("database error: %w", err)
+	}
+	if t == nil {
+		return nil, fmt.Errorf("transaction not found")
+	}
+
+	// Verify the user has access to the account
+	au, err := s.AccountUserRepo.FindByAccountAndUser(ctx, t.AccountID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("database error: %w", err)
+	}
+	if au == nil {
+		return nil, fmt.Errorf("access denied")
+	}
+
+	now := time.Now()
+	t.Time = req.Time
+	t.EncryptedPayload = req.EncryptedPayload
+	t.Version++
+	t.UpdatedAt = now
+
+	if err := s.TransactionRepo.Update(ctx, t); err != nil {
+		return nil, fmt.Errorf("failed to update transaction: %w", err)
+	}
+
+	return t, nil
+}
+
 // SoftDelete marks a transaction as deleted.
 func (s *TransactionService) SoftDelete(ctx context.Context, transactionID, userID string) error {
 	t, err := s.TransactionRepo.FindByID(ctx, transactionID)

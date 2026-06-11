@@ -29,6 +29,8 @@ function saveCategories(accountId: string, categories: string[]): void {
 }
 
 interface CategoryState {
+  /** Version counter bumped on every mutation — drives reactive re-renders */
+  version: number;
   /** Get categories for a specific account (from localStorage) */
   getCategories: (accountId: string) => string[];
   /** Add a new category for an account */
@@ -37,7 +39,9 @@ interface CategoryState {
   removeCategory: (accountId: string, category: string) => void;
 }
 
-export const useCategoryStore = create<CategoryState>(() => ({
+export const useCategoryStore = create<CategoryState>((set, get) => ({
+  version: 0,
+
   getCategories: (accountId) => loadCategories(accountId),
 
   addCategory: (accountId, category) => {
@@ -45,10 +49,12 @@ export const useCategoryStore = create<CategoryState>(() => ({
     const normalized = category.trim();
     if (!normalized || existing.includes(normalized)) return;
     saveCategories(accountId, [...existing, normalized]);
+    set({ version: get().version + 1 });
   },
 
   removeCategory: (accountId, category) => {
     const existing = loadCategories(accountId);
     saveCategories(accountId, existing.filter((c) => c !== category));
+    set({ version: get().version + 1 });
   },
 }));

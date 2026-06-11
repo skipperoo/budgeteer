@@ -83,6 +83,42 @@ func CreateTransaction(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(t)
 }
 
+func UpdateTransaction(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
+	if !ok || claims == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(model.Error{Error: "unauthorized"})
+		return
+	}
+
+	transactionID := r.PathValue("id")
+
+	var req model.CreateTransactionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body"})
+		return
+	}
+	defer r.Body.Close()
+
+	t, err := service.Transactions.Update(r.Context(), transactionID, claims.UserID, &req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		code := http.StatusForbidden
+		if err.Error() == "transaction not found" {
+			code = http.StatusNotFound
+		}
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(model.Error{Error: err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(t)
+}
+
 func DeleteTransaction(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
 	if !ok || claims == nil {

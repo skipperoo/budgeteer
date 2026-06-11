@@ -170,7 +170,7 @@ export async function getAccountKey(
  */
 export async function fetchAndDecryptTransactions(
   accountId: string,
-  userPrivateKeyBase64: string,
+  userPrivateKeyBase64?: string,
   userPublicKey?: string
 ): Promise<DecryptedTransaction[]> {
   const accountKey = await getAccountKey(accountId, userPrivateKeyBase64, userPublicKey);

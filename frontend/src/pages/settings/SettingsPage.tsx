@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 import { API_BASE, ENDPOINTS } from "@/lib/constants";
 import { useAuthStore } from "@/stores/auth-store";
 import { decryptWithPassword, encryptWithPassword } from "@/lib/crypto";
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
 
 const CURRENCIES = [
   { code: "EUR", symbol: "€", name: "Euro" },
@@ -285,6 +286,19 @@ export default function SettingsPage() {
                   </option>
                 ))}
               </select>
+            </CardContent>
+          </Card>
+
+          {/* --- Theme Card --- */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Theme</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-3">
+                Switch between light and dark mode.
+              </p>
+              <ThemeToggle />
             </CardContent>
           </Card>
         </div>
