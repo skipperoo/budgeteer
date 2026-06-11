@@ -18,12 +18,9 @@ import { ENDPOINTS } from "@/lib/constants";
 import { generateAccountKey, encryptAccountKeyForRecipient, bytesToBase64 } from "@/lib/crypto";
 import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
 import { decryptAccountKeyForRecipient } from "@/lib/crypto";
+import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
 import type { AccountUser, Transaction, CreateTransactionRequest } from "@/types";
 import type { TransactionPayload } from "@/lib/crypto-transaction";
-
-interface DecryptedTx extends Transaction {
-  decryptedPayload?: TransactionPayload;
-}
 
 const CURRENCIES = [
   { code: "EUR", symbol: "€", name: "Euro" },
@@ -66,7 +63,7 @@ export default function AccountDetailPage() {
   const [accountKeyBase64, setAccountKeyBase64] = useState<string | null>(null);
 
   // --- Transaction state ---
-  const [transactions, setTransactions] = useState<DecryptedTx[]>([]);
+  const [transactions, setTransactions] = useState<TransactionDisplay[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [txError, setTxError] = useState("");
 
@@ -89,16 +86,18 @@ export default function AccountDetailPage() {
     if (id) {
       fetchAccountUsers(id);
       // Fetch the account key first, then transactions (so we can decrypt)
-      fetchAccountKey().then(() => {
-        fetchTransactions();
+      fetchAccountKey().then((key) => {
+        fetchTransactions(key ?? undefined);
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, fetchAccountUsers]);
 
   // Fetch and decrypt the account key for this account.
   // If no key is found for the current user, generate one and store it.
-  const fetchAccountKey = async () => {
-    if (!id || !privKeyBase64) return;
+  // Returns the key so it can be passed synchronously to fetchTransactions.
+  const fetchAccountKey = async (): Promise<string | null> => {
+    if (!id || !privKeyBase64) return null;
     try {
       const users = await apiFetch<AccountUser[]>(ENDPOINTS.accountUsers(id));
       for (const au of users) {
@@ -109,7 +108,7 @@ export default function AccountDetailPage() {
               parts[1], parts[0], privKeyBase64
             );
             setAccountKeyBase64(key);
-            return;
+            return key;
           } catch { continue; }
         }
       }
@@ -124,8 +123,12 @@ export default function AccountDetailPage() {
           body: JSON.stringify({ encrypted_account_key: payload }),
         });
         setAccountKeyBase64(newKey);
+        return newKey;
       }
-    } catch { /* no key available */ }
+      return null;
+    } catch {
+      return null; /* no key available */
+    }
   };
 
   // Re-fetch accounts if we don't have this one yet
@@ -135,27 +138,36 @@ export default function AccountDetailPage() {
     }
   }, [id, account, accounts.length, fetchAccounts]);
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = async (key?: string) => {
     if (!id) return;
+    const keyToUse = key ?? accountKeyBase64;
     setTxLoading(true);
     setTxError("");
     try {
       const data = await apiFetch<Transaction[]>(ENDPOINTS.transactions(id));
       const raw = data ?? [];
 
-      // Try to decrypt each transaction if key is available
-      const decrypted = await Promise.all(
+      const decrypted: TransactionDisplay[] = await Promise.all(
         raw.map(async (tx) => {
-          if (accountKeyBase64) {
+          if (keyToUse) {
             try {
               const payload = await decryptTransactionPayload(
                 tx.encrypted_payload,
-                accountKeyBase64
+                keyToUse
               );
-              return { ...tx, decryptedPayload: payload } as DecryptedTx;
-            } catch { /* fall through */ }
+              return {
+                id: tx.id,
+                time: tx.time,
+                payload,
+              };
+            } catch { /* fall through: show "could not decrypt" */ }
           }
-          return tx as DecryptedTx;
+          return {
+            id: tx.id,
+            time: tx.time,
+            payload: null,
+            decryptError: keyToUse ? "Decryption failed" : "Key unavailable",
+          };
         })
       );
 
@@ -167,11 +179,12 @@ export default function AccountDetailPage() {
     }
   };
 
-  // Re-decrypt when account key changes
+  // Re-decrypt when account key changes (e.g., after invite generates a new key)
   useEffect(() => {
     if (accountKeyBase64 && transactions.length > 0) {
-      fetchTransactions();
+      fetchTransactions(accountKeyBase64);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountKeyBase64]);
 
   // --- Edit account ---
@@ -586,62 +599,13 @@ export default function AccountDetailPage() {
             </p>
           ) : (
             <div className="space-y-2">
-              {transactions.map((tx) => {
-                const p = tx.decryptedPayload;
-                const isIncome = p ? p.amount >= 0 : null;
-                return (
-                  <div
-                    key={tx.id}
-                    className="flex items-center justify-between p-3 rounded-lg border"
-                  >
-                    <div className="flex items-center gap-4 min-w-0">
-                      {p ? (
-                        <>
-                          <span
-                            className={`text-sm font-semibold tabular-nums ${
-                              isIncome ? "text-green-600" : "text-red-600"
-                            }`}
-                          >
-                            {isIncome ? "+" : ""}
-                            {p.amount.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </span>
-                          <span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">
-                            {p.category}
-                          </span>
-                          {p.counterparty && (
-                            <span className="text-sm text-muted-foreground truncate hidden sm:inline">
-                              {p.counterparty}
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-xs font-mono text-muted-foreground">
-                          {tx.encrypted_payload.slice(0, 16)}...
-                        </span>
-                      )}
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {new Date(tx.time).toLocaleDateString()}
-                      </span>
-                      {p?.notes && (
-                        <span className="text-xs text-muted-foreground truncate hidden md:inline italic">
-                          {p.notes}
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive"
-                      onClick={() => handleDeleteTransaction(tx.id)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                );
-              })}
+              {transactions.map((tx) => (
+                <TransactionCard
+                  key={tx.id}
+                  transaction={tx}
+                  onDelete={handleDeleteTransaction}
+                />
+              ))}
             </div>
           )}
         </CardContent>

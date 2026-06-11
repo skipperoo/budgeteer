@@ -17,8 +17,9 @@ import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64 } from "@/lib/crypto";
 import { encryptTransactionPayload } from "@/lib/crypto-transaction";
-import { fetchAndDecryptTransactions } from "@/lib/decrypt-transactions";
-import type { Transaction, CreateTransactionRequest } from "@/types";
+import { fetchAndDecryptTransactions, getAccountKey } from "@/lib/decrypt-transactions";
+import { TransactionCard } from "@/components/transactions/TransactionCard";
+import type { CreateTransactionRequest } from "@/types";
 import type { DecryptedTransaction } from "@/lib/decrypt-transactions";
 
 export default function DashboardPage() {
@@ -64,29 +65,30 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!privKeyBase64 || accounts.length === 0) return;
 
-    let total = 0;
+    let accountCounts = 0;
     const allDecrypted: DecryptedTransaction[] = [];
 
     Promise.all(
       accounts.map(async (acc) => {
         try {
-          // Get raw count first
-          const raw = await apiFetch<Transaction[]>(ENDPOINTS.transactions(acc.id));
-          total += (raw ?? []).length;
-
-          // Try to decrypt
-          const decrypted = await fetchAndDecryptTransactions(acc.id, privKeyBase64, user?.public_key);
+          // Try to decrypt — fetchAndDecryptTransactions calls getAccountKey internally
+          const decrypted = await fetchAndDecryptTransactions(
+            acc.id,
+            privKeyBase64,
+            user?.public_key
+          );
           allDecrypted.push(...decrypted);
+          accountCounts += decrypted.length;
         } catch {
-          // Skip accounts we can't decrypt
+          // Skip accounts we can't decrypt (no key yet, etc.)
         }
       })
     ).then(() => {
-      setRawTxCount(total);
+      setRawTxCount(accountCounts);
       allDecrypted.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
       setAllTxs(allDecrypted);
     });
-  }, [accounts, privKeyBase64]);
+  }, [accounts, privKeyBase64, user]);
 
   const recentTxs = allTxs.slice(0, 10);
   const avgAmount =
@@ -119,6 +121,10 @@ export default function DashboardPage() {
       setTxCreateError("Please select an account");
       return;
     }
+    if (!privKeyBase64) {
+      setTxCreateError("Private key not available");
+      return;
+    }
     setTxCreateError("");
     setTxCreating(true);
 
@@ -128,7 +134,13 @@ export default function DashboardPage() {
         throw new Error("Invalid amount");
       }
 
-      const accountKeyBase64 = "AAAAAAAAAAAAAAAAAAAAAA==";
+      // Fetch the real account key for the selected account
+      const accountKeyBase64 = await getAccountKey(
+        txAccountId,
+        privKeyBase64,
+        user?.public_key
+      );
+
       const encryptedPayload = await encryptTransactionPayload(
         { amount, category: txCategory || "general", notes: txNotes, counterparty: txCounterparty },
         accountKeyBase64
@@ -147,6 +159,7 @@ export default function DashboardPage() {
       setTxNotes("");
       setTxCounterparty("");
       setTxDate(new Date().toISOString().slice(0, 10));
+      setShowCategoryInput(false);
     } catch (err: any) {
       setTxCreateError(err.message);
     } finally {
@@ -372,43 +385,18 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {recentTxs.map((tx) => {
-                const isIncome = tx.payload.amount >= 0;
-                return (
-                  <div
-                    key={tx.id}
-                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => navigate(`/accounts/${tx.account_id}`)}
-                  >
-                    <div className="flex items-center gap-4 min-w-0">
-                      <span
-                        className={`text-sm font-semibold tabular-nums ${
-                          isIncome ? "text-green-600" : "text-red-600"
-                        }`}
-                      >
-                        {isIncome ? "+" : ""}
-                        {tx.payload.amount.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
-                      <span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">
-                        {tx.payload.category}
-                      </span>
-                      {tx.payload.counterparty && (
-                        <span className="text-sm text-muted-foreground truncate hidden sm:inline">
-                          {tx.payload.counterparty}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(tx.time).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+              {recentTxs.map((tx) => (
+                <TransactionCard
+                  key={tx.id}
+                  transaction={{
+                    id: tx.id,
+                    time: tx.time,
+                    payload: tx.payload,
+                  }}
+                  onClick={() => navigate(`/accounts/${tx.account_id}`)}
+                  compact
+                />
+              ))}
             </div>
           )}
         </CardContent>

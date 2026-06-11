@@ -21,24 +21,57 @@ export interface DecryptedTransaction {
   payload: TransactionPayload;
 }
 
+/** A transaction whose payload may or may not have decrypted. */
+export interface DecryptResult {
+  id: string;
+  time: string;
+  account_id: string;
+  created_by: string;
+  payload: TransactionPayload | null;
+  decryptError?: string;
+}
+
 /**
  * Decrypt a single transaction's payload using the account key.
+ * Returns null for the payload if decryption fails (instead of throwing),
+ * so a single bad transaction doesn't break a whole batch.
  */
 export async function decryptTx(
   tx: Transaction,
   accountKeyBase64: string
-): Promise<DecryptedTransaction> {
-  const payload = await decryptTransactionPayload(
-    tx.encrypted_payload,
-    accountKeyBase64
+): Promise<DecryptResult> {
+  try {
+    const payload = await decryptTransactionPayload(
+      tx.encrypted_payload,
+      accountKeyBase64
+    );
+    return {
+      id: tx.id,
+      time: tx.time,
+      account_id: tx.account_id,
+      created_by: tx.created_by,
+      payload,
+    };
+  } catch {
+    return {
+      id: tx.id,
+      time: tx.time,
+      account_id: tx.account_id,
+      created_by: tx.created_by,
+      payload: null,
+      decryptError: "Decryption failed",
+    };
+  }
+}
+
+/** Filter a DecryptResult[] to only successfully-decrypted transactions. */
+export function filterDecrypted(
+  results: DecryptResult[]
+): DecryptedTransaction[] {
+  return results.filter(
+    (r): r is DecryptedTransaction & { payload: TransactionPayload } =>
+      r.payload !== null
   );
-  return {
-    id: tx.id,
-    time: tx.time,
-    account_id: tx.account_id,
-    created_by: tx.created_by,
-    payload,
-  };
 }
 
 /**
@@ -97,10 +130,31 @@ export async function fetchAndDecryptTransactions(
   const txs = await apiFetch<Transaction[]>(ENDPOINTS.transactions(accountId));
   if (!txs || txs.length === 0) return [];
 
-  const decrypted = await Promise.all(
+  const results = await Promise.all(
     txs.map((tx) => decryptTx(tx, accountKey))
   );
-  return decrypted.sort(
+  return filterDecrypted(results).sort(
+    (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()
+  );
+}
+
+/**
+ * Like fetchAndDecryptTransactions, but returns ALL results (including
+ * failed decryptions) so the caller can render "Could not decrypt" entries.
+ */
+export async function fetchAndDecryptTransactionsWithErrors(
+  accountId: string,
+  userPrivateKeyBase64: string,
+  userPublicKey?: string
+): Promise<DecryptResult[]> {
+  const accountKey = await getAccountKey(accountId, userPrivateKeyBase64, userPublicKey);
+  const txs = await apiFetch<Transaction[]>(ENDPOINTS.transactions(accountId));
+  if (!txs || txs.length === 0) return [];
+
+  const results = await Promise.all(
+    txs.map((tx) => decryptTx(tx, accountKey))
+  );
+  return results.sort(
     (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()
   );
 }

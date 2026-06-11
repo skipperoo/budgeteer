@@ -29,7 +29,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="w-64 border-r bg-card flex flex-col">
+    <aside className="hidden md:flex w-64 border-r bg-card flex-col">
       <div className="p-6">
         <h1 className="text-xl font-bold">Budgeteer</h1>
       </div>

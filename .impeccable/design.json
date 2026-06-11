@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-11T21:00:00Z",
+  "title": "Design System: Budgeteer",
+  "extensions": {
+    "colorMeta": {
+      "background": { "role": "neutral", "displayName": "Background", "canonical": "oklch(100% 0 0)", "tonalRamp": ["oklch(15% 0.04 265)", "oklch(30% 0.035 265)", "oklch(45% 0.03 260)", "oklch(60% 0.02 260)", "oklch(75% 0.015 260)", "oklch(85% 0.01 260)", "oklch(93% 0.008 260)", "oklch(100% 0 0)"] },
+      "foreground": { "role": "primary-text", "displayName": "Foreground", "canonical": "oklch(12% 0.04 265)", "tonalRamp": ["oklch(12% 0.04 265)", "oklch(25% 0.035 265)", "oklch(40% 0.03 260)", "oklch(55% 0.025 260)", "oklch(70% 0.02 260)", "oklch(82% 0.015 260)", "oklch(92% 0.01 260)", "oklch(98% 0.005 260)"] },
+      "primary": { "role": "primary", "displayName": "Primary Navy", "canonical": "oklch(18% 0.04 265)", "tonalRamp": ["oklch(12% 0.04 265)", "oklch(18% 0.04 265)", "oklch(28% 0.04 265)", "oklch(40% 0.035 265)", "oklch(55% 0.03 260)", "oklch(72% 0.025 260)", "oklch(85% 0.015 260)", "oklch(95% 0.008 260)"] },
+      "muted-foreground": { "role": "neutral-text", "displayName": "Muted Foreground", "canonical": "oklch(55% 0.02 260)", "tonalRamp": ["oklch(15% 0.03 265)", "oklch(28% 0.025 265)", "oklch(40% 0.025 260)", "oklch(55% 0.02 260)", "oklch(68% 0.015 260)", "oklch(80% 0.01 260)", "oklch(90% 0.008 260)", "oklch(97% 0.005 260)"] },
+      "border": { "role": "neutral-stroke", "displayName": "Border", "canonical": "oklch(93% 0.008 260)", "tonalRamp": ["oklch(15% 0.04 265)", "oklch(30% 0.035 265)", "oklch(48% 0.03 260)", "oklch(62% 0.025 260)", "oklch(75% 0.02 260)", "oklch(83% 0.015 260)", "oklch(93% 0.008 260)", "oklch(98% 0.005 260)"] },
+      "destructive": { "role": "semantic-error", "displayName": "Destructive Red", "canonical": "oklch(58% 0.2 25)", "tonalRamp": ["oklch(25% 0.18 25)", "oklch(35% 0.2 25)", "oklch(45% 0.2 25)", "oklch(58% 0.2 25)", "oklch(68% 0.18 25)", "oklch(78% 0.14 25)", "oklch(88% 0.08 25)", "oklch(95% 0.04 25)"] },
+      "background-dark": { "role": "neutral", "displayName": "Background Dark", "canonical": "oklch(13% 0.01 265)", "tonalRamp": ["oklch(5% 0.005 265)", "oklch(10% 0.01 265)", "oklch(13% 0.01 265)", "oklch(20% 0.015 265)", "oklch(30% 0.02 265)", "oklch(45% 0.02 260)", "oklch(65% 0.02 260)", "oklch(85% 0.015 260)"] },
+      "foreground-dark": { "role": "primary-text", "displayName": "Foreground Dark", "canonical": "oklch(93% 0.01 260)", "tonalRamp": ["oklch(93% 0.01 260)", "oklch(80% 0.015 260)", "oklch(65% 0.02 260)", "oklch(50% 0.02 265)", "oklch(35% 0.02 265)", "oklch(25% 0.015 265)", "oklch(18% 0.01 265)", "oklch(10% 0.005 265)"] },
+      "primary-dark": { "role": "primary", "displayName": "Primary Dark", "canonical": "oklch(62% 0.06 260)", "tonalRamp": ["oklch(25% 0.04 265)", "oklch(35% 0.05 265)", "oklch(45% 0.055 260)", "oklch(62% 0.06 260)", "oklch(72% 0.05 260)", "oklch(82% 0.03 260)", "oklch(90% 0.02 260)", "oklch(97% 0.01 260)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page-level headings — one per page." },
+      "headline": { "displayName": "Headline", "purpose": "Section headings, card titles, dialog titles." },
+      "title": { "displayName": "Title", "purpose": "Card titles, sub-section headers." },
+      "body": { "displayName": "Body", "purpose": "Primary reading size for all content." },
+      "label": { "displayName": "Label", "purpose": "Form labels, button text, navigation items." }
+    },
+    "shadows": [
+      { "name": "card", "value": "0 1px 2px 0 rgb(0 0 0 / 0.05)", "purpose": "Default card surface elevation." },
+      { "name": "hover", "value": "0 4px 6px -1px rgb(0 0 0 / 0.1)", "purpose": "Interactive card hover state." },
+      { "name": "dialog", "value": "0 10px 15px -3px rgb(0 0 0 / 0.1)", "purpose": "Dialog content and elevated surfaces." },
+      { "name": "overlay", "value": "0 0 0 9999px rgb(0 0 0 / 0.8)", "purpose": "Dialog backdrop overlay." }
+    ],
+    "motion": [
+      { "name": "state-transition", "value": "background-color 0.2s ease, opacity 0.2s ease", "purpose": "Default easing for hover, focus, and state transitions (200ms)." },
+      { "name": "dialog-enter", "value": "opacity 0.2s ease, transform 0.2s ease", "purpose": "Dialog open/close animation (200ms fade + zoom)." },
+      { "name": "shadow-transition", "value": "box-shadow 0.2s ease", "purpose": "Card hover shadow lift transition." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "Primary call-to-action. Used for 'Sign in', 'Create', 'Add Transaction', 'Save'.",
+      "html": "<button class=\"ds-btn-primary\">Add Transaction</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 8px 16px; background: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; font-size: 0.875rem; font-weight: 500; line-height: 1; border: none; border-radius: 6px; cursor: pointer; transition: background-color 0.2s, opacity 0.2s; white-space: nowrap; } .ds-btn-primary:hover { opacity: 0.9; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 1px #0a0a1a; } .ds-btn-primary:disabled { opacity: 0.5; pointer-events: none; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action. Used for 'Cancel', 'Back', 'Edit'.",
+      "html": "<button class=\"ds-btn-outline\">Cancel</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 8px 16px; background: transparent; color: #0a0a1a; font-family: system-ui, -apple-system, sans-serif; font-size: 0.875rem; font-weight: 500; line-height: 1; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; transition: background-color 0.2s, color 0.2s; white-space: nowrap; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); } .ds-btn-outline:hover { background: #f1f5f9; color: #0f172a; } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 1px #0a0a1a; } .ds-btn-outline:disabled { opacity: 0.5; pointer-events: none; }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Destructive action. Used for 'Delete', 'Remove'.",
+      "html": "<button class=\"ds-btn-destructive\">Delete</button>",
+      "css": ".ds-btn-destructive { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 8px 16px; background: #ef4444; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; font-size: 0.875rem; font-weight: 500; line-height: 1; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; white-space: nowrap; } .ds-btn-destructive:hover { opacity: 0.9; } .ds-btn-destructive:focus-visible { outline: none; box-shadow: 0 0 0 1px #0a0a1a; } .ds-btn-destructive:disabled { opacity: 0.5; pointer-events: none; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Single-line text field for forms and search.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Enter amount\">",
+      "css": ".ds-input { display: flex; height: 36px; width: 100%; padding: 4px 12px; background: transparent; color: #0a0a1a; font-family: system-ui, -apple-system, sans-serif; font-size: 0.875rem; line-height: 1.5715; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); transition: box-shadow 0.2s; box-sizing: border-box; } .ds-input::placeholder { color: #64748b; } .ds-input:focus { outline: none; box-shadow: 0 0 0 1px #0a0a1a; } .ds-input:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Card Container",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Content container for sections, forms, data display.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\"><h3 class=\"ds-card-title\">Recent Transactions</h3></div><div class=\"ds-card-content\"><p style=\"color: #64748b; font-size: 0.875rem;\">Card content area (24px padding).</p></div></div>",
+      "css": ".ds-card { background: #ffffff; color: #0a0a1a; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); } .ds-card-header { display: flex; flex-direction: column; gap: 6px; padding: 24px; } .ds-card-title { font-family: system-ui, -apple-system, sans-serif; font-size: 1rem; font-weight: 600; line-height: 1; letter-spacing: -0.01em; margin: 0; } .ds-card-content { padding: 0 24px 24px; }"
+    },
+    {
+      "name": "Dialog / Modal",
+      "kind": "custom",
+      "refersTo": "dialog",
+      "description": "Modal overlay for focused tasks — creating accounts, transactions, inviting users.",
+      "html": "<div class=\"ds-dialog-backdrop\"><div class=\"ds-dialog\"><div class=\"ds-dialog-header\"><h2 class=\"ds-dialog-title\">New Transaction</h2><button class=\"ds-dialog-close\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line></svg></button></div><div class=\"ds-dialog-content\"><p style=\"color: #64748b; font-size: 0.875rem;\">Dialog content area.</p></div></div></div>",
+      "css": ".ds-dialog-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); } .ds-dialog { width: 100%; max-width: 512px; margin: 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); padding: 24px; position: relative; } .ds-dialog-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; } .ds-dialog-title { font-family: system-ui, -apple-system, sans-serif; font-size: 1.125rem; font-weight: 600; line-height: 1; letter-spacing: -0.01em; margin: 0; } .ds-dialog-close { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; color: #64748b; border-radius: 4px; cursor: pointer; transition: color 0.2s, background 0.2s; padding: 0; } .ds-dialog-close:hover { color: #0a0a1a; background: #f1f5f9; } .ds-dialog-content { }"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "refersTo": "button-ghost",
+      "description": "Fixed sidebar with app name, navigation items, and logout.",
+      "html": "<aside class=\"ds-sidebar\"><div class=\"ds-sidebar-brand\"><h1 class=\"ds-sidebar-title\">Budgeteer</h1></div><nav class=\"ds-sidebar-nav\"><a class=\"ds-nav-item ds-nav-item-active\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"></rect></svg>Dashboard</a><a class=\"ds-nav-item\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4\"></path><path d=\"M3 12v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5\"></path><path d=\"M12 12v4\"></path></svg>Accounts</a><a class=\"ds-nav-item\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"3\"></circle><path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z\"></path></svg>Settings</a></nav><div class=\"ds-sidebar-footer\"><button class=\"ds-nav-item\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path><polyline points=\"16 17 21 12 16 7\"></polyline><line x1=\"21\" y1=\"12\" x2=\"9\" y2=\"12\"></line></svg>Logout</button></div></aside>",
+      "css": ".ds-sidebar { width: 256px; height: 100vh; display: flex; flex-direction: column; border-right: 1px solid #e2e8f0; background: #ffffff; } .ds-sidebar-brand { padding: 24px; } .ds-sidebar-title { font-family: system-ui, -apple-system, sans-serif; font-size: 1.25rem; font-weight: 700; line-height: 1.2; margin: 0; color: #0a0a1a; } .ds-sidebar-nav { flex: 1; padding: 0 16px; display: flex; flex-direction: column; gap: 4px; } .ds-nav-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; font-family: system-ui, -apple-system, sans-serif; font-size: 0.875rem; font-weight: 500; color: #64748b; text-decoration: none; border-radius: 6px; transition: background-color 0.2s, color 0.2s; border: none; background: transparent; cursor: pointer; width: 100%; text-align: left; } .ds-nav-item svg { width: 16px; height: 16px; flex-shrink: 0; } .ds-nav-item:hover { background: #f1f5f9; color: #0f172a; } .ds-nav-item-active { background: #f1f5f9; color: #0f172a; } .ds-sidebar-footer { padding: 16px; border-top: 1px solid #e2e8f0; }"
+    },
+    {
+      "name": "Transaction Row",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Compact data row for transaction list items. Shows amount, category, counterparty, and date.",
+      "html": "<div class=\"ds-tx-row\"><div class=\"ds-tx-left\"><span class=\"ds-tx-amount ds-tx-expense\">-42.50</span><span class=\"ds-tx-category\">Groceries</span><span class=\"ds-tx-counterparty\">Whole Foods</span></div><span class=\"ds-tx-date\">Jun 11</span></div>",
+      "css": ".ds-tx-row { display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px; cursor: pointer; transition: background-color 0.2s; } .ds-tx-row:hover { background: rgb(241 245 249 / 0.5); } .ds-tx-left { display: flex; align-items: center; gap: 16px; min-width: 0; } .ds-tx-amount { font-family: system-ui, -apple-system, sans-serif; font-size: 0.875rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; } .ds-tx-income { color: #16a34a; } .ds-tx-expense { color: #dc2626; } .ds-tx-category { font-size: 0.75rem; background: #f1f5f9; color: #0f172a; padding: 2px 8px; border-radius: 9999px; white-space: nowrap; } .ds-tx-counterparty { font-size: 0.875rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: none; } @media (min-width: 640px) { .ds-tx-counterparty { display: inline; } } .ds-tx-date { font-size: 0.75rem; color: #64748b; white-space: nowrap; flex-shrink: 0; }"
+    },
+    {
+      "name": "Summary Stat Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Compact stat display for the dashboard summary grid — total accounts, transactions, income/expense counts, average amount.",
+      "html": "<div class=\"ds-stat-card\"><div class=\"ds-stat-label\">Total Accounts</div><div class=\"ds-stat-value\">3</div></div>",
+      "css": ".ds-stat-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); } .ds-stat-label { font-family: system-ui, -apple-system, sans-serif; font-size: 0.875rem; font-weight: 500; color: #64748b; margin-bottom: 4px; } .ds-stat-value { font-family: system-ui, -apple-system, sans-serif; font-size: 1.875rem; font-weight: 700; line-height: 1.2; color: #0a0a1a; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Desk",
+    "overview": "Budgeteer's interface is a clean, ordered workspace where the numbers do the talking. Like a well-organized desk in a quiet room: everything has its place, nothing is loud, and the only thing that demands attention is the work itself — the user's financial data.\n\nThe system rejects gamification, decorative motion, and urgency tricks. Finance tracking is already emotionally loaded; the UI should feel like a trustworthy accountant's desk, not a dashboard designed to maximize engagement. Color is restrained. Typography is familiar and legible. Motion, when it occurs, is a 200ms response to an interaction, not a choreographed entrance.\n\nThe product register means this is a tool first. Users sit down to log a transaction, review spending, or invite a household member — and the UI should disappear into that task.",
+    "keyCharacteristics": [
+      "Restrained color: one neutral family (cool slate) with one accent (primary navy). Saturation below 5% on all surfaces.",
+      "System font stack: no custom typeface. Reads instantly on every device.",
+      "Flat by default, layered with purpose: tonal stacking for depth; shadows reserved for interactive states and modals.",
+      "Consistent component vocabulary across every screen. A button is a button; an input is an input.",
+      "Generous whitespace (24px padding on cards, 24px sidebar padding, 24px page margins) punctuated by dense data rows."
+    ],
+    "rules": [
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces sit on the same z-plane until an interaction or structural need lifts them. Sidebars and content panels are distinguished by background color and a 1px border, not by a drop shadow.", "section": "elevation" },
+      { "name": "The One Voice Rule", "body": "The primary navy accent is used on no more than 10% of any given screen. Its rarity is the point.", "section": "colors" }
+    ],
+    "dos": [
+      "Do use color only as an enhancement, never as the sole differentiator. Income/expense rows use +/- prefixes alongside green/red text.",
+      "Do keep all interactive elements at 36px height for consistent touch targets.",
+      "Do use the system font stack exclusively. No custom fonts, no icon fonts (use inline SVGs).",
+      "Do verify muted-foreground (#64748b) against white (#ffffff) for 4.5:1 minimum contrast.",
+      "Do use focus-visible:ring-1 ring-ring on every interactive element.",
+      "Do keep form error messages as text below the field. Do not change the input border to red.",
+      "Do skeleton-load content areas with the same surface tokens (muted gray). No spinners in the middle of content.",
+      "Do respect prefers-reduced-motion: replace all animated transitions with instant (0ms) state changes.",
+      "Do verify all color pairs in dark mode meet the same contrast ratios as light mode.",
+      "Do persist the user's theme preference to localStorage so the choice survives page reload.",
+      "Do default to the system prefers-color-scheme on first visit."
+    ],
+    "donts": [
+      "Don't use gradient text, colored accent stripes (border-left greater than 1px), or glassmorphism. Prohibited entirely.",
+      "Don't use display or serif fonts anywhere in the UI. The system font stack is the only typeface.",
+      "Don't add decorative motion. Motion conveys state only (hover, focus, open, close) and stays within 150-250ms.",
+      "Don't use modals as the first thought for interaction. Exhaust inline and progressive disclosure patterns first.",
+      "Don't use the primary navy on more than 10% of any single screen. Its rarity is the point.",
+      "Don't create different button shapes or input styles on different pages. The component vocabulary is universal.",
+      "Don't show 'you're offline' banners that block interaction. A subtle indicator in the sidebar footer is sufficient.",
+      "Don't use cards inside cards. A card is the outermost container; use direct child elements for internal grouping."
+    ]
+  }
+}
