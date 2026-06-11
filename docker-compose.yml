@@ -37,7 +37,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: timescale/timescaledb:latest-pg16
+    image: timescale/timescaledb:latest-pg18
     secrets:
       - db_password
     environment:

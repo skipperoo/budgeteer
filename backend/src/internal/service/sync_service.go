@@ -85,9 +85,11 @@ func (s *SyncService) Push(ctx context.Context, userID string, operations []mode
 				continue
 			}
 			payload := op.EncryptedPayload
+			accountID := op.EntityType
 			item := &model.SyncQueueItem{
 				ID:               uuid.New().String(),
 				TargetUserID:     au.UserID,
+				AccountID:        &accountID,
 				Action:           op.Action,
 				EntityType:       op.EntityType,
 				EncryptedPayload: &payload,
