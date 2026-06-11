@@ -65,6 +65,16 @@ Upon login, the user's `encrypted_private_key` is fetched from the server and de
   - UI customization and Locale settings.
   - Default currency settings.
 
+### Category Model
+
+Categories are managed **client-side** only (per AGENTS.md E2E encryption model — the category field is part of the encrypted transaction payload):
+
+- **Storage:** Categories are stored in `localStorage` keyed by account ID (`budgeteer_categories_{accountId}`). No backend API is needed for categories.
+- **Per-user:** Each user maintains their own category list per account. When a user creates a transaction with a new category, it is saved to their local list.
+- **Joint accounts:** Categories from all members are implicitly merged because each member adds locally; the union of all members' categories is available when creating transactions (since each client only sees its own local list, the merge can be enhanced by syncing category lists through the sync queue in future).
+- **UI:** A dropdown/combobox in the transaction creation form shows existing categories for the selected account plus an "Add new category..." option. Selecting this shows a text input to type and save a new category.
+- **Shared categories via sync (future):** When syncing, transaction payloads contain the category string. A future enhancement could sync category lists through the sync queue so joint account members see each other's categories.
+
 ---
 
 ## 4. Backend Specifications

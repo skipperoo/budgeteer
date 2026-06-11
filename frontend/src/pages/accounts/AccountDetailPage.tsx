@@ -12,11 +12,18 @@ import {
 } from "@/components/ui/dialog";
 import { useAccountStore } from "@/stores/account-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useCategoryStore } from "@/stores/category-store";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
-import { generateAccountKey, encryptAccountKeyForRecipient } from "@/lib/crypto";
-import { encryptTransactionPayload } from "@/lib/crypto-transaction";
-import type { Transaction, CreateTransactionRequest } from "@/types";
+import { generateAccountKey, encryptAccountKeyForRecipient, bytesToBase64 } from "@/lib/crypto";
+import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
+import { decryptAccountKeyForRecipient } from "@/lib/crypto";
+import type { AccountUser, Transaction, CreateTransactionRequest } from "@/types";
+import type { TransactionPayload } from "@/lib/crypto-transaction";
+
+interface DecryptedTx extends Transaction {
+  decryptedPayload?: TransactionPayload;
+}
 
 const CURRENCIES = [
   { code: "EUR", symbol: "€", name: "Euro" },
@@ -50,8 +57,15 @@ export default function AccountDetailPage() {
   const [editError, setEditError] = useState("");
   const [editing, setEditing] = useState(false);
 
+  // --- Decryption ---
+  const plaintextPrivateKey = useAuthStore((s) => s.plaintextPrivateKey);
+  const privKeyBase64 = plaintextPrivateKey
+    ? bytesToBase64(new Uint8Array(plaintextPrivateKey))
+    : null;
+  const [accountKeyBase64, setAccountKeyBase64] = useState<string | null>(null);
+
   // --- Transaction state ---
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<DecryptedTx[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [txError, setTxError] = useState("");
 
@@ -65,12 +79,38 @@ export default function AccountDetailPage() {
   const [txCreating, setTxCreating] = useState(false);
   const [txCreateError, setTxCreateError] = useState("");
 
+  // Category combobox state
+  const { getCategories, addCategory } = useCategoryStore();
+  const [showCategoryInput, setShowCategoryInput] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
+
   useEffect(() => {
     if (id) {
       fetchAccountUsers(id);
       fetchTransactions();
+      fetchAccountKey();
     }
   }, [id, fetchAccountUsers]);
+
+  // Fetch and decrypt the account key for this account
+  const fetchAccountKey = async () => {
+    if (!id || !privKeyBase64) return;
+    try {
+      const users = await apiFetch<AccountUser[]>(ENDPOINTS.accountUsers(id));
+      for (const au of users) {
+        const parts = au.encrypted_account_key.split(":");
+        if (parts.length === 2) {
+          try {
+            const key = await decryptAccountKeyForRecipient(
+              parts[1], parts[0], privKeyBase64
+            );
+            setAccountKeyBase64(key);
+            return;
+          } catch { continue; }
+        }
+      }
+    } catch { /* no key available */ }
+  };
 
   // Re-fetch accounts if we don't have this one yet
   useEffect(() => {
@@ -85,13 +125,38 @@ export default function AccountDetailPage() {
     setTxError("");
     try {
       const data = await apiFetch<Transaction[]>(ENDPOINTS.transactions(id));
-      setTransactions(data ?? []);
+      const raw = data ?? [];
+
+      // Try to decrypt each transaction if key is available
+      const decrypted = await Promise.all(
+        raw.map(async (tx) => {
+          if (accountKeyBase64) {
+            try {
+              const payload = await decryptTransactionPayload(
+                tx.encrypted_payload,
+                accountKeyBase64
+              );
+              return { ...tx, decryptedPayload: payload } as DecryptedTx;
+            } catch { /* fall through */ }
+          }
+          return tx as DecryptedTx;
+        })
+      );
+
+      setTransactions(decrypted);
     } catch (err: any) {
       setTxError(err.message);
     } finally {
       setTxLoading(false);
     }
   };
+
+  // Re-decrypt when account key changes
+  useEffect(() => {
+    if (accountKeyBase64 && transactions.length > 0) {
+      fetchTransactions();
+    }
+  }, [accountKeyBase64]);
 
   // --- Edit account ---
   const openEdit = () => {
@@ -141,9 +206,29 @@ export default function AccountDetailPage() {
     }
   };
 
+  // Category helpers
+  const handleSelectCategory = (cat: string) => {
+    setTxCategory(cat);
+    setShowCategoryInput(false);
+    setNewCategory("");
+  };
+
+  const handleAddNewCategory = () => {
+    const cat = newCategory.trim();
+    if (!cat) return;
+    if (id) addCategory(id, cat);
+    setTxCategory(cat);
+    setShowCategoryInput(false);
+    setNewCategory("");
+  };
+
   // --- Create transaction ---
   const handleCreateTransaction = async () => {
     if (!id) return;
+    if (!accountKeyBase64) {
+      setTxCreateError("Account key not available. Try re-encrypting the key.");
+      return;
+    }
     setTxCreateError("");
     setTxCreating(true);
 
@@ -153,17 +238,11 @@ export default function AccountDetailPage() {
         throw new Error("Invalid amount");
       }
 
-      // Encrypt the transaction payload
-      // In a full implementation, the account key would be fetched from the
-      // account_users table and decrypted. For now, we use a placeholder.
-      const accountKeyBase64 = "AAAAAAAAAAAAAAAAAAAAAA=="; // placeholder 32-byte key
+      const category = txCategory || "general";
+      if (id) addCategory(id, category);
+
       const encryptedPayload = await encryptTransactionPayload(
-        {
-          amount,
-          category: txCategory || "general",
-          notes: txNotes,
-          counterparty: txCounterparty,
-        },
+        { amount, category, notes: txNotes, counterparty: txCounterparty },
         accountKeyBase64
       );
 
@@ -183,6 +262,7 @@ export default function AccountDetailPage() {
       setTxNotes("");
       setTxCounterparty("");
       setTxDate(new Date().toISOString().slice(0, 10));
+      setShowCategoryInput(false);
       await fetchTransactions();
     } catch (err: any) {
       setTxCreateError(err.message);
@@ -261,11 +341,55 @@ export default function AccountDetailPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Category</label>
-                  <Input
-                    value={txCategory}
-                    onChange={(e) => setTxCategory(e.target.value)}
-                    placeholder="e.g. groceries, salary"
-                  />
+                  {!showCategoryInput ? (
+                    <div className="flex gap-2">
+                      <select
+                        value={txCategory}
+                        onChange={(e) => {
+                          if (e.target.value === "__new__") {
+                            setShowCategoryInput(true);
+                          } else {
+                            setTxCategory(e.target.value);
+                          }
+                        }}
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                      >
+                        <option value="">Select category...</option>
+                        {id &&
+                          getCategories(id).map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                        <option value="__new__">+ Add new category...</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        value={newCategory}
+                        onChange={(e) => setNewCategory(e.target.value)}
+                        placeholder="New category name"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddNewCategory();
+                          }
+                        }}
+                      />
+                      <Button type="button" size="sm" onClick={handleAddNewCategory}>
+                        Add
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowCategoryInput(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Counterparty</label>
@@ -420,29 +544,62 @@ export default function AccountDetailPage() {
             </p>
           ) : (
             <div className="space-y-2">
-              {transactions.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="flex items-center justify-between p-3 rounded-lg border"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(tx.time).toLocaleDateString()}
-                    </span>
-                    <span className="text-xs font-mono text-muted-foreground">
-                      {tx.encrypted_payload.slice(0, 16)}...
-                    </span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive"
-                    onClick={() => handleDeleteTransaction(tx.id)}
+              {transactions.map((tx) => {
+                const p = tx.decryptedPayload;
+                const isIncome = p ? p.amount >= 0 : null;
+                return (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between p-3 rounded-lg border"
                   >
-                    Delete
-                  </Button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-4 min-w-0">
+                      {p ? (
+                        <>
+                          <span
+                            className={`text-sm font-semibold tabular-nums ${
+                              isIncome ? "text-green-600" : "text-red-600"
+                            }`}
+                          >
+                            {isIncome ? "+" : ""}
+                            {p.amount.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
+                          <span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">
+                            {p.category}
+                          </span>
+                          {p.counterparty && (
+                            <span className="text-sm text-muted-foreground truncate hidden sm:inline">
+                              {p.counterparty}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {tx.encrypted_payload.slice(0, 16)}...
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(tx.time).toLocaleDateString()}
+                      </span>
+                      {p?.notes && (
+                        <span className="text-xs text-muted-foreground truncate hidden md:inline italic">
+                          {p.notes}
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive"
+                      onClick={() => handleDeleteTransaction(tx.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
