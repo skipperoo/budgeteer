@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -64,10 +65,13 @@ func readSecret(name string) string {
 	return ""
 }
 
+// readFileOrEnv reads a secret from a Docker secret file or falls back to an
+// environment variable. Whitespace is trimmed from the file content to prevent
+// issues with trailing newlines (a common Docker secrets pitfall).
 func readFileOrEnv(path, envKey string) string {
 	data, err := os.ReadFile(path)
 	if err == nil && len(data) > 0 {
-		return string(data)
+		return strings.TrimSpace(string(data))
 	}
 	return os.Getenv(envKey)
 }
