@@ -5,7 +5,7 @@ import "time"
 type SyncQueueItem struct {
 	ID               string     `json:"id"`
 	TargetUserID     string     `json:"target_user_id"`
-	AccountID        string     `json:"account_id"`
+	AccountID        *string    `json:"account_id,omitempty"`
 	Action           string     `json:"action"`      // INSERT, UPDATE, DELETE
 	EntityType       string     `json:"entity_type"` // transaction, account, etc.
 	EncryptedPayload *string    `json:"encrypted_payload,omitempty"`

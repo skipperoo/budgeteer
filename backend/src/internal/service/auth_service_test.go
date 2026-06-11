@@ -2,48 +2,45 @@ package service
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"budgeteer-backend/internal/database"
 	"budgeteer-backend/internal/model"
 	"budgeteer-backend/internal/repository"
+	"budgeteer-backend/internal/testhelpers"
 )
-
-func dbURL() string {
-	if v := os.Getenv("TEST_DB_DSN"); v != "" {
-		return v
-	}
-	return "postgres://budgeteer:budgeteer_db_pass_2024@localhost:5432/budgeteer?sslmode=disable"
-}
-
-func redisAddr() string {
-	if v := os.Getenv("TEST_REDIS_ADDR"); v != "" {
-		return v
-	}
-	return "localhost:6379"
-}
-
-func redisPass() string {
-	return os.Getenv("TEST_REDIS_PASSWORD")
-}
 
 func setupTestDB(t *testing.T) context.CancelFunc {
 	t.Helper()
 
 	ctx := context.Background()
-	if err := database.Connect(ctx, dbURL()); err != nil {
-		t.Skipf("Skipping integration test: database not available: %v", err)
+
+	pg, err := testhelpers.SetupPostgresOnce(ctx)
+	if err != nil {
+		t.Skipf("Skipping integration test: postgres not available: %v", err)
 	}
 
-	if err := database.ConnectRedis(ctx, redisAddr(), "", redisPass()); err != nil {
-		database.Close()
+	rd, err := testhelpers.SetupRedis(ctx)
+	if err != nil {
 		t.Skipf("Skipping integration test: redis not available: %v", err)
+	}
+
+	if err := database.Connect(ctx, pg.DSN); err != nil {
+		t.Skipf("Skipping integration test: database connect failed: %v", err)
+	}
+
+	if err := database.ConnectRedis(ctx, rd.Host, rd.Port, rd.Password); err != nil {
+		database.Close()
+		t.Skipf("Skipping integration test: redis connect failed: %v", err)
 	}
 
 	cleanup := func() {
 		database.Pool.Exec(ctx, "DELETE FROM email_outbox")
 		database.Pool.Exec(ctx, "DELETE FROM otps")
+		database.Pool.Exec(ctx, "DELETE FROM sync_queue")
+		database.Pool.Exec(ctx, "DELETE FROM account_users")
+		database.Pool.Exec(ctx, "DELETE FROM accounts")
+		database.Pool.Exec(ctx, "DELETE FROM transactions")
 		database.Pool.Exec(ctx, "DELETE FROM users")
 		database.Close()
 		database.CloseRedis()

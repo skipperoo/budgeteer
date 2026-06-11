@@ -8,3 +8,7 @@ redis_data/
 node_modules/
 # Build output
 dist/
+# Go compiled binary
+budgeteer-backend
+# Opencode AI assistant config
+.opencode/
