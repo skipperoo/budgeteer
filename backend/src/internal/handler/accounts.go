@@ -158,6 +158,39 @@ func ListAccountUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(users)
 }
 
+func UpdateMyAccountKey(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
+	if !ok || claims == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(model.Error{Error: "unauthorized"})
+		return
+	}
+
+	accountID := r.PathValue("id")
+
+	var req struct {
+		EncryptedAccountKey string `json:"encrypted_account_key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body"})
+		return
+	}
+	defer r.Body.Close()
+
+	if err := service.Accounts.UpdateMyKey(r.Context(), accountID, claims.UserID, req.EncryptedAccountKey); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(model.Error{Error: err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "key updated"})
+}
+
 func RemoveAccountUser(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
 	if !ok || claims == nil {

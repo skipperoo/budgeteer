@@ -48,10 +48,11 @@ func (s *AccountService) Create(ctx context.Context, userID string, req *model.C
 	}
 
 	au := &model.AccountUser{
-		AccountID: account.ID,
-		UserID:    userID,
-		Role:      "owner",
-		JoinedAt:  now,
+		AccountID:           account.ID,
+		UserID:              userID,
+		EncryptedAccountKey: req.EncryptedAccountKey,
+		Role:                "owner",
+		JoinedAt:            now,
 	}
 	if err := s.AccountUserRepo.Create(ctx, au); err != nil {
 		return nil, fmt.Errorf("failed to add owner: %w", err)
@@ -157,6 +158,10 @@ func (s *AccountService) ListUsers(ctx context.Context, accountID string) ([]*mo
 	}
 
 	return s.AccountUserRepo.ListByAccount(ctx, accountID)
+}
+
+func (s *AccountService) UpdateMyKey(ctx context.Context, accountID, userID, encryptedKey string) error {
+	return s.AccountUserRepo.UpdateKey(ctx, accountID, userID, encryptedKey)
 }
 
 func (s *AccountService) RemoveUser(ctx context.Context, accountID, requesterID, targetUserID string) error {

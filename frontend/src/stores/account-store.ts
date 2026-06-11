@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
-import type { Account, AccountUser } from "@/types";
+import { generateAccountKey, encryptAccountKeyForRecipient } from "@/lib/crypto";
+import type { Account, AccountUser, CreateAccountRequest } from "@/types";
 
 interface AccountState {
   accounts: Account[];
@@ -38,9 +39,19 @@ export const useAccountStore = create<AccountState>((set, get) => ({
   createAccount: async (currency, type) => {
     set({ loading: true, error: null });
     try {
+      // Generate an account key and encrypt it for the current user
+      const { useAuthStore } = await import("@/stores/auth-store");
+      const user = useAuthStore.getState().user;
+      let encryptedAccountKey = "";
+      if (user?.public_key) {
+        const accountKey = generateAccountKey();
+        const enc = await encryptAccountKeyForRecipient(accountKey, user.public_key);
+        encryptedAccountKey = `${enc.ephemeralPublicKey}:${enc.ciphertext}`;
+      }
+
       await apiFetch(ENDPOINTS.accounts, {
         method: "POST",
-        body: JSON.stringify({ currency, type }),
+        body: JSON.stringify({ currency, type, encrypted_account_key: encryptedAccountKey } as CreateAccountRequest),
       });
       await get().fetchAccounts();
     } catch (err: any) {

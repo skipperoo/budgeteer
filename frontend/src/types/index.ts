@@ -69,6 +69,12 @@ export interface KeysResponse {
   encrypted_private_key: string;
 }
 
+export interface CreateAccountRequest {
+  currency: string;
+  type: string;
+  encrypted_account_key: string;
+}
+
 export interface CreateTransactionRequest {
   time: string;
   encrypted_payload: string;

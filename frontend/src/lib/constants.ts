@@ -15,6 +15,7 @@ export const ENDPOINTS = {
   accounts: `${API_BASE}/accounts`,
   account: (id: string) => `${API_BASE}/accounts/${id}`,
   accountInvite: (id: string) => `${API_BASE}/accounts/${id}/invite`,
+  accountKey: (id: string) => `${API_BASE}/accounts/${id}/key`,
   accountUsers: (id: string) => `${API_BASE}/accounts/${id}/users`,
   accountUser: (aid: string, uid: string) =>
     `${API_BASE}/accounts/${aid}/users/${uid}`,

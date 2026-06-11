@@ -80,6 +80,12 @@ func (r *AccountUserRepository) Delete(ctx context.Context, accountID, userID st
 	return err
 }
 
+func (r *AccountUserRepository) UpdateKey(ctx context.Context, accountID, userID, encryptedKey string) error {
+	query := `UPDATE account_users SET encrypted_account_key = $1 WHERE account_id = $2 AND user_id = $3`
+	_, err := database.Pool.Exec(ctx, query, encryptedKey, accountID, userID)
+	return err
+}
+
 func (r *AccountUserRepository) CountByAccount(ctx context.Context, accountID string) (int, error) {
 	query := `SELECT COUNT(*) FROM account_users WHERE account_id = $1`
 	var count int

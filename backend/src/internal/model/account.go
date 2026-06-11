@@ -15,8 +15,9 @@ type Account struct {
 }
 
 type CreateAccountRequest struct {
-	Currency string `json:"currency"`
-	Type     string `json:"type"`
+	Currency            string `json:"currency"`
+	Type                string `json:"type"`
+	EncryptedAccountKey string `json:"encrypted_account_key"`
 }
 
 type AccountUser struct {

@@ -82,6 +82,7 @@ func main() {
 		AddHandler("PUT    /v1/accounts/{id}",             handler.UpdateAccount).
 		AddHandler("DELETE /v1/accounts/{id}",             handler.DeleteAccount).
 		AddHandler("POST   /v1/accounts/{id}/invite",        handler.InviteToAccount).
+		AddHandler("PUT    /v1/accounts/{id}/key",           handler.UpdateMyAccountKey).
 		AddHandler("GET    /v1/accounts/{id}/users",         handler.ListAccountUsers).
 		AddHandler("DELETE /v1/accounts/{id}/users/{uid}",   handler.RemoveAccountUser).
 		AddHandler("GET    /v1/accounts/{id}/transactions",  handler.ListTransactions).

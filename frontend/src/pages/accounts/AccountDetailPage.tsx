@@ -92,7 +92,8 @@ export default function AccountDetailPage() {
     }
   }, [id, fetchAccountUsers]);
 
-  // Fetch and decrypt the account key for this account
+  // Fetch and decrypt the account key for this account.
+  // If no key is found for the current user, generate one and store it.
   const fetchAccountKey = async () => {
     if (!id || !privKeyBase64) return;
     try {
@@ -108,6 +109,18 @@ export default function AccountDetailPage() {
             return;
           } catch { continue; }
         }
+      }
+      // No decryptable key found for current user — generate one and store it
+      const newKey = generateAccountKey();
+      const ownPubKey = currentUser?.public_key;
+      if (ownPubKey) {
+        const enc = await encryptAccountKeyForRecipient(newKey, ownPubKey);
+        const payload = `${enc.ephemeralPublicKey}:${enc.ciphertext}`;
+        await apiFetch(ENDPOINTS.accountKey(id), {
+          method: "PUT",
+          body: JSON.stringify({ encrypted_account_key: payload }),
+        });
+        setAccountKeyBase64(newKey);
       }
     } catch { /* no key available */ }
   };
@@ -192,8 +205,25 @@ export default function AccountDetailPage() {
         `${ENDPOINTS.userLookup}?email=${encodeURIComponent(inviteEmail)}`
       );
 
-      const accountKey = generateAccountKey();
-      const encrypted = await encryptAccountKeyForRecipient(accountKey, public_key);
+      // Reuse the existing account key if we have it, otherwise generate one
+      let keyToUse = accountKeyBase64;
+      if (!keyToUse) {
+        keyToUse = generateAccountKey();
+        // Also store it for ourselves
+        const ownPubKey = currentUser?.public_key;
+        if (ownPubKey) {
+          const enc = await encryptAccountKeyForRecipient(keyToUse, ownPubKey);
+          await apiFetch(ENDPOINTS.accountKey(id), {
+            method: "PUT",
+            body: JSON.stringify({
+              encrypted_account_key: `${enc.ephemeralPublicKey}:${enc.ciphertext}`,
+            }),
+          });
+          setAccountKeyBase64(keyToUse);
+        }
+      }
+
+      const encrypted = await encryptAccountKeyForRecipient(keyToUse, public_key);
       const encryptedAccountKey = `${encrypted.ephemeralPublicKey}:${encrypted.ciphertext}`;
 
       await inviteUser(id, inviteEmail, encryptedAccountKey);
