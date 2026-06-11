@@ -71,11 +71,13 @@ func main() {
 		AddMiddleware(middleware.JWTAuth).
 		AddHandler("POST   /v1/auth/logout",               handler.Logout).
 		AddHandler("GET    /v1/auth/keys",                 handler.GetKeys).
+		AddHandler("GET    /v1/auth/me",                   handler.Me).
 		AddHandler("PUT    /v1/auth/password",             handler.ChangePassword).
 		AddHandler("GET    /v1/users/lookup",              handler.LookupUser).
 		AddHandler("GET    /v1/sync/pull",                 handler.SyncPull).
 		AddHandler("POST   /v1/sync/push",                 handler.SyncPush).
-		AddHandler("POST   /v1/accounts/",                 handler.CreateAccount).
+		AddHandler("GET    /v1/accounts",                  handler.ListAccounts).
+		AddHandler("POST   /v1/accounts",                  handler.CreateAccount).
 		AddHandler("DELETE /v1/accounts/{id}",             handler.DeleteAccount).
 		AddHandler("POST   /v1/accounts/{id}/invite",      handler.InviteToAccount).
 		AddHandler("GET    /v1/accounts/{id}/users",       handler.ListAccountUsers).

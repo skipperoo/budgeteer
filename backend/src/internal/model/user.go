@@ -42,3 +42,11 @@ type ChangePasswordRequest struct {
 type KeysResponse struct {
 	EncryptedPrivateKey string `json:"encrypted_private_key"`
 }
+
+type UserResponse struct {
+	ID                  string `json:"id"`
+	Email               string `json:"email"`
+	PublicKey           string `json:"public_key"`
+	EncryptedPrivateKey string `json:"encrypted_private_key"`
+	IsVerified          bool   `json:"is_verified"`
+}

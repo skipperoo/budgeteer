@@ -27,6 +27,11 @@ func InitAccountService() {
 	}
 }
 
+// List returns all active accounts the user has access to.
+func (s *AccountService) List(ctx context.Context, userID string) ([]*model.Account, error) {
+	return s.AccountRepo.ListByUserID(ctx, userID)
+}
+
 func (s *AccountService) Create(ctx context.Context, userID string, req *model.CreateAccountRequest) (*model.Account, error) {
 	now := time.Now()
 	account := &model.Account{

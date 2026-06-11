@@ -136,6 +136,33 @@ func GetKeys(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(model.KeysResponse{EncryptedPrivateKey: user.EncryptedPrivateKey})
 }
 
+func Me(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
+	if !ok || claims == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(model.Error{Error: "unauthorized"})
+		return
+	}
+
+	user, err := service.Auth.UserRepo.FindByID(r.Context(), claims.UserID)
+	if err != nil || user == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(model.Error{Error: "user not found"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(model.UserResponse{
+		ID:                  user.ID,
+		Email:               user.Email,
+		PublicKey:           user.PublicKey,
+		EncryptedPrivateKey: user.EncryptedPrivateKey,
+		IsVerified:          user.IsVerified,
+	})
+}
+
 func ChangePassword(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
 	if !ok || claims == nil {
