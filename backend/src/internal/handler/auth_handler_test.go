@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"budgeteer-backend/internal/database"
 	"budgeteer-backend/internal/logger"
 	"budgeteer-backend/internal/model"
+	"budgeteer-backend/internal/repository"
 	"budgeteer-backend/internal/service"
 	"budgeteer-backend/internal/testhelpers"
 )
@@ -45,6 +47,11 @@ func handlerSetupTest(t *testing.T) func() {
 	service.InitServices()
 
 	cleanup := func() {
+		// Clean Redis pending registrations
+		keys, _ := database.Redis.Keys(ctx, "pending_reg:*").Result()
+		for _, k := range keys {
+			database.Redis.Del(ctx, k)
+		}
 		database.Pool.Exec(ctx, "DELETE FROM email_outbox")
 		database.Pool.Exec(ctx, "DELETE FROM otps")
 		database.Pool.Exec(ctx, "DELETE FROM sync_queue")
@@ -161,15 +168,35 @@ func TestLoginHandler_VerifiedUser(t *testing.T) {
 	password := "Str0ng!Pass"
 
 	service.InitAuthService()
-	result, _ := service.Auth.Register(context.Background(), &model.RegisterRequest{
+	err := service.Auth.Register(context.Background(), &model.RegisterRequest{
 		Email:               email,
 		Password:            password,
 		PublicKey:           "pk",
 		EncryptedPrivateKey: "ek",
 	})
+	if err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
 
-	// Directly mark user as verified (OTP is randomly generated, so bypass it)
-	_, _ = database.Pool.Exec(context.Background(), "UPDATE users SET is_verified = true WHERE id = $1", result.ID)
+	// Retrieve OTP from email outbox
+	emailRepo := &repository.EmailRepository{}
+	emails, _ := emailRepo.ListPending(context.Background(), 10)
+	var otpCode string
+	for _, e := range emails {
+		if e.ToAddress == email {
+			fmt.Sscanf(e.Body, "Your verification code is: %s", &otpCode)
+			break
+		}
+	}
+	if otpCode == "" {
+		t.Fatal("Could not extract OTP code from email outbox")
+	}
+
+	// Verify OTP — this creates the user in DB
+	_, err = service.Auth.VerifyOTP(context.Background(), email, otpCode)
+	if err != nil {
+		t.Fatalf("VerifyOTP failed: %v", err)
+	}
 
 	loginBody := map[string]string{"email": email, "password": password}
 	w := httptest.NewRecorder()

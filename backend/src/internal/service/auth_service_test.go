@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"budgeteer-backend/internal/database"
@@ -35,6 +36,11 @@ func setupTestDB(t *testing.T) context.CancelFunc {
 	}
 
 	cleanup := func() {
+		// Clean up Redis pending registrations
+		keys, _ := database.Redis.Keys(ctx, "pending_reg:*").Result()
+		for _, k := range keys {
+			database.Redis.Del(ctx, k)
+		}
 		database.Pool.Exec(ctx, "DELETE FROM email_outbox")
 		database.Pool.Exec(ctx, "DELETE FROM otps")
 		database.Pool.Exec(ctx, "DELETE FROM sync_queue")
@@ -49,7 +55,7 @@ func setupTestDB(t *testing.T) context.CancelFunc {
 	return cleanup
 }
 
-func TestAuthServiceRegisterIntegration(t *testing.T) {
+func TestAuthServiceRegisterAndVerifyIntegration(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
@@ -62,36 +68,66 @@ func TestAuthServiceRegisterIntegration(t *testing.T) {
 		EncryptedPrivateKey: "test-encrypted-key",
 	}
 
-	user, err := Auth.Register(context.Background(), req)
+	// Register — should succeed without creating a user in DB
+	err := Auth.Register(context.Background(), req)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
-	if user.ID == "" {
-		t.Fatal("Register returned user with empty ID")
+	// User should NOT exist in DB yet
+	userRepo := &repository.UserRepository{}
+	user, err := userRepo.FindByEmail(context.Background(), req.Email)
+	if err != nil {
+		t.Fatalf("FindByEmail failed: %v", err)
 	}
-	if user.Email != req.Email {
-		t.Fatalf("Register returned email %q, want %q", user.Email, req.Email)
-	}
-	if user.IsVerified {
-		t.Fatal("New user should not be verified")
+	if user != nil {
+		t.Fatal("User should not exist in DB before OTP verification")
 	}
 
-	if !CheckPasswordHash(req.Password, user.PasswordHash) {
+	// Retrieve OTP code from email_outbox (it's in the body)
+	emailRepo := &repository.EmailRepository{}
+	emails, _ := emailRepo.ListPending(context.Background(), 10)
+	var otpCode string
+	for _, e := range emails {
+		if e.ToAddress == req.Email {
+			// Body format: "Your verification code is: XXXXXX\n\n..."
+			_, _ = fmt.Sscanf(e.Body, "Your verification code is: %s", &otpCode)
+			break
+		}
+	}
+	if otpCode == "" {
+		t.Fatal("Could not extract OTP code from email outbox")
+	}
+
+	// Verify OTP — this should create the user
+	createdUser, err := Auth.VerifyOTP(context.Background(), req.Email, otpCode)
+	if err != nil {
+		t.Fatalf("VerifyOTP failed: %v", err)
+	}
+	if createdUser == nil {
+		t.Fatal("VerifyOTP returned nil user")
+	}
+	if createdUser.Email != req.Email {
+		t.Fatalf("VerifyOTP returned email %q, want %q", createdUser.Email, req.Email)
+	}
+	if !createdUser.IsVerified {
+		t.Fatal("Verified user should have IsVerified=true")
+	}
+	if !CheckPasswordHash(req.Password, createdUser.PasswordHash) {
 		t.Fatal("Stored password hash should match the original password")
 	}
 
-	otpRepo := &repository.OTPRepository{}
-	otp, err := otpRepo.FindValidByUserID(context.Background(), user.ID)
+	// User should now exist in DB
+	user, err = userRepo.FindByEmail(context.Background(), req.Email)
 	if err != nil {
-		t.Fatalf("Failed to find OTP for user: %v", err)
+		t.Fatalf("FindByEmail after verify failed: %v", err)
 	}
-	if otp == nil {
-		t.Fatal("No OTP created for registered user")
+	if user == nil {
+		t.Fatal("User should exist in DB after OTP verification")
 	}
-
-	emailRepo := &repository.EmailRepository{}
-	_ = emailRepo
+	if !user.IsVerified {
+		t.Fatal("User in DB should be verified")
+	}
 }
 
 func TestAuthServiceRegisterDuplicateEmail(t *testing.T) {
@@ -107,14 +143,41 @@ func TestAuthServiceRegisterDuplicateEmail(t *testing.T) {
 		EncryptedPrivateKey: "test-encrypted-key",
 	}
 
-	_, err := Auth.Register(context.Background(), req)
+	// First register — pending in Redis
+	err := Auth.Register(context.Background(), req)
 	if err != nil {
 		t.Fatalf("First register failed: %v", err)
 	}
 
-	_, err = Auth.Register(context.Background(), req)
+	// Second register with same email should fail (pending already exists)
+	err = Auth.Register(context.Background(), req)
 	if err == nil {
-		t.Fatal("Second register with same email should fail")
+		t.Fatal("Second register with same email should fail (pending exists)")
+	}
+
+	// Complete the registration
+	emailRepo := &repository.EmailRepository{}
+	emails, _ := emailRepo.ListPending(context.Background(), 10)
+	var otpCode string
+	for _, e := range emails {
+		if e.ToAddress == req.Email {
+			_, _ = fmt.Sscanf(e.Body, "Your verification code is: %s", &otpCode)
+			break
+		}
+	}
+	if otpCode == "" {
+		t.Fatal("Could not extract OTP code")
+	}
+
+	_, err = Auth.VerifyOTP(context.Background(), req.Email, otpCode)
+	if err != nil {
+		t.Fatalf("VerifyOTP failed: %v", err)
+	}
+
+	// Register again with same email — should fail because user now exists
+	err = Auth.Register(context.Background(), req)
+	if err == nil {
+		t.Fatal("Register after verification should fail (email already registered)")
 	}
 }
 

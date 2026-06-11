@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -12,6 +13,20 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// pendingRegistrationTTL is how long we keep a registration pending
+// before the OTP expires and the data is auto-cleaned by Redis.
+const pendingRegistrationTTL = 15 * time.Minute
+
+// pendingRegistration holds the data submitted during registration,
+// stored in Redis until the user verifies their email via OTP.
+type pendingRegistration struct {
+	PasswordHash        string `json:"password_hash"`
+	PublicKey           string `json:"public_key"`
+	EncryptedPrivateKey string `json:"encrypted_private_key"`
+	OTPCodeHash         string `json:"otp_code_hash"`
+	OTPExpiresAt        int64  `json:"otp_expires_at"` // unix timestamp
+}
 
 type AuthService struct {
 	UserRepo  *repository.UserRepository
@@ -29,52 +44,53 @@ func InitAuthService() {
 	}
 }
 
-func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest) (*model.User, error) {
+func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest) error {
+	// Check if the email is already taken by a verified user
 	existing, err := s.UserRepo.FindByEmail(ctx, req.Email)
 	if err != nil {
-		return nil, fmt.Errorf("database error: %w", err)
+		return fmt.Errorf("database error: %w", err)
 	}
 	if existing != nil {
-		return nil, fmt.Errorf("email already registered")
+		return fmt.Errorf("email already registered")
+	}
+
+	// Check if there is already a pending registration for this email
+	pendingKey := "pending_reg:" + req.Email
+	exists, err := database.Redis.Exists(ctx, pendingKey).Result()
+	if err != nil {
+		return fmt.Errorf("redis error: %w", err)
+	}
+	if exists > 0 {
+		return fmt.Errorf("verification already pending for this email")
 	}
 
 	hashedPassword, err := HashPassword(req.Password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
-	}
-
-	now := time.Now()
-	user := &model.User{
-		ID:                  uuid.New().String(),
-		Email:               req.Email,
-		PasswordHash:        hashedPassword,
-		PublicKey:           req.PublicKey,
-		EncryptedPrivateKey: req.EncryptedPrivateKey,
-		IsVerified:          false,
-		CreatedAt:           now,
-		UpdatedAt:           now,
-	}
-
-	if err := s.UserRepo.Create(ctx, user); err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	otpCode := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
 	otpHash, err := HashPassword(otpCode)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash OTP: %w", err)
+		return fmt.Errorf("failed to hash OTP: %w", err)
 	}
 
-	otp := &model.OTP{
-		ID:        uuid.New().String(),
-		UserID:    user.ID,
-		CodeHash:  otpHash,
-		ExpiresAt: now.Add(15 * time.Minute),
-		Consumed:  false,
-		CreatedAt: now,
+	now := time.Now()
+	pending := &pendingRegistration{
+		PasswordHash:        hashedPassword,
+		PublicKey:           req.PublicKey,
+		EncryptedPrivateKey: req.EncryptedPrivateKey,
+		OTPCodeHash:         otpHash,
+		OTPExpiresAt:        now.Add(pendingRegistrationTTL).Unix(),
 	}
-	if err := s.OTPRepo.Create(ctx, otp); err != nil {
-		return nil, fmt.Errorf("failed to create OTP: %w", err)
+
+	data, err := json.Marshal(pending)
+	if err != nil {
+		return fmt.Errorf("failed to marshal pending registration: %w", err)
+	}
+
+	if err := database.Redis.Set(ctx, pendingKey, data, pendingRegistrationTTL).Err(); err != nil {
+		return fmt.Errorf("failed to store pending registration: %w", err)
 	}
 
 	email := &model.EmailOutbox{
@@ -87,42 +103,56 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest) 
 		CreatedAt:    now,
 	}
 	if err := s.EmailRepo.Create(ctx, email); err != nil {
-		return nil, fmt.Errorf("failed to queue verification email: %w", err)
-	}
-
-	return user, nil
-}
-
-func (s *AuthService) VerifyOTP(ctx context.Context, email, code string) error {
-	user, err := s.UserRepo.FindByEmail(ctx, email)
-	if err != nil {
-		return fmt.Errorf("database error: %w", err)
-	}
-	if user == nil {
-		return fmt.Errorf("user not found")
-	}
-
-	otp, err := s.OTPRepo.FindValidByUserID(ctx, user.ID)
-	if err != nil {
-		return fmt.Errorf("database error: %w", err)
-	}
-	if otp == nil {
-		return fmt.Errorf("no valid OTP found")
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(otp.CodeHash), []byte(code)); err != nil {
-		return fmt.Errorf("invalid OTP code")
-	}
-
-	if err := s.OTPRepo.MarkConsumed(ctx, otp.ID); err != nil {
-		return fmt.Errorf("failed to consume OTP: %w", err)
-	}
-
-	if err := s.UserRepo.UpdateVerified(ctx, user.ID); err != nil {
-		return fmt.Errorf("failed to verify user: %w", err)
+		return fmt.Errorf("failed to queue verification email: %w", err)
 	}
 
 	return nil
+}
+
+func (s *AuthService) VerifyOTP(ctx context.Context, email, code string) (*model.User, error) {
+	pendingKey := "pending_reg:" + email
+	data, err := database.Redis.Get(ctx, pendingKey).Bytes()
+	if err != nil {
+		return nil, fmt.Errorf("no pending registration found for this email")
+	}
+
+	var pending pendingRegistration
+	if err := json.Unmarshal(data, &pending); err != nil {
+		return nil, fmt.Errorf("failed to parse pending registration: %w", err)
+	}
+
+	// Check OTP expiry
+	if time.Now().Unix() > pending.OTPExpiresAt {
+		database.Redis.Del(ctx, pendingKey)
+		return nil, fmt.Errorf("OTP has expired, please register again")
+	}
+
+	// Validate OTP code
+	if err := bcrypt.CompareHashAndPassword([]byte(pending.OTPCodeHash), []byte(code)); err != nil {
+		return nil, fmt.Errorf("invalid OTP code")
+	}
+
+	// Create user in database
+	now := time.Now()
+	user := &model.User{
+		ID:                  uuid.New().String(),
+		Email:               email,
+		PasswordHash:        pending.PasswordHash,
+		PublicKey:           pending.PublicKey,
+		EncryptedPrivateKey: pending.EncryptedPrivateKey,
+		IsVerified:          true,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}
+
+	if err := s.UserRepo.Create(ctx, user); err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Clean up pending registration
+	database.Redis.Del(ctx, pendingKey)
+
+	return user, nil
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string) (*model.User, string, error) {

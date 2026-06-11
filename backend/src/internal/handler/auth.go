@@ -22,15 +22,19 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	user, err := service.Auth.Register(r.Context(), &req)
-	if err != nil {
+	if err := service.Auth.Register(r.Context(), &req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
+		code := http.StatusConflict
+		// Distinguish between conflict (already registered) and other errors
+		if err.Error() == "verification already pending for this email" {
+			code = http.StatusConflict
+		}
+		w.WriteHeader(code)
 		json.NewEncoder(w).Encode(model.Error{Error: err.Error()})
 		return
 	}
 
-	logger.Info("User registered: %s", user.Email)
+	logger.Info("User registered (pending OTP): %s", req.Email)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"message": "registration successful, check email for OTP"})
@@ -46,13 +50,19 @@ func VerifyOTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	if err := service.Auth.VerifyOTP(r.Context(), req.Email, req.Code); err != nil {
+	user, err := service.Auth.VerifyOTP(r.Context(), req.Email, req.Code)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
+		code := http.StatusBadRequest
+		if err.Error() == "OTP has expired, please register again" {
+			code = http.StatusGone
+		}
+		w.WriteHeader(code)
 		json.NewEncoder(w).Encode(model.Error{Error: err.Error()})
 		return
 	}
 
+	logger.Info("User verified and registered: %s", user.Email)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "email verified successfully"})
 }
