@@ -15,12 +15,11 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useCategoryStore } from "@/stores/category-store";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
-import { generateAccountKey, encryptAccountKeyForRecipient, bytesToBase64 } from "@/lib/crypto";
+import { bytesToBase64, encryptAccountKeyForRecipient, generateAccountKey } from "@/lib/crypto";
 import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
-import { decryptAccountKeyForRecipient } from "@/lib/crypto";
+import { getAccountKey } from "@/lib/decrypt-transactions";
 import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
-import type { AccountUser, Transaction, CreateTransactionRequest } from "@/types";
-import type { TransactionPayload } from "@/lib/crypto-transaction";
+import type { Transaction, CreateTransactionRequest } from "@/types";
 
 const CURRENCIES = [
   { code: "EUR", symbol: "€", name: "Euro" },
@@ -94,38 +93,14 @@ export default function AccountDetailPage() {
   }, [id, fetchAccountUsers]);
 
   // Fetch and decrypt the account key for this account.
-  // If no key is found for the current user, generate one and store it.
-  // Returns the key so it can be passed synchronously to fetchTransactions.
+  // Delegates to the shared getAccountKey which handles caching in
+  // sessionStorage for page-refresh resilience.
   const fetchAccountKey = async (): Promise<string | null> => {
-    if (!id || !privKeyBase64) return null;
+    if (!id) return null;
     try {
-      const users = await apiFetch<AccountUser[]>(ENDPOINTS.accountUsers(id));
-      for (const au of users) {
-        const parts = au.encrypted_account_key.split(":");
-        if (parts.length === 2) {
-          try {
-            const key = await decryptAccountKeyForRecipient(
-              parts[1], parts[0], privKeyBase64
-            );
-            setAccountKeyBase64(key);
-            return key;
-          } catch { continue; }
-        }
-      }
-      // No decryptable key found for current user — generate one and store it
-      const newKey = generateAccountKey();
-      const ownPubKey = currentUser?.public_key;
-      if (ownPubKey) {
-        const enc = await encryptAccountKeyForRecipient(newKey, ownPubKey);
-        const payload = `${enc.ephemeralPublicKey}:${enc.ciphertext}`;
-        await apiFetch(ENDPOINTS.accountKey(id), {
-          method: "PUT",
-          body: JSON.stringify({ encrypted_account_key: payload }),
-        });
-        setAccountKeyBase64(newKey);
-        return newKey;
-      }
-      return null;
+      const key = await getAccountKey(id, privKeyBase64 ?? undefined, currentUser?.public_key);
+      setAccountKeyBase64(key);
+      return key;
     } catch {
       return null; /* no key available */
     }
@@ -223,9 +198,20 @@ export default function AccountDetailPage() {
       );
 
       // Reuse the existing account key if we have it, otherwise generate one
-      let keyToUse = accountKeyBase64;
-      if (!keyToUse) {
-        keyToUse = generateAccountKey();
+      let keyToUse: string;
+      if (accountKeyBase64) {
+        keyToUse = accountKeyBase64;
+      } else {
+        // Try to get via shared utility (which checks cache & can generate)
+        try {
+          keyToUse = await getAccountKey(
+            id,
+            privKeyBase64 ?? undefined,
+            currentUser?.public_key
+          );
+        } catch {
+          keyToUse = generateAccountKey();
+        }
         // Also store it for ourselves
         const ownPubKey = currentUser?.public_key;
         if (ownPubKey) {

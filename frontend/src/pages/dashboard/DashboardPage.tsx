@@ -121,10 +121,6 @@ export default function DashboardPage() {
       setTxCreateError("Please select an account");
       return;
     }
-    if (!privKeyBase64) {
-      setTxCreateError("Private key not available");
-      return;
-    }
     setTxCreateError("");
     setTxCreating(true);
 
@@ -134,10 +130,12 @@ export default function DashboardPage() {
         throw new Error("Invalid amount");
       }
 
-      // Fetch the real account key for the selected account
+      // Fetch (or retrieve from cache) the account key for the selected account.
+      // getAccountKey now checks sessionStorage first, so it can work even
+      // after a page refresh (when the in-memory private key is gone).
       const accountKeyBase64 = await getAccountKey(
         txAccountId,
-        privKeyBase64,
+        privKeyBase64 ?? undefined,
         user?.public_key
       );
 

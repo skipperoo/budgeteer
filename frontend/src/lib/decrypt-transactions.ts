@@ -74,35 +74,79 @@ export function filterDecrypted(
   );
 }
 
+// ---------------------------------------------------------------------------
+// SessionStorage account key cache
+//
+// The decrypted account key is cached in sessionStorage so it survives page
+// refreshes (but NOT tab close — sessionStorage is per-tab ephemeral).
+// This avoids requiring the user to re-enter their password on every page
+// load just to create transactions.
+// ---------------------------------------------------------------------------
+
+function cacheKeyName(accountId: string): string {
+  return `budgeteer_account_key_${accountId}`;
+}
+
+/** Retrieve a cached account key from sessionStorage, or null. */
+export function getCachedAccountKey(accountId: string): string | null {
+  try {
+    return sessionStorage.getItem(cacheKeyName(accountId));
+  } catch {
+    return null;
+  }
+}
+
+/** Store a decrypted account key in sessionStorage. */
+function setCachedAccountKey(accountId: string, key: string): void {
+  try {
+    sessionStorage.setItem(cacheKeyName(accountId), key);
+  } catch {
+    // sessionStorage may be unavailable (private browsing, quota, etc.)
+  }
+}
+
 /**
- * Fetch and decrypt the account key for a given account.
+ * Fetch and decrypt (or retrieve from cache) the account key for a given account.
  *
  * The encrypted_account_key is stored as "ephemeralPublicKey:ciphertext"
  * (both base64). We need the user's X25519 private key to decrypt it.
+ *
+ * @param userPrivateKeyBase64 - Optional. If omitted, only the sessionStorage
+ *   cache is checked (and key generation with userPublicKey).
+ * @param userPublicKey - Optional. If no encrypted key matches and this is
+ *   provided, a new account key is generated and stored server-side.
  */
 export async function getAccountKey(
   accountId: string,
-  userPrivateKeyBase64: string,
+  userPrivateKeyBase64?: string,
   userPublicKey?: string
 ): Promise<string> {
-  const users = await apiFetch<AccountUser[]>(ENDPOINTS.accountUsers(accountId));
-  for (const au of users) {
-    const parts = au.encrypted_account_key.split(":");
-    if (parts.length === 2) {
-      try {
-        const key = await decryptAccountKeyForRecipient(
-          parts[1], // ciphertext
-          parts[0], // ephemeral public key
-          userPrivateKeyBase64
-        );
-        return key;
-      } catch {
-        continue; // not our entry, try next
+  // 1. Check sessionStorage cache first
+  const cached = getCachedAccountKey(accountId);
+  if (cached) return cached;
+
+  // 2. If we have the private key, try to decrypt the server-side key
+  if (userPrivateKeyBase64) {
+    const users = await apiFetch<AccountUser[]>(ENDPOINTS.accountUsers(accountId));
+    for (const au of users) {
+      const parts = au.encrypted_account_key.split(":");
+      if (parts.length === 2) {
+        try {
+          const key = await decryptAccountKeyForRecipient(
+            parts[1], // ciphertext
+            parts[0], // ephemeral public key
+            userPrivateKeyBase64
+          );
+          setCachedAccountKey(accountId, key);
+          return key;
+        } catch {
+          continue; // not our entry, try next
+        }
       }
     }
   }
 
-  // No decryptable key found — generate a new one and store it
+  // 3. No decryptable key found — generate a new one and store it
   if (userPublicKey) {
     const newKey = generateAccountKey();
     const enc = await encryptAccountKeyForRecipient(newKey, userPublicKey);
@@ -111,10 +155,13 @@ export async function getAccountKey(
       method: "PUT",
       body: JSON.stringify({ encrypted_account_key: payload }),
     });
+    setCachedAccountKey(accountId, newKey);
     return newKey;
   }
 
-  throw new Error("Could not decrypt account key — no matching entry found");
+  throw new Error(
+    "Could not decrypt account key. Please re-login to restore your encryption keys."
+  );
 }
 
 /**
