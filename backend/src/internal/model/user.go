@@ -29,6 +29,15 @@ type LoginResponse struct {
 	Token string `json:"token"`
 }
 
+type LoginInitResponse struct {
+	SessionID string `json:"session_id"`
+}
+
+type LoginVerifyOTPRequest struct {
+	SessionID string `json:"session_id"`
+	Code      string `json:"code"`
+}
+
 type VerifyOTPRequest struct {
 	Email string `json:"email"`
 	Code  string `json:"code"`

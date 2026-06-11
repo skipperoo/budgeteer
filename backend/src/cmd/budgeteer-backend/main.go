@@ -62,8 +62,9 @@ func main() {
 		AddMiddleware(loggingMw.GetMiddleware()).
 		AddHandler("POST /api/v1/auth/register",   handler.Register).
 		AddHandler("POST /api/v1/auth/verify-otp", handler.VerifyOTP).
-		AddHandler("POST /api/v1/auth/login",       handler.Login).
-		AddHandler("GET  /api/v1/health",           handler.HealthCheck)
+		AddHandler("POST /api/v1/auth/login",             handler.Login).
+		AddHandler("POST /api/v1/auth/login-verify-otp", handler.LoginVerifyOTP).
+		AddHandler("GET  /api/v1/health",                 handler.HealthCheck)
 
 	// --- Protected routes (JWT + Redis blocklist) ---
 	protected := routy.NewRouter()

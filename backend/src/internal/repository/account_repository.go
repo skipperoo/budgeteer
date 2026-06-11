@@ -53,7 +53,7 @@ func (r *AccountRepository) ListByUserID(ctx context.Context, userID string) ([]
 	}
 	defer rows.Close()
 
-	var accounts []*model.Account
+	accounts := make([]*model.Account, 0)
 	for rows.Next() {
 		a := &model.Account{}
 		if err := rows.Scan(&a.ID, &a.Currency, &a.Type, &a.CreatedBy, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt); err != nil {

@@ -4,6 +4,7 @@ export const ENDPOINTS = {
   register: `${API_BASE}/auth/register`,
   verifyOTP: `${API_BASE}/auth/verify-otp`,
   login: `${API_BASE}/auth/login`,
+  loginVerifyOTP: `${API_BASE}/auth/login-verify-otp`,
   logout: `${API_BASE}/auth/logout`,
   keys: `${API_BASE}/auth/keys`,
   me: `${API_BASE}/auth/me`,

@@ -155,6 +155,119 @@ func (s *AuthService) VerifyOTP(ctx context.Context, email, code string) (*model
 	return user, nil
 }
 
+// loginOTPTTL is how long a login OTP session is valid.
+const loginOTPTTL = 5 * time.Minute
+
+// loginOTPSession is stored in Redis during the login OTP flow.
+type loginOTPSession struct {
+	UserID      string `json:"user_id"`
+	Email       string `json:"email"`
+	OTPCodeHash string `json:"otp_code_hash"`
+	ExpiresAt   int64  `json:"expires_at"`
+}
+
+// LoginInit validates credentials, sends an OTP email, and returns a session ID.
+func (s *AuthService) LoginInit(ctx context.Context, email, password string) (string, error) {
+	user, err := s.UserRepo.FindByEmail(ctx, email)
+	if err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+	if user == nil {
+		return "", fmt.Errorf("invalid email or password")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return "", fmt.Errorf("invalid email or password")
+	}
+
+	if !user.IsVerified {
+		return "", fmt.Errorf("email not verified")
+	}
+
+	// Generate OTP
+	otpCode := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	otpHash, err := HashPassword(otpCode)
+	if err != nil {
+		return "", fmt.Errorf("failed to hash OTP: %w", err)
+	}
+
+	now := time.Now()
+	sessionID := uuid.New().String()
+	session := &loginOTPSession{
+		UserID:      user.ID,
+		Email:       user.Email,
+		OTPCodeHash: otpHash,
+		ExpiresAt:   now.Add(loginOTPTTL).Unix(),
+	}
+
+	data, err := json.Marshal(session)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal login session: %w", err)
+	}
+
+	key := "login_otp:" + sessionID
+	if err := database.Redis.Set(ctx, key, data, loginOTPTTL).Err(); err != nil {
+		return "", fmt.Errorf("failed to store login session: %w", err)
+	}
+
+	// Queue OTP email
+	emailMsg := &model.EmailOutbox{
+		ID:           uuid.New().String(),
+		ToAddress:    user.Email,
+		Subject:      "Your Budgeteer login code",
+		Body:         fmt.Sprintf("Your login verification code is: %s\n\nThis code expires in 5 minutes.", otpCode),
+		Status:       "pending",
+		ScheduledFor: now,
+		CreatedAt:    now,
+	}
+	if err := s.EmailRepo.Create(ctx, emailMsg); err != nil {
+		return "", fmt.Errorf("failed to queue login email: %w", err)
+	}
+
+	return sessionID, nil
+}
+
+// LoginVerifyOTP validates the OTP code and returns a JWT token.
+func (s *AuthService) LoginVerifyOTP(ctx context.Context, sessionID, code string) (*model.User, string, error) {
+	key := "login_otp:" + sessionID
+	data, err := database.Redis.Get(ctx, key).Bytes()
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid or expired login session")
+	}
+
+	var session loginOTPSession
+	if err := json.Unmarshal(data, &session); err != nil {
+		return nil, "", fmt.Errorf("failed to parse login session: %w", err)
+	}
+
+	// Check expiry
+	if time.Now().Unix() > session.ExpiresAt {
+		database.Redis.Del(ctx, key)
+		return nil, "", fmt.Errorf("OTP has expired, please log in again")
+	}
+
+	// Validate OTP code
+	if err := bcrypt.CompareHashAndPassword([]byte(session.OTPCodeHash), []byte(code)); err != nil {
+		return nil, "", fmt.Errorf("invalid OTP code")
+	}
+
+	// Clean up used session
+	database.Redis.Del(ctx, key)
+
+	// Look up user and generate JWT
+	user, err := s.UserRepo.FindByID(ctx, session.UserID)
+	if err != nil || user == nil {
+		return nil, "", fmt.Errorf("user not found")
+	}
+
+	token, _, err := GenerateJWT(user.ID, user.Email)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	return user, token, nil
+}
+
 func (s *AuthService) Login(ctx context.Context, email, password string) (*model.User, string, error) {
 	user, err := s.UserRepo.FindByEmail(ctx, email)
 	if err != nil {

@@ -50,6 +50,7 @@ export default function SettingsPage() {
   // --- Password change ---
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState("");
 
@@ -89,6 +90,11 @@ export default function SettingsPage() {
 
     if (!encryptedPrivateKey) {
       setPwError("No private key found. Please log in again.");
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPwError("New passwords do not match");
       return;
     }
 
@@ -146,7 +152,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-lg">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <h1 className="text-3xl font-bold">Settings</h1>
 
       {/* --- Account Card --- */}
@@ -180,6 +186,16 @@ export default function SettingsPage() {
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
+                required
+                minLength={8}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Confirm New Password</label>
+              <Input
+                type="password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
                 required
                 minLength={8}
               />

@@ -27,8 +27,8 @@ export const useAccountStore = create<AccountState>((set, get) => ({
   fetchAccounts: async () => {
     set({ loading: true, error: null });
     try {
-      const accounts = await apiFetch<Account[]>(ENDPOINTS.accounts);
-      set({ accounts, loading: false });
+      const data = await apiFetch<Account[]>(ENDPOINTS.accounts);
+      set({ accounts: data ?? [], loading: false });
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }

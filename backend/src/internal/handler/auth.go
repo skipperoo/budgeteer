@@ -77,7 +77,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	user, token, err := service.Auth.Login(r.Context(), req.Email, req.Password)
+	sessionID, err := service.Auth.LoginInit(r.Context(), req.Email, req.Password)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -85,7 +85,34 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info("User logged in: %s", user.Email)
+	logger.Info("Login OTP sent to: %s", req.Email)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(model.LoginInitResponse{SessionID: sessionID})
+}
+
+func LoginVerifyOTP(w http.ResponseWriter, r *http.Request) {
+	var req model.LoginVerifyOTPRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body"})
+		return
+	}
+	defer r.Body.Close()
+
+	user, token, err := service.Auth.LoginVerifyOTP(r.Context(), req.SessionID, req.Code)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		code := http.StatusBadRequest
+		if err.Error() == "OTP has expired, please log in again" {
+			code = http.StatusGone
+		}
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(model.Error{Error: err.Error()})
+		return
+	}
+
+	logger.Info("User logged in via OTP: %s", user.Email)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(model.LoginResponse{Token: token})
 }

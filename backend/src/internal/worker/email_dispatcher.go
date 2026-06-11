@@ -105,7 +105,7 @@ type EmailDispatcher struct {
 func NewEmailDispatcher() *EmailDispatcher {
 	return &EmailDispatcher{
 		EmailRepo: &repository.EmailRepository{},
-		interval:  30 * time.Second,
+		interval:  5 * time.Second,
 		batchSize: 10,
 	}
 }

@@ -178,38 +178,117 @@ func TestLoginHandler_VerifiedUser(t *testing.T) {
 		t.Fatalf("Register failed: %v", err)
 	}
 
-	// Retrieve OTP from email outbox
+	// Retrieve registration OTP from email outbox
 	emailRepo := &repository.EmailRepository{}
 	emails, _ := emailRepo.ListPending(context.Background(), 10)
-	var otpCode string
+	var regOTP string
 	for _, e := range emails {
 		if e.ToAddress == email {
-			fmt.Sscanf(e.Body, "Your verification code is: %s", &otpCode)
+			fmt.Sscanf(e.Body, "Your verification code is: %s", &regOTP)
 			break
 		}
 	}
-	if otpCode == "" {
-		t.Fatal("Could not extract OTP code from email outbox")
+	if regOTP == "" {
+		t.Fatal("Could not extract registration OTP code from email outbox")
 	}
 
 	// Verify OTP — this creates the user in DB
-	_, err = service.Auth.VerifyOTP(context.Background(), email, otpCode)
+	_, err = service.Auth.VerifyOTP(context.Background(), email, regOTP)
 	if err != nil {
 		t.Fatalf("VerifyOTP failed: %v", err)
 	}
 
+	// Step 1: Login with email/password → should get session_id
 	loginBody := map[string]string{"email": email, "password": password}
 	w := httptest.NewRecorder()
 	Login(w, request("POST", "/api/v1/auth/login", loginBody))
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("Verified user login should succeed, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("Verified user login init should succeed, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp map[string]string
-	json.NewDecoder(w.Body).Decode(&resp)
-	if resp["token"] == "" {
-		t.Fatal("Login should return a token")
+	var initResp map[string]string
+	json.NewDecoder(w.Body).Decode(&initResp)
+	if initResp["session_id"] == "" {
+		t.Fatal("Login init should return a session_id")
+	}
+
+	// Retrieve login OTP from email outbox
+	emails2, _ := emailRepo.ListPending(context.Background(), 10)
+	var loginOTP string
+	for _, e := range emails2 {
+		if e.ToAddress == email {
+			fmt.Sscanf(e.Body, "Your login verification code is: %s", &loginOTP)
+			break
+		}
+	}
+	if loginOTP == "" {
+		t.Fatal("Could not extract login OTP code from email outbox")
+	}
+
+	// Step 2: Verify login OTP → should get JWT
+	otpBody := map[string]string{
+		"session_id": initResp["session_id"],
+		"code":       loginOTP,
+	}
+	w2 := httptest.NewRecorder()
+	LoginVerifyOTP(w2, request("POST", "/api/v1/auth/login-verify-otp", otpBody))
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("Login OTP verification should succeed, got %d: %s", w2.Code, w2.Body.String())
+	}
+
+	var tokenResp map[string]string
+	json.NewDecoder(w2.Body).Decode(&tokenResp)
+	if tokenResp["token"] == "" {
+		t.Fatal("Login OTP verification should return a token")
+	}
+}
+
+func TestLoginHandler_WrongPassword(t *testing.T) {
+	cleanup := handlerSetupTest(t)
+	defer cleanup()
+
+	email := "handler-wrong-pw@test.com"
+	password := "Str0ng!Pass"
+
+	// Register and verify
+	service.InitAuthService()
+	err := service.Auth.Register(context.Background(), &model.RegisterRequest{
+		Email:               email,
+		Password:            password,
+		PublicKey:           "pk",
+		EncryptedPrivateKey: "ek",
+	})
+	if err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	emailRepo := &repository.EmailRepository{}
+	emails, _ := emailRepo.ListPending(context.Background(), 10)
+	var regOTP string
+	for _, e := range emails {
+		if e.ToAddress == email {
+			fmt.Sscanf(e.Body, "Your verification code is: %s", &regOTP)
+			break
+		}
+	}
+	if regOTP == "" {
+		t.Fatal("Could not extract OTP code from email outbox")
+	}
+
+	_, err = service.Auth.VerifyOTP(context.Background(), email, regOTP)
+	if err != nil {
+		t.Fatalf("VerifyOTP failed: %v", err)
+	}
+
+	// Try login with wrong password
+	loginBody := map[string]string{"email": email, "password": "wrong-password"}
+	w := httptest.NewRecorder()
+	Login(w, request("POST", "/api/v1/auth/login", loginBody))
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("Login with wrong password should return 401, got %d", w.Code)
 	}
 }
 

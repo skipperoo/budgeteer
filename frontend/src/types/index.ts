@@ -61,6 +61,10 @@ export interface LoginResponse {
   token: string;
 }
 
+export interface LoginInitResponse {
+  session_id: string;
+}
+
 export interface KeysResponse {
   encrypted_private_key: string;
 }
