@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { useAuthStore } from "@/stores/auth-store";
-import { decryptWithPassword } from "@/lib/crypto";
+import { decryptWithPassword, base64ToBytes } from "@/lib/crypto";
 import type { LoginResponse, User } from "@/types";
 
 export default function LoginPage() {
@@ -29,16 +29,23 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const { encrypted_private_key } = await apiFetch<{ encrypted_private_key: string }>(
-        ENDPOINTS.keys,
-        { headers: { Authorization: `Bearer ${token}` } }
+      // Fetch full user profile from /me
+      const user = await apiFetch<User>(ENDPOINTS.me, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Decrypt the private key with the user's password
+      const plaintextKey = await decryptWithPassword(
+        user.encrypted_private_key,
+        password
       );
 
-      const plaintextKey = await decryptWithPassword(encrypted_private_key, password);
-      const keyBytes = new TextEncoder().encode(plaintextKey).buffer;
+      // Decode the base64-encoded private key into raw bytes.
+      // plaintextKey is a base64 string (PKCS8 DER or raw bytes) so we
+      // decode it rather than UTF-8-encoding it.
+      const keyBytes = base64ToBytes(plaintextKey).buffer;
 
-      const user: User = { email, encrypted_private_key, is_verified: true } as User;
-      setAuth(token, user, encrypted_private_key);
+      setAuth(token, user, user.encrypted_private_key);
       setPrivateKey(keyBytes as ArrayBuffer);
 
       navigate("/dashboard", { replace: true });

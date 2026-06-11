@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth-store";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -11,11 +12,33 @@ import SettingsPage from "@/pages/settings/SettingsPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
+  const hydrating = useAuthStore((s) => s.hydrating);
+
+  if (hydrating) {
+    return (
+      <div className="h-screen flex items-center justify-center text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
+
   if (!token) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
 export default function App() {
+  const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
+  const hydrate = useAuthStore((s) => s.hydrate);
+
+  // Hydrate the session on mount: if we have a token but no user,
+  // fetch /me to populate the store.
+  useEffect(() => {
+    if (token && !user) {
+      hydrate();
+    }
+  }, [token, user, hydrate]);
+
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />

@@ -14,3 +14,5 @@ budgeteer-backend
 .opencode/
 # Dev certificates (self-signed, generated locally)
 certs/
+# TypeScript incremental build cache
+*.tsbuildinfo

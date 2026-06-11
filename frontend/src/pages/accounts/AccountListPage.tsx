@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -12,12 +11,34 @@ import {
 } from "@/components/ui/dialog";
 import { useAccountStore } from "@/stores/account-store";
 
+const CURRENCIES = [
+  { code: "EUR", symbol: "€", name: "Euro" },
+  { code: "USD", symbol: "$", name: "US Dollar" },
+  { code: "GBP", symbol: "£", name: "British Pound" },
+  { code: "CHF", symbol: "Fr", name: "Swiss Franc" },
+  { code: "JPY", symbol: "¥", name: "Japanese Yen" },
+  { code: "CAD", symbol: "CA$", name: "Canadian Dollar" },
+  { code: "AUD", symbol: "A$", name: "Australian Dollar" },
+  { code: "BRL", symbol: "R$", name: "Brazilian Real" },
+  { code: "CNY", symbol: "¥", name: "Chinese Yuan" },
+  { code: "SEK", symbol: "kr", name: "Swedish Krona" },
+  { code: "NOK", symbol: "kr", name: "Norwegian Krone" },
+  { code: "DKK", symbol: "kr", name: "Danish Krone" },
+  { code: "PLN", symbol: "zł", name: "Polish Zloty" },
+  { code: "CZK", symbol: "Kč", name: "Czech Koruna" },
+  { code: "HUF", symbol: "Ft", name: "Hungarian Forint" },
+  { code: "INR", symbol: "₹", name: "Indian Rupee" },
+  { code: "MXN", symbol: "Mex$", name: "Mexican Peso" },
+] as const;
+
+type AccountType = "personal" | "joint" | "savings";
+
 export default function AccountListPage() {
   const navigate = useNavigate();
   const { accounts, fetchAccounts, createAccount, deleteAccount } = useAccountStore();
   const [open, setOpen] = useState(false);
-  const [currency, setCurrency] = useState("USD");
-  const [type, setType] = useState<"personal" | "joint" | "savings">("personal");
+  const [currency, setCurrency] = useState("EUR");
+  const [type, setType] = useState<AccountType>("personal");
 
   useEffect(() => {
     fetchAccounts();
@@ -26,7 +47,7 @@ export default function AccountListPage() {
   const handleCreate = async () => {
     await createAccount(currency, type);
     setOpen(false);
-    setCurrency("USD");
+    setCurrency("EUR");
     setType("personal");
   };
 
@@ -45,18 +66,23 @@ export default function AccountListPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Currency</label>
-                <Input
+                <select
                   value={currency}
-                  onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-                  maxLength={3}
-                  placeholder="USD"
-                />
+                  onChange={(e) => setCurrency(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                  {CURRENCIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code} — {c.symbol} {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Type</label>
                 <select
                   value={type}
-                  onChange={(e) => setType(e.target.value as any)}
+                  onChange={(e) => setType(e.target.value as AccountType)}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                 >
                   <option value="personal">Personal</option>

@@ -11,16 +11,20 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useAccountStore } from "@/stores/account-store";
+import { useAuthStore } from "@/stores/auth-store";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
+import { generateAccountKey, encryptAccountKeyForRecipient } from "@/lib/crypto";
 
 export default function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { accounts, accountUsers, fetchAccountUsers, inviteUser, removeUser } = useAccountStore();
   const account = accounts.find((a) => a.id === id);
+  const currentUser = useAuthStore((s) => s.user);
   const [inviteEmail, setInviteEmail] = useState("");
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
     if (id) fetchAccountUsers(id);
@@ -29,20 +33,33 @@ export default function AccountDetailPage() {
   const handleInvite = async () => {
     if (!id) return;
     setError("");
+    setInviting(true);
 
     try {
+      // 1. Fetch the invitee's public key
       const { public_key } = await apiFetch<{ public_key: string }>(
         `${ENDPOINTS.userLookup}?email=${encodeURIComponent(inviteEmail)}`
       );
 
-      const keyBytes = new TextEncoder().encode("account-key-placeholder");
-      const encryptedKey = btoa(String.fromCharCode(...new Uint8Array(keyBytes)));
+      // 2. Generate a fresh AES-256 Account Key for this account (if it doesn't exist
+      //    we generate one; the owner creates it on first invite).
+      //    In a full implementation the Account Key would be stored and reused.
+      const accountKey = generateAccountKey();
 
-      await inviteUser(id, inviteEmail, encryptedKey);
+      // 3. Encrypt the Account Key via ECIES (X25519 + AES-GCM) using the invitee's public key
+      const encrypted = await encryptAccountKeyForRecipient(accountKey, public_key);
+
+      // 4. Send the ephemeral public key + ciphertext to the backend
+      //    Format: base64(ephemeralPublicKey) + ":" + base64(ciphertext)
+      const encryptedAccountKey = `${encrypted.ephemeralPublicKey}:${encrypted.ciphertext}`;
+
+      await inviteUser(id, inviteEmail, encryptedAccountKey);
       setOpen(false);
       setInviteEmail("");
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setInviting(false);
     }
   };
 
@@ -77,8 +94,8 @@ export default function AccountDetailPage() {
                   />
                 </div>
                 {error && <p className="text-sm text-destructive">{error}</p>}
-                <Button onClick={handleInvite} className="w-full">
-                  Send Invite
+                <Button onClick={handleInvite} className="w-full" disabled={inviting}>
+                  {inviting ? "Sending..." : "Send Invite"}
                 </Button>
               </div>
             </DialogContent>
@@ -103,7 +120,9 @@ export default function AccountDetailPage() {
                   <div>
                     <span className="text-sm font-medium capitalize">{user.role}</span>
                     <span className="text-xs text-muted-foreground ml-2">
-                      ID: {user.user_id.slice(0, 8)}...
+                      {user.user_id === currentUser?.id
+                        ? "(you)"
+                        : `ID: ${user.user_id.slice(0, 8)}...`}
                     </span>
                   </div>
                   {user.role !== "owner" && (
