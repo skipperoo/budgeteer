@@ -81,7 +81,7 @@ func UpdateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	account, err := service.Accounts.Update(r.Context(), accountID, claims.UserID, req.Currency, req.Type)
+	account, err := service.Accounts.Update(r.Context(), accountID, claims.UserID, req.Name, req.Currency, req.Type)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)

@@ -13,19 +13,19 @@ import (
 type AccountRepository struct{}
 
 func (r *AccountRepository) Create(ctx context.Context, a *model.Account) error {
-	query := `INSERT INTO accounts (id, currency, type, created_by, created_at, updated_at)
-	          VALUES ($1, $2, $3, $4, $5, $6)`
+	query := `INSERT INTO accounts (id, name, currency, type, created_by, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7)`
 	_, err := database.Pool.Exec(ctx, query,
-		a.ID, a.Currency, a.Type, a.CreatedBy, a.CreatedAt, a.UpdatedAt)
+		a.ID, a.Name, a.Currency, a.Type, a.CreatedBy, a.CreatedAt, a.UpdatedAt)
 	return err
 }
 
 func (r *AccountRepository) FindByID(ctx context.Context, id string) (*model.Account, error) {
-	query := `SELECT id, currency, type, created_by, created_at, updated_at, deleted_at
+	query := `SELECT id, name, currency, type, created_by, created_at, updated_at, deleted_at
 	          FROM accounts WHERE id = $1`
 	row := database.Pool.QueryRow(ctx, query, id)
 	a := &model.Account{}
-	err := row.Scan(&a.ID, &a.Currency, &a.Type, &a.CreatedBy, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt)
+	err := row.Scan(&a.ID, &a.Name, &a.Currency, &a.Type, &a.CreatedBy, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -36,8 +36,8 @@ func (r *AccountRepository) FindByID(ctx context.Context, id string) (*model.Acc
 }
 
 func (r *AccountRepository) Update(ctx context.Context, a *model.Account) error {
-	query := `UPDATE accounts SET currency = $1, type = $2, updated_at = $3 WHERE id = $4 AND deleted_at IS NULL`
-	_, err := database.Pool.Exec(ctx, query, a.Currency, a.Type, time.Now(), a.ID)
+	query := `UPDATE accounts SET name = $1, currency = $2, type = $3, updated_at = $4 WHERE id = $5 AND deleted_at IS NULL`
+	_, err := database.Pool.Exec(ctx, query, a.Name, a.Currency, a.Type, time.Now(), a.ID)
 	return err
 }
 
@@ -48,7 +48,7 @@ func (r *AccountRepository) SoftDelete(ctx context.Context, id string) error {
 }
 
 func (r *AccountRepository) ListByUserID(ctx context.Context, userID string) ([]*model.Account, error) {
-	query := `SELECT a.id, a.currency, a.type, a.created_by, a.created_at, a.updated_at, a.deleted_at
+	query := `SELECT a.id, a.name, a.currency, a.type, a.created_by, a.created_at, a.updated_at, a.deleted_at
 	          FROM accounts a
 	          JOIN account_users au ON au.account_id = a.id
 	          WHERE au.user_id = $1 AND a.deleted_at IS NULL
@@ -62,7 +62,7 @@ func (r *AccountRepository) ListByUserID(ctx context.Context, userID string) ([]
 	accounts := make([]*model.Account, 0)
 	for rows.Next() {
 		a := &model.Account{}
-		if err := rows.Scan(&a.ID, &a.Currency, &a.Type, &a.CreatedBy, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &a.Currency, &a.Type, &a.CreatedBy, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt); err != nil {
 			return nil, err
 		}
 		accounts = append(accounts, a)

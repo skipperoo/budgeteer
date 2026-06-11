@@ -37,6 +37,7 @@ export default function AccountListPage() {
   const navigate = useNavigate();
   const { accounts, fetchAccounts, createAccount, deleteAccount } = useAccountStore();
   const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
   const [currency, setCurrency] = useState("EUR");
   const [type, setType] = useState<AccountType>("personal");
 
@@ -45,8 +46,9 @@ export default function AccountListPage() {
   }, [fetchAccounts]);
 
   const handleCreate = async () => {
-    await createAccount(currency, type);
+    await createAccount(name, currency, type);
     setOpen(false);
+    setName("");
     setCurrency("EUR");
     setType("personal");
   };
@@ -64,6 +66,16 @@ export default function AccountListPage() {
               <DialogTitle>New Account</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="My Account"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                />
+              </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Currency</label>
                 <select
@@ -107,7 +119,7 @@ export default function AccountListPage() {
           >
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">{account.currency}</CardTitle>
+                <CardTitle className="text-lg">{account.name || account.currency}</CardTitle>
                 <span className="text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded-full">
                   {account.type}
                 </span>

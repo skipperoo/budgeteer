@@ -11,8 +11,8 @@ interface AccountState {
   loading: boolean;
   error: string | null;
   fetchAccounts: () => Promise<void>;
-  createAccount: (currency: string, type: string) => Promise<Account | void>;
-  updateAccount: (id: string, currency: string, type: string) => Promise<void>;
+  createAccount: (name: string, currency: string, type: string) => Promise<Account | void>;
+  updateAccount: (id: string, name: string, currency: string, type: string) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   fetchAccountUsers: (id: string) => Promise<void>;
   inviteUser: (accountId: string, userEmail: string, encryptedKey: string) => Promise<void>;
@@ -36,7 +36,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     }
   },
 
-  createAccount: async (currency, type) => {
+  createAccount: async (name, currency, type) => {
     set({ loading: true, error: null });
     try {
       // Generate an account key and encrypt it for the current user
@@ -51,7 +51,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
 
       await apiFetch(ENDPOINTS.accounts, {
         method: "POST",
-        body: JSON.stringify({ currency, type, encrypted_account_key: encryptedAccountKey } as CreateAccountRequest),
+        body: JSON.stringify({ name, currency, type, encrypted_account_key: encryptedAccountKey } as CreateAccountRequest),
       });
       await get().fetchAccounts();
     } catch (err: any) {
@@ -59,12 +59,12 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     }
   },
 
-  updateAccount: async (id, currency, type) => {
+  updateAccount: async (id, name, currency, type) => {
     set({ loading: true, error: null });
     try {
       const updated = await apiFetch<Account>(ENDPOINTS.account(id), {
         method: "PUT",
-        body: JSON.stringify({ currency, type }),
+        body: JSON.stringify({ name, currency, type }),
       });
       set((s) => ({
         accounts: s.accounts.map((a) => (a.id === id ? updated : a)),

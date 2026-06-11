@@ -10,6 +10,7 @@ export interface User {
 
 export interface Account {
   id: string;
+  name: string;
   currency: string;
   type: AccountType;
   created_by: string;
@@ -70,6 +71,7 @@ export interface KeysResponse {
 }
 
 export interface CreateAccountRequest {
+  name: string;
   currency: string;
   type: string;
   encrypted_account_key: string;

@@ -52,6 +52,7 @@ export default function AccountDetailPage() {
 
   // --- Edit account state ---
   const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
   const [editCurrency, setEditCurrency] = useState("");
   const [editType, setEditType] = useState("");
   const [editError, setEditError] = useState("");
@@ -87,8 +88,10 @@ export default function AccountDetailPage() {
   useEffect(() => {
     if (id) {
       fetchAccountUsers(id);
-      fetchTransactions();
-      fetchAccountKey();
+      // Fetch the account key first, then transactions (so we can decrypt)
+      fetchAccountKey().then(() => {
+        fetchTransactions();
+      });
     }
   }, [id, fetchAccountUsers]);
 
@@ -174,6 +177,7 @@ export default function AccountDetailPage() {
   // --- Edit account ---
   const openEdit = () => {
     if (!account) return;
+    setEditName(account.name);
     setEditCurrency(account.currency);
     setEditType(account.type);
     setEditError("");
@@ -185,7 +189,7 @@ export default function AccountDetailPage() {
     setEditError("");
     setEditing(true);
     try {
-      await updateAccount(id, editCurrency, editType);
+      await updateAccount(id, editName, editCurrency, editType);
       setEditOpen(false);
     } catch (err: any) {
       setEditError(err.message);
@@ -331,7 +335,7 @@ export default function AccountDetailPage() {
             &larr;
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">{account.currency}</h1>
+            <h1 className="text-3xl font-bold">{account.name || account.currency}</h1>
             <p className="text-sm text-muted-foreground capitalize">{account.type} account</p>
           </div>
           <Button variant="outline" size="sm" onClick={openEdit}>
@@ -483,6 +487,14 @@ export default function AccountDetailPage() {
             <DialogTitle>Edit Account</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Name</label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Account name"
+              />
+            </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Currency</label>
               <select

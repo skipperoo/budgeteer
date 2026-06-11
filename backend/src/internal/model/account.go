@@ -6,6 +6,7 @@ import (
 
 type Account struct {
 	ID        string     `json:"id"`
+	Name      string     `json:"name"`
 	Currency  string     `json:"currency"`
 	Type      string     `json:"type"` // personal, joint, savings
 	CreatedBy string     `json:"created_by"`
@@ -15,6 +16,7 @@ type Account struct {
 }
 
 type CreateAccountRequest struct {
+	Name                string `json:"name"`
 	Currency            string `json:"currency"`
 	Type                string `json:"type"`
 	EncryptedAccountKey string `json:"encrypted_account_key"`

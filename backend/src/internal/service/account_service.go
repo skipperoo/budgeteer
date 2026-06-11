@@ -36,6 +36,7 @@ func (s *AccountService) Create(ctx context.Context, userID string, req *model.C
 	now := time.Now()
 	account := &model.Account{
 		ID:        uuid.New().String(),
+		Name:      req.Name,
 		Currency:  req.Currency,
 		Type:      req.Type,
 		CreatedBy: userID,
@@ -81,7 +82,7 @@ func (s *AccountService) SoftDelete(ctx context.Context, accountID, userID strin
 	return s.AccountRepo.SoftDelete(ctx, accountID)
 }
 
-func (s *AccountService) Update(ctx context.Context, accountID, userID, currency, accountType string) (*model.Account, error) {
+func (s *AccountService) Update(ctx context.Context, accountID, userID, name, currency, accountType string) (*model.Account, error) {
 	account, err := s.AccountRepo.FindByID(ctx, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("database error: %w", err)
@@ -98,6 +99,7 @@ func (s *AccountService) Update(ctx context.Context, accountID, userID, currency
 		return nil, fmt.Errorf("only the owner can edit the account")
 	}
 
+	account.Name = name
 	account.Currency = currency
 	account.Type = accountType
 	if err := s.AccountRepo.Update(ctx, account); err != nil {

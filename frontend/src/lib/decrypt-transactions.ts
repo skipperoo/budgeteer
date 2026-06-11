@@ -8,7 +8,7 @@
 
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
-import { decryptAccountKeyForRecipient } from "@/lib/crypto";
+import { decryptAccountKeyForRecipient, encryptAccountKeyForRecipient, generateAccountKey } from "@/lib/crypto";
 import { decryptTransactionPayload } from "@/lib/crypto-transaction";
 import type { AccountUser, Transaction } from "@/types";
 import type { TransactionPayload } from "@/lib/crypto-transaction";
@@ -49,11 +49,10 @@ export async function decryptTx(
  */
 export async function getAccountKey(
   accountId: string,
-  userPrivateKeyBase64: string
+  userPrivateKeyBase64: string,
+  userPublicKey?: string
 ): Promise<string> {
   const users = await apiFetch<AccountUser[]>(ENDPOINTS.accountUsers(accountId));
-  // The current user's entry is where we find the encrypted key for us
-  // (we need to figure out which entry is ours — we pass all and try each)
   for (const au of users) {
     const parts = au.encrypted_account_key.split(":");
     if (parts.length === 2) {
@@ -69,6 +68,19 @@ export async function getAccountKey(
       }
     }
   }
+
+  // No decryptable key found — generate a new one and store it
+  if (userPublicKey) {
+    const newKey = generateAccountKey();
+    const enc = await encryptAccountKeyForRecipient(newKey, userPublicKey);
+    const payload = `${enc.ephemeralPublicKey}:${enc.ciphertext}`;
+    await apiFetch(ENDPOINTS.accountKey(accountId), {
+      method: "PUT",
+      body: JSON.stringify({ encrypted_account_key: payload }),
+    });
+    return newKey;
+  }
+
   throw new Error("Could not decrypt account key — no matching entry found");
 }
 
@@ -78,9 +90,10 @@ export async function getAccountKey(
  */
 export async function fetchAndDecryptTransactions(
   accountId: string,
-  userPrivateKeyBase64: string
+  userPrivateKeyBase64: string,
+  userPublicKey?: string
 ): Promise<DecryptedTransaction[]> {
-  const accountKey = await getAccountKey(accountId, userPrivateKeyBase64);
+  const accountKey = await getAccountKey(accountId, userPrivateKeyBase64, userPublicKey);
   const txs = await apiFetch<Transaction[]>(ENDPOINTS.transactions(accountId));
   if (!txs || txs.length === 0) return [];
 

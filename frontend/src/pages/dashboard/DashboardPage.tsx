@@ -75,7 +75,7 @@ export default function DashboardPage() {
           total += (raw ?? []).length;
 
           // Try to decrypt
-          const decrypted = await fetchAndDecryptTransactions(acc.id, privKeyBase64);
+          const decrypted = await fetchAndDecryptTransactions(acc.id, privKeyBase64, user?.public_key);
           allDecrypted.push(...decrypted);
         } catch {
           // Skip accounts we can't decrypt
@@ -191,7 +191,7 @@ export default function DashboardPage() {
                   <option value="">Select account...</option>
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.currency} ({a.type})
+                      {a.name || a.currency} ({a.type})
                     </option>
                   ))}
                 </select>

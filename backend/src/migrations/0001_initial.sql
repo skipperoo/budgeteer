@@ -37,6 +37,7 @@ CREATE TABLE otps (
 -- ============================================================
 CREATE TABLE accounts (
     id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name       VARCHAR(255) NOT NULL DEFAULT '',
     currency   VARCHAR(3) NOT NULL,
     type       VARCHAR(50) CHECK (type IN ('personal', 'joint', 'savings')) NOT NULL,
     created_by UUID REFERENCES users(id),
