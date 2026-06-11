@@ -7,7 +7,31 @@ import {
   decryptData,
   generateAccountKey,
   generateSalt,
+  bytesToBase64,
+  base64ToBytes,
+  deriveSharedSecret,
+  compress,
+  decompress,
+  encryptAccountKeyForRecipient,
+  decryptAccountKeyForRecipient,
 } from "./crypto";
+
+describe("base64 helpers", () => {
+  it("should round-trip bytes to base64 and back", () => {
+    const original = new Uint8Array([0, 1, 2, 3, 255, 128, 64]);
+    const b64 = bytesToBase64(original);
+    const decoded = base64ToBytes(b64);
+    expect(decoded).toEqual(original);
+  });
+
+  it("should handle empty byte array", () => {
+    const original = new Uint8Array(0);
+    const b64 = bytesToBase64(original);
+    const decoded = base64ToBytes(b64);
+    expect(decoded).toEqual(original);
+    expect(b64).toBe("");
+  });
+});
 
 describe("password-based encryption", () => {
   it("should encrypt and decrypt with a password", async () => {
@@ -41,18 +65,118 @@ describe("password-based encryption", () => {
   });
 });
 
-describe("key pair generation", () => {
-  it("should generate a public and private key", async () => {
-    const keyPair = await generateKeyPair();
+describe("key pair generation (X25519)", () => {
+  it("should generate a public and private key", () => {
+    const keyPair = generateKeyPair();
     expect(keyPair.publicKey).toBeTruthy();
     expect(keyPair.privateKey).toBeTruthy();
     expect(keyPair.publicKey).not.toBe(keyPair.privateKey);
   });
 
-  it("should generate different key pairs each time", async () => {
-    const [kp1, kp2] = await Promise.all([generateKeyPair(), generateKeyPair()]);
+  it("should generate valid base64 keys", () => {
+    const keyPair = generateKeyPair();
+    // X25519 public key is 32 bytes → 44 base64 chars with padding
+    expect(() => base64ToBytes(keyPair.publicKey)).not.toThrow();
+    expect(() => base64ToBytes(keyPair.privateKey)).not.toThrow();
+    expect(base64ToBytes(keyPair.publicKey).length).toBe(32);
+    expect(base64ToBytes(keyPair.privateKey).length).toBe(32);
+  });
+
+  it("should generate different key pairs each time", () => {
+    const kp1 = generateKeyPair();
+    const kp2 = generateKeyPair();
     expect(kp1.publicKey).not.toBe(kp2.publicKey);
     expect(kp1.privateKey).not.toBe(kp2.privateKey);
+  });
+});
+
+describe("X25519 shared secret derivation", () => {
+  it("should derive a shared secret between two parties", () => {
+    const alice = generateKeyPair();
+    const bob = generateKeyPair();
+
+    const alicePriv = base64ToBytes(alice.privateKey);
+    const bobPub = base64ToBytes(bob.publicKey);
+    const bobPriv = base64ToBytes(bob.privateKey);
+    const alicePub = base64ToBytes(alice.publicKey);
+
+    const secretFromAlice = deriveSharedSecret(alicePriv, bobPub);
+    const secretFromBob = deriveSharedSecret(bobPriv, alicePub);
+
+    expect(secretFromAlice).toEqual(secretFromBob);
+    expect(secretFromAlice.length).toBe(32);
+  });
+
+  it("should produce different secrets for different pairs", () => {
+    const alice = generateKeyPair();
+    const bob = generateKeyPair();
+    const carol = generateKeyPair();
+
+    const secretAB = deriveSharedSecret(
+      base64ToBytes(alice.privateKey),
+      base64ToBytes(bob.publicKey)
+    );
+    const secretAC = deriveSharedSecret(
+      base64ToBytes(alice.privateKey),
+      base64ToBytes(carol.publicKey)
+    );
+
+    expect(secretAB).not.toEqual(secretAC);
+  });
+});
+
+describe("ECIES account key encryption", () => {
+  it("should encrypt and decrypt an account key for a recipient", async () => {
+    const accountKey = generateAccountKey();
+    const recipient = generateKeyPair();
+
+    const encrypted = await encryptAccountKeyForRecipient(
+      accountKey,
+      recipient.publicKey
+    );
+
+    expect(encrypted.ephemeralPublicKey).toBeTruthy();
+    expect(encrypted.ciphertext).toBeTruthy();
+
+    const decrypted = await decryptAccountKeyForRecipient(
+      encrypted.ciphertext,
+      encrypted.ephemeralPublicKey,
+      recipient.privateKey
+    );
+
+    expect(decrypted).toBe(accountKey);
+  });
+
+  it("should fail to decrypt with wrong private key", async () => {
+    const accountKey = generateAccountKey();
+    const alice = generateKeyPair();
+    const bob = generateKeyPair();
+
+    const encrypted = await encryptAccountKeyForRecipient(
+      accountKey,
+      alice.publicKey
+    );
+
+    // Bob tries to decrypt Alice's encrypted key — should fail
+    await expect(
+      decryptAccountKeyForRecipient(
+        encrypted.ciphertext,
+        encrypted.ephemeralPublicKey,
+        bob.privateKey
+      )
+    ).rejects.toThrow();
+  });
+
+  it("should produce different ciphertexts for the same key", async () => {
+    const accountKey = generateAccountKey();
+    const recipient = generateKeyPair();
+
+    const e1 = await encryptAccountKeyForRecipient(accountKey, recipient.publicKey);
+    const e2 = await encryptAccountKeyForRecipient(accountKey, recipient.publicKey);
+
+    // Different ephemeral keys → different ciphertexts
+    expect(e1.ephemeralPublicKey).not.toBe(e2.ephemeralPublicKey);
+    expect(e1.ciphertext).not.toBe(e2.ciphertext);
   });
 });
 
@@ -91,7 +215,7 @@ describe("account key generation", () => {
   it("should generate a 32-byte base64 key", () => {
     const key = generateAccountKey();
     expect(key).toBeTruthy();
-    const decoded = atob(key);
+    const decoded = base64ToBytes(key);
     expect(decoded.length).toBe(32);
   });
 
@@ -106,7 +230,19 @@ describe("salt generation", () => {
   it("should generate a 16-byte base64 salt", () => {
     const salt = generateSalt();
     expect(salt).toBeTruthy();
-    const decoded = atob(salt);
+    const decoded = base64ToBytes(salt);
     expect(decoded.length).toBe(16);
+  });
+});
+
+describe("compression stubs", () => {
+  it("compress should be a pass-through for now", () => {
+    const data = "test data for compression";
+    expect(compress(data)).toBe(data);
+  });
+
+  it("decompress should be a pass-through for now", () => {
+    const data = "test data for decompression";
+    expect(decompress(data)).toBe(data);
   });
 });
