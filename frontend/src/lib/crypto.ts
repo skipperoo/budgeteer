@@ -1,7 +1,22 @@
+/**
+ * Checks that the Web Crypto API is available in a secure context.
+ * crypto.subtle is only defined when the page is served over HTTPS
+ * (or from localhost). Throws a descriptive error if unavailable.
+ */
+function checkCrypto(): void {
+  if (!crypto.subtle) {
+    throw new Error(
+      "Encryption is unavailable because the page is not served over a secure connection (HTTPS). " +
+      "Please access this application via https:// or localhost."
+    );
+  }
+}
+
 export async function deriveKeyFromPassword(
   password: string,
   salt: Uint8Array
 ): Promise<CryptoKey> {
+  checkCrypto();
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
@@ -28,6 +43,7 @@ export async function encryptWithPassword(
   plaintext: string,
   password: string
 ): Promise<string> {
+  checkCrypto();
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveKeyFromPassword(password, salt);
@@ -48,6 +64,7 @@ export async function decryptWithPassword(
   ciphertext: string,
   password: string
 ): Promise<string> {
+  checkCrypto();
   const combined = Uint8Array.from(atob(ciphertext), (c) => c.charCodeAt(0));
   const salt = combined.slice(0, 16);
   const iv = combined.slice(16, 28);
@@ -65,6 +82,7 @@ export async function generateKeyPair(): Promise<{
   publicKey: string;
   privateKey: string;
 }> {
+  checkCrypto();
   const keyPair = await crypto.subtle.generateKey(
     {
       name: "ECDH",
@@ -84,6 +102,7 @@ export async function generateKeyPair(): Promise<{
 }
 
 export async function encryptData(plaintext: string, keyBase64: string): Promise<string> {
+  checkCrypto();
   const keyBytes = Uint8Array.from(atob(keyBase64), (c) => c.charCodeAt(0));
   const iv = crypto.getRandomValues(new Uint8Array(12));
 
@@ -102,6 +121,7 @@ export async function encryptData(plaintext: string, keyBase64: string): Promise
 }
 
 export async function decryptData(ciphertext: string, keyBase64: string): Promise<string> {
+  checkCrypto();
   const keyBytes = Uint8Array.from(atob(keyBase64), (c) => c.charCodeAt(0));
   const combined = Uint8Array.from(atob(ciphertext), (c) => c.charCodeAt(0));
   const iv = combined.slice(0, 12);
