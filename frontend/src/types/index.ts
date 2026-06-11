@@ -69,6 +69,11 @@ export interface KeysResponse {
   encrypted_private_key: string;
 }
 
+export interface CreateTransactionRequest {
+  time: string;
+  encrypted_payload: string;
+}
+
 export interface SyncPullResponse {
   items: SyncQueueItem[];
   next_cursor?: string;

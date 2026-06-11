@@ -79,10 +79,14 @@ func main() {
 		AddHandler("POST   /v1/sync/push",                 handler.SyncPush).
 		AddHandler("GET    /v1/accounts",                  handler.ListAccounts).
 		AddHandler("POST   /v1/accounts",                  handler.CreateAccount).
+		AddHandler("PUT    /v1/accounts/{id}",             handler.UpdateAccount).
 		AddHandler("DELETE /v1/accounts/{id}",             handler.DeleteAccount).
-		AddHandler("POST   /v1/accounts/{id}/invite",      handler.InviteToAccount).
-		AddHandler("GET    /v1/accounts/{id}/users",       handler.ListAccountUsers).
-		AddHandler("DELETE /v1/accounts/{id}/users/{uid}", handler.RemoveAccountUser)
+		AddHandler("POST   /v1/accounts/{id}/invite",        handler.InviteToAccount).
+		AddHandler("GET    /v1/accounts/{id}/users",         handler.ListAccountUsers).
+		AddHandler("DELETE /v1/accounts/{id}/users/{uid}",   handler.RemoveAccountUser).
+		AddHandler("GET    /v1/accounts/{id}/transactions",  handler.ListTransactions).
+		AddHandler("POST   /v1/accounts/{id}/transactions",  handler.CreateTransaction).
+		AddHandler("DELETE /v1/transactions/{id}",           handler.DeleteTransaction)
 
 	router.AddSubroute("/api/", protected.Finalize())
 	final := router.Finalize()

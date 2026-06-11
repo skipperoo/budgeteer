@@ -18,4 +18,6 @@ export const ENDPOINTS = {
   accountUsers: (id: string) => `${API_BASE}/accounts/${id}/users`,
   accountUser: (aid: string, uid: string) =>
     `${API_BASE}/accounts/${aid}/users/${uid}`,
+  transactions: (accountId: string) => `${API_BASE}/accounts/${accountId}/transactions`,
+  transaction: (id: string) => `${API_BASE}/transactions/${id}`,
 } as const;

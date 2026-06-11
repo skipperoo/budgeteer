@@ -35,6 +35,12 @@ func (r *AccountRepository) FindByID(ctx context.Context, id string) (*model.Acc
 	return a, nil
 }
 
+func (r *AccountRepository) Update(ctx context.Context, a *model.Account) error {
+	query := `UPDATE accounts SET currency = $1, type = $2, updated_at = $3 WHERE id = $4 AND deleted_at IS NULL`
+	_, err := database.Pool.Exec(ctx, query, a.Currency, a.Type, time.Now(), a.ID)
+	return err
+}
+
 func (r *AccountRepository) SoftDelete(ctx context.Context, id string) error {
 	query := `UPDATE accounts SET deleted_at = $1, updated_at = $1 WHERE id = $2 AND deleted_at IS NULL`
 	_, err := database.Pool.Exec(ctx, query, time.Now(), id)

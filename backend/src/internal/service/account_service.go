@@ -80,6 +80,32 @@ func (s *AccountService) SoftDelete(ctx context.Context, accountID, userID strin
 	return s.AccountRepo.SoftDelete(ctx, accountID)
 }
 
+func (s *AccountService) Update(ctx context.Context, accountID, userID, currency, accountType string) (*model.Account, error) {
+	account, err := s.AccountRepo.FindByID(ctx, accountID)
+	if err != nil {
+		return nil, fmt.Errorf("database error: %w", err)
+	}
+	if account == nil || account.DeletedAt != nil {
+		return nil, fmt.Errorf("account not found")
+	}
+
+	au, err := s.AccountUserRepo.FindByAccountAndUser(ctx, accountID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("database error: %w", err)
+	}
+	if au == nil || (au.Role != "owner" && au.Role != "admin") {
+		return nil, fmt.Errorf("only the owner can edit the account")
+	}
+
+	account.Currency = currency
+	account.Type = accountType
+	if err := s.AccountRepo.Update(ctx, account); err != nil {
+		return nil, fmt.Errorf("failed to update account: %w", err)
+	}
+
+	return account, nil
+}
+
 func (s *AccountService) InviteUser(ctx context.Context, accountID, inviterID, userEmail, encryptedAccountKey string) error {
 	account, err := s.AccountRepo.FindByID(ctx, accountID)
 	if err != nil {

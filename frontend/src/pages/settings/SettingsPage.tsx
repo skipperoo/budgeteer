@@ -152,11 +152,63 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <h1 className="text-3xl font-bold">Settings</h1>
+    <div className="mx-auto w-full max-w-5xl px-4">
+      <h1 className="text-3xl font-bold mb-6">Settings</h1>
 
-      {/* --- Account Card --- */}
-      <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left column: Currency + Locale */}
+        <div className="space-y-6 lg:col-span-1">
+          {/* --- Default Currency Card (P1.4) --- */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Default Currency</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-3">
+                Set your preferred default currency for new accounts.
+              </p>
+              <select
+                value={defaultCurrency}
+                onChange={(e) => setDefaultCurrency(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} — {c.symbol} {c.name}
+                  </option>
+                ))}
+              </select>
+            </CardContent>
+          </Card>
+
+          {/* --- Locale Card (P3.1) --- */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Locale / Language</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-3">
+                Choose your preferred language. The UI will use this locale for
+                formatting numbers and dates.
+              </p>
+              <select
+                value={locale}
+                onChange={(e) => setLocale(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              >
+                {LOCALES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right column: Account Card */}
+        <div className="lg:col-span-2">
+          <Card>
         <CardHeader>
           <CardTitle>Account</CardTitle>
         </CardHeader>
@@ -235,53 +287,8 @@ export default function SettingsPage() {
           </form>
         </CardContent>
       </Card>
-
-      {/* --- Default Currency Card (P1.4) --- */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Default Currency</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-3">
-            Set your preferred default currency for new accounts.
-          </p>
-          <select
-            value={defaultCurrency}
-            onChange={(e) => setDefaultCurrency(e.target.value)}
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.code} — {c.symbol} {c.name}
-              </option>
-            ))}
-          </select>
-        </CardContent>
-      </Card>
-
-      {/* --- Locale Card (P3.1) --- */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Locale / Language</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-3">
-            Choose your preferred language. The UI will use this locale for
-            formatting numbers and dates.
-          </p>
-          <select
-            value={locale}
-            onChange={(e) => setLocale(e.target.value)}
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-          >
-            {LOCALES.map((l) => (
-              <option key={l.code} value={l.code}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        </CardContent>
-      </Card>
+    </div>
+    </div>
     </div>
   );
 }

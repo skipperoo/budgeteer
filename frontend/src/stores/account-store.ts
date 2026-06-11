@@ -10,7 +10,8 @@ interface AccountState {
   loading: boolean;
   error: string | null;
   fetchAccounts: () => Promise<void>;
-  createAccount: (currency: string, type: string) => Promise<void>;
+  createAccount: (currency: string, type: string) => Promise<Account | void>;
+  updateAccount: (id: string, currency: string, type: string) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   fetchAccountUsers: (id: string) => Promise<void>;
   inviteUser: (accountId: string, userEmail: string, encryptedKey: string) => Promise<void>;
@@ -42,6 +43,23 @@ export const useAccountStore = create<AccountState>((set, get) => ({
         body: JSON.stringify({ currency, type }),
       });
       await get().fetchAccounts();
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  },
+
+  updateAccount: async (id, currency, type) => {
+    set({ loading: true, error: null });
+    try {
+      const updated = await apiFetch<Account>(ENDPOINTS.account(id), {
+        method: "PUT",
+        body: JSON.stringify({ currency, type }),
+      });
+      set((s) => ({
+        accounts: s.accounts.map((a) => (a.id === id ? updated : a)),
+        currentAccount: s.currentAccount?.id === id ? updated : s.currentAccount,
+        loading: false,
+      }));
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }

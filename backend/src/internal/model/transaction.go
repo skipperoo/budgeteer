@@ -2,6 +2,12 @@ package model
 
 import "time"
 
+type CreateTransactionRequest struct {
+	AccountID        string    `json:"account_id"`
+	Time             time.Time `json:"time"`
+	EncryptedPayload string    `json:"encrypted_payload"`
+}
+
 type Transaction struct {
 	ID               string    `json:"id"`
 	Time             time.Time `json:"time"`
