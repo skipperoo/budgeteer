@@ -19,6 +19,7 @@ type Config struct {
 	SMTPUser      string
 	SMTPPassword  string
 	SMTPFrom      string
+	SMTPUseSSL    bool
 	JWTSecret     string
 	JWTSecretPath string
 }
@@ -41,6 +42,7 @@ func LoadConfig() {
 		SMTPUser:      getenvOrDefault("SMTP_USER", ""),
 		SMTPPassword:  readSecret("smtp_password"),
 		SMTPFrom:      getenvOrDefault("SMTP_FROM", "noreply@budgeteer.app"),
+		SMTPUseSSL:    getenvOrDefault("SMTP_SSL", "false") == "true" || getenvOrDefault("SMTP_PORT", "587") == "465",
 		JWTSecret:     readSecret("jwt_secret"),
 		JWTSecretPath: "/run/secrets/jwt_secret",
 	}
