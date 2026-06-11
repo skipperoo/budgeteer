@@ -7,9 +7,11 @@
 # crypto.subtle (Web Crypto API) in the Vite dev server.
 #
 # Usage:
-#   ./gen_certs.sh            # generate (skips if exists)
-#   ./gen_certs.sh --force    # regenerate (overwrites)
-#   ./gen_certs.sh --trust    # trust the CA on this system
+#   ./gen_certs.sh                      # generate (skips if exists)
+#   ./gen_certs.sh --force              # regenerate (overwrites)
+#   ./gen_certs.sh --trust              # trust the CA on this system
+#   ./gen_certs.sh --force 10.0.0.1     # include extra IP in SAN
+#   ./gen_certs.sh --force myhost.local # include extra DNS in SAN
 # =============================================================
 
 set -euo pipefail
@@ -32,10 +34,13 @@ NC='\033[0m'
 # ── Parse args ────────────────────────────────────────────
 FORCE=false
 TRUST=false
+EXTRA_NAMES=()
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=true ;;
     --trust) TRUST=true ;;
+    --*)     echo -e "${RED}Unknown option: $arg${NC}"; exit 1 ;;
+    *)       EXTRA_NAMES+=("$arg") ;;
   esac
 done
 
@@ -109,7 +114,36 @@ echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━�
 
 openssl genrsa -out "$SERVER_KEY" "$RSA_BITS"
 
-# Create CSR config with SANs for localhost and 127.0.0.1
+# ── Build SAN entries ─────────────────────────────────────
+# Default SANs (always included)
+DNS_NAMES=(localhost)
+IP_NAMES=(127.0.0.1 "::1")
+
+# Sort extra names into DNS vs IP
+for name in "${EXTRA_NAMES[@]}"; do
+  if [[ "$name" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "$name" =~ ^:: ]]; then
+    IP_NAMES+=("$name")
+  else
+    DNS_NAMES+=("$name")
+  fi
+done
+
+# Generate alt_names section for config files
+build_alt_names() {
+  local idx=1
+  for dns in "${DNS_NAMES[@]}"; do
+    echo "DNS.$idx = $dns"
+    idx=$((idx + 1))
+  done
+  for ip in "${IP_NAMES[@]}"; do
+    echo "IP.$idx = $ip"
+    idx=$((idx + 1))
+  done
+}
+
+ALT_NAMES=$(build_alt_names)
+
+# Create CSR config with SANs
 cat > "$CERTS_DIR/csr.conf" <<EOF
 [req]
 default_bits       = $RSA_BITS
@@ -124,16 +158,13 @@ ST = Development
 L  = Dev
 O  = Budgeteer
 OU = Development
-CN = localhost
+CN = ${DNS_NAMES[0]}
 
 [req_ext]
 subjectAltName = @alt_names
 
 [alt_names]
-DNS.1 = localhost
-DNS.2 = *.localhost
-IP.1  = 127.0.0.1
-IP.2  = ::1
+${ALT_NAMES}
 EOF
 
 openssl req -new \
@@ -150,10 +181,7 @@ extendedKeyUsage       = serverAuth
 subjectAltName         = @alt_names
 
 [alt_names]
-DNS.1 = localhost
-DNS.2 = *.localhost
-IP.1  = 127.0.0.1
-IP.2  = ::1
+${ALT_NAMES}
 EOF
 
 openssl x509 -req \
