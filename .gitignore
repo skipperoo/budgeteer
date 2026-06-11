@@ -12,3 +12,5 @@ dist/
 budgeteer-backend
 # Opencode AI assistant config
 .opencode/
+# Dev certificates (self-signed, generated locally)
+certs/
