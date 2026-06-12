@@ -137,7 +137,7 @@ export function TransactionCard({
         {/* Actions - only visible on hover if not compact or if they are explicitly passed */}
         {(onEdit || onDelete) && (
           <div className={`
-            flex items-center gap-1 max-sm:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200
+            flex items-center gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-200
             ${compact ? "absolute -right-2 top-1/2 -translate-y-1/2 bg-card p-1 shadow-lg rounded-lg border border-border" : ""}
           `}>
             {onEdit && (
