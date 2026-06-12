@@ -242,6 +242,10 @@ export default function DashboardPage() {
       .sort((a, b) => b.value - a.value);
   })();
 
+  // Totals for donut center labels
+  const expenseTotal = expenseChartData.reduce((sum, d) => sum + d.value, 0);
+  const incomeTotal = incomeChartData.reduce((sum, d) => sum + d.value, 0);
+
   // Handle category selection
   const handleSelectCategory = (cat: string) => {
     setTxCategory(cat);
@@ -666,6 +670,31 @@ export default function DashboardPage() {
                             return null;
                           }}
                         />
+                        <text
+                          x="50%"
+                          y="50%"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="fill-destructive"
+                          style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                        >
+                          {defaultSymbol}
+                          {expenseTotal.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </text>
+                        <text
+                          x="50%"
+                          y="50%"
+                          dy={16}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="fill-muted-foreground"
+                          style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                        >
+                          expenses
+                        </text>
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -739,6 +768,31 @@ export default function DashboardPage() {
                             return null;
                           }}
                         />
+                        <text
+                          x="50%"
+                          y="50%"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="fill-income"
+                          style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                        >
+                          {defaultSymbol}
+                          {incomeTotal.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </text>
+                        <text
+                          x="50%"
+                          y="50%"
+                          dy={16}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="fill-muted-foreground"
+                          style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                        >
+                          income
+                        </text>
                       </PieChart>
                     </ResponsiveContainer>
                   </div>

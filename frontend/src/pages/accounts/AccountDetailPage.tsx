@@ -1144,7 +1144,7 @@ export default function AccountDetailPage() {
                               className="fill-income"
                               style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
                             >
-                              +{getCurrencySymbol(account.currency)}
+                              {getCurrencySymbol(account.currency)}
                               {incomeTotal.toLocaleString(undefined, {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2,
