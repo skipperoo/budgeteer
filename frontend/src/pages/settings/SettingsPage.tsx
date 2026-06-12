@@ -8,6 +8,7 @@ import { API_BASE, ENDPOINTS } from "@/lib/constants";
 import { useAuthStore } from "@/stores/auth-store";
 import { decryptWithPassword, encryptWithPassword } from "@/lib/crypto";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
+import { useAccent, type AccentKey } from "@/hooks/use-accent";
 
 const CURRENCIES = [
   { code: "EUR", symbol: "€", name: "Euro" },
@@ -70,6 +71,9 @@ export default function SettingsPage() {
   const [locale, setLocale] = useState(() =>
     getSetting("budgeteer_locale", "en")
   );
+
+  // --- Accent color ---
+  const { accentKey, setAccent, presets } = useAccent();
 
   // Persist currency and locale to localStorage on change
   useEffect(() => {
@@ -299,6 +303,43 @@ export default function SettingsPage() {
                 Switch between light and dark mode.
               </p>
               <ThemeToggle />
+            </CardContent>
+          </Card>
+
+          {/* --- Accent Color Card --- */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Accent Color</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-3">
+                Choose your preferred accent color for buttons and highlights.
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {(Object.entries(presets) as [AccentKey, typeof presets[AccentKey]][]).map(([key, def]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setAccent(key)}
+                    className={`
+                      flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all duration-150 cursor-pointer
+                      ${accentKey === key
+                        ? "border-ring ring-1 ring-ring"
+                        : "border-border hover:border-muted-foreground/30"
+                      }
+                    `}
+                    title={def.label}
+                  >
+                    <span
+                      className="w-6 h-6 rounded-full shrink-0"
+                      style={{ backgroundColor: def.light.primary }}
+                    />
+                    <span className="text-[10px] font-medium text-muted-foreground leading-tight text-center">
+                      {def.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </div>

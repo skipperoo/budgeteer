@@ -8,8 +8,8 @@ colors:
   card-foreground: "oklch(0.22 0.025 15)"
   popover: "oklch(1 0 0)"
   popover-foreground: "oklch(0.22 0.025 15)"
-  primary: "oklch(0.52 0.085 12)"
-  primary-foreground: "oklch(0.99 0.005 30)"
+  primary: "oklch(0.40 0.06 260)"
+  primary-foreground: "oklch(0.97 0.005 260)"
   secondary: "oklch(0.95 0.018 20)"
   secondary-foreground: "oklch(0.30 0.03 15)"
   muted: "oklch(0.95 0.018 20)"
@@ -20,7 +20,7 @@ colors:
   destructive-foreground: "oklch(0.99 0.005 30)"
   border: "oklch(0.90 0.015 25)"
   input: "oklch(0.90 0.015 25)"
-  ring: "oklch(0.52 0.085 12)"
+  ring: "oklch(0.40 0.06 260)"
   income: "oklch(0.48 0.1 150)"
   expense: "oklch(0.52 0.13 22)"
 typography:
@@ -127,7 +127,7 @@ The product register means this is a tool first. Users sit down to log a transac
 
 ## 2. Colors
 
-The palette is a warm rose-neutral family — moderate chroma (< 0.025 on neutrals, < 0.15 on accents), warm hue range (12°–30°). This represents a deliberate shift from the cool slate neutrals typical of financial tools. The warmth is carried by the body background and surface tones, not just the accent.
+The palette pairs warm rose-tinted neutrals with a cool slate blue accent — an intentional warm/cool contrast that avoids the sterility of all-cool financial tools while keeping the accent restrained and professional. Neutrals sit in the warm hue range (12°–30°), while the primary accent sits in the cool blue range (260°). This contrast gives personality without sacrificing clarity.
 
 **Dual-mode system.** The UI supports both light and dark themes via a `.dark` class toggle on `<html>`. The dark mode is not an inversion — warm deep-brown neutrals replace the background (L 0.16, hue 15°), cards lift slightly (L 0.20) for surface distinction, and the primary accent lightens to a blush rose (L 0.72) for readability against dark backgrounds. Theme preference is persisted to localStorage (`budgeteer_theme`) and defaults to the system `prefers-color-scheme`. A sun/moon toggle in the header lets users switch at any time.
 
@@ -138,13 +138,13 @@ The palette is a warm rose-neutral family — moderate chroma (< 0.025 on neutra
 | **Background**     | `oklch(0.985 0.008 30)`            | Near-white with a whisper of rose warmth              |
 | **Foreground**     | `oklch(0.22 0.025 15)`             | Warm near-black — body text, headings, labels         |
 | **Card / Popover** | `oklch(1 0 0)`                     | Pure white card surfaces — distinction by border only |
-| **Primary**        | `oklch(0.52 0.085 12)`            | Muted dusty rose — primary buttons, active nav        |
-| **Primary fg**     | `oklch(0.99 0.005 30)`            | Warm white text on primary surfaces                   |
+| **Primary**        | `oklch(0.40 0.06 260)`            | Muted slate blue — primary buttons, active nav        |
+| **Primary fg**     | `oklch(0.97 0.005 260)`           | Near-white text on primary surfaces                   |
 | **Secondary**      | `oklch(0.95 0.018 20)`            | Blush-tinted light surface — sidebar, hover states    |
 | **Muted fg**       | `oklch(0.48 0.025 15)`            | Medium warm gray — secondary text, placeholders       |
 | **Destructive**    | `oklch(0.56 0.15 22)`             | Desaturated terracotta — softer than harsh red        |
 | **Border / Input** | `oklch(0.90 0.015 25)`            | Soft rose-gray stroke — card borders, dividers         |
-| **Ring**           | `oklch(0.52 0.085 12)`            | Matches primary — focus ring on interactive elements  |
+| **Ring**           | `oklch(0.40 0.06 260)`            | Matches primary — focus ring on interactive elements  |
 | **Income**         | `oklch(0.48 0.1 150)`             | Soft sage green — income amounts                      |
 | **Expense**        | `oklch(0.52 0.13 22)`             | Muted terracotta — expense amounts                    |
 
@@ -157,19 +157,19 @@ The `.dark` class overrides every token. Key differences from light mode:
 | **Background**     | `oklch(0.16 0.02 15)`             | Deep warm brown-gray — not black                       |
 | **Card / Popover** | `oklch(0.20 0.022 15)`            | Slightly lighter for surface distinction               |
 | **Foreground**     | `oklch(0.93 0.012 30)`            | Warm near-white — high contrast body text              |
-| **Primary**        | `oklch(0.72 0.075 12)`            | Light dusty rose — readable against dark surfaces      |
-| **Primary fg**     | `oklch(0.14 0.02 15)`             | Dark text on primary buttons                           |
+| **Primary**        | `oklch(0.60 0.06 260)`            | Light slate blue — readable against dark surfaces      |
+| **Primary fg**     | `oklch(0.14 0.02 260)`            | Dark text on primary buttons                           |
 | **Secondary**      | `oklch(0.26 0.025 15)`            | Dark warm surface for hover/active states              |
 | **Muted fg**       | `oklch(0.62 0.02 20)`             | Brighter than light mode — legible against dark bg     |
 | **Destructive**    | `oklch(0.60 0.14 22)`             | Slightly desaturated terracotta — reduced eye strain   |
 | **Border / Input** | `oklch(0.30 0.025 15)`            | Subtle warm stroke separating surfaces                 |
-| **Ring**           | `oklch(0.72 0.075 12)`            | Matches dark-mode primary — visible focus indicator    |
+| **Ring**           | `oklch(0.60 0.06 260)`            | Matches dark-mode primary — visible focus indicator    |
 | **Income**         | `oklch(0.68 0.1 150)`            | Brighter sage green for dark mode                      |
 | **Expense**        | `oklch(0.68 0.12 22)`             | Brighter terracotta for dark mode                      |
 
 ### Semantic Meaning
 
-- **Primary** (dusty rose) is used for call-to-action buttons, active navigation indicators, and the brand mark. It appears on no more than 10% of any screen — its warmth is a signal, not a wash.
+- **Primary** (slate blue) is used for call-to-action buttons, active navigation indicators, and the brand mark. It appears on no more than 10% of any screen — its rarity is the point. The default is a cool slate blue, but users can customize it from Settings.
 - **Destructive** (desaturated terracotta) replaces harsh `#ef4444` red. It conveys removal without alarm.
 - **Income / Expense** colors are informational only, always accompanied by `+`/`-` prefixes. Income is sage green; expense is muted terracotta.
 
@@ -229,7 +229,7 @@ All components are Shadcn UI primitives (Radix-based) styled via Tailwind CSS v4
 
 **Shape:** Gently curved (0.625rem / 10px via `rounded-md`). All variants share the same radius and height (36px / `h-9`).
 
-- **Default** (`bg-primary text-primary-foreground shadow`): Dusty rose fill, warm white text.
+- **Default** (`bg-primary text-primary-foreground shadow`): Slate blue fill, near-white text.
 - **Destructive** (`bg-destructive text-destructive-foreground shadow-sm`): Terracotta fill, warm white text.
 - **Outline** (`border border-input bg-background shadow-sm`): Near-white fill, warm dark text, 1px rose-gray border.
 - **Secondary** (`bg-secondary text-secondary-foreground shadow-sm`): Blush-tinted fill, warm dark text.
@@ -315,7 +315,8 @@ A sun/moon icon button in the top-right of the Header, 32px × 32px, `rounded-md
 - **Don't** use gradient text, colored accent stripes (`border-left` greater than 1px), or glassmorphism. Prohibited entirely.
 - **Don't** add decorative motion. Motion conveys state only (hover, focus, open, close) and stays within 150–250ms.
 - **Don't** use modals as the first thought for interaction. Exhaust inline and progressive disclosure patterns first.
-- **Don't** use the dusty rose primary on more than 10% of any single screen. Its rarity is the point.
+- **Don't** use the primary accent on more than 10% of any single screen. Its rarity is the point.
+- **Don't** change the income/expense colors (sage green / muted terracotta) — those are fixed semantic signals, not accent-linked.
 - **Don't** create different button shapes or input styles on different pages. The component vocabulary is universal.
 - **Don't** show "you're offline" banners that block interaction. A subtle indicator in the sidebar footer is sufficient.
 - **Don't** use cards inside cards. A card is the outermost container; use direct child elements for internal grouping.

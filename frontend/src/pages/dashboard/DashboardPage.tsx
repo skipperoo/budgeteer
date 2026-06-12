@@ -125,15 +125,16 @@ export default function DashboardPage() {
   const defaultCurrency = localStorage.getItem("budgeteer_default_currency") || "EUR";
   const defaultSymbol = getCurrencySymbol(defaultCurrency);
 
+  // Pastel chart colors — light chroma, high lightness for a soft, harmonious look
   const CHART_COLORS = [
-    "oklch(0.6 0.18 140)", // Soft Teal/Green
-    "oklch(0.65 0.16 220)", // Slate Blue
-    "oklch(0.62 0.15 280)", // Purple
-    "oklch(0.68 0.14 40)",   // Ochre / Warm orange
-    "oklch(0.58 0.16 320)", // Rose / Pink
-    "oklch(0.64 0.11 100)", // Sage
-    "oklch(0.55 0.13 180)", // Ocean Blue
-    "oklch(0.62 0.17 10)",  // Reddish-coral
+    "oklch(0.75 0.12 140)",  // Pastel green/teal
+    "oklch(0.78 0.10 220)",  // Pastel blue
+    "oklch(0.76 0.10 280)",  // Pastel purple
+    "oklch(0.80 0.09 40)",   // Pastel ochre
+    "oklch(0.74 0.12 320)",  // Pastel rose
+    "oklch(0.77 0.08 100)",  // Pastel sage
+    "oklch(0.72 0.10 180)",  // Pastel ocean
+    "oklch(0.76 0.11 10)",   // Pastel coral
   ];
 
   // Group and compute balance over time

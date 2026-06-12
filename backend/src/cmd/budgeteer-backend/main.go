@@ -74,6 +74,8 @@ func main() {
 		AddHandler("GET    /v1/auth/keys",                 handler.GetKeys).
 		AddHandler("GET    /v1/auth/me",                   handler.Me).
 		AddHandler("PUT    /v1/auth/password",             handler.ChangePassword).
+		AddHandler("GET    /v1/auth/preferences",           handler.GetPreferences).
+		AddHandler("PUT    /v1/auth/preferences",           handler.UpdatePreferences).
 		AddHandler("GET    /v1/users/lookup",              handler.LookupUser).
 		AddHandler("GET    /v1/sync/pull",                 handler.SyncPull).
 		AddHandler("POST   /v1/sync/push",                 handler.SyncPush).

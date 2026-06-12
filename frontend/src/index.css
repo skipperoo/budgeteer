@@ -19,9 +19,9 @@
   --color-popover:            oklch(1 0 0);
   --color-popover-foreground: oklch(0.22 0.025 15);
 
-  /* Primary: muted dusty rose – used sparingly on primary actions */
-  --color-primary:            oklch(0.52 0.085 12);
-  --color-primary-foreground: oklch(0.99 0.005 30);
+  /* Primary: muted slate blue – restrained, professional accent */
+  --color-primary:            oklch(0.40 0.06 260);
+  --color-primary-foreground: oklch(0.97 0.005 260);
 
   /* Secondary / muted: blush-tinted light surface */
   --color-secondary:          oklch(0.95 0.018 20);
@@ -39,7 +39,7 @@
 
   --color-border:  oklch(0.90 0.015 25);
   --color-input:   oklch(0.90 0.015 25);
-  --color-ring:    oklch(0.52 0.085 12);
+  --color-ring:    oklch(0.40 0.06 260);
 
   /* Income green: soft sage */
   --color-income:  oklch(0.48 0.1 150);
@@ -60,8 +60,8 @@
   --color-popover:            oklch(0.20 0.022 15);
   --color-popover-foreground: oklch(0.93 0.012 30);
 
-  --color-primary:            oklch(0.72 0.075 12);
-  --color-primary-foreground: oklch(0.14 0.02 15);
+  --color-primary:            oklch(0.60 0.06 260);
+  --color-primary-foreground: oklch(0.14 0.02 260);
 
   --color-secondary:          oklch(0.26 0.025 15);
   --color-secondary-foreground: oklch(0.88 0.012 30);
@@ -77,7 +77,7 @@
 
   --color-border: oklch(0.30 0.025 15);
   --color-input:  oklch(0.30 0.025 15);
-  --color-ring:   oklch(0.72 0.075 12);
+  --color-ring:   oklch(0.60 0.06 260);
 
   --color-income:  oklch(0.68 0.1 150);
   --color-expense: oklch(0.68 0.12 22);

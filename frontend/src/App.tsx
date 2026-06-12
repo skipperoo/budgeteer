@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth-store";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { useAccent } from "@/hooks/use-accent";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
 import VerifyOTPPage from "@/pages/auth/VerifyOTPPage";
@@ -38,6 +39,9 @@ export default function App() {
       hydrate();
     }
   }, [token, user, hydrate]);
+
+  // Load and apply the user's preferred accent color
+  useAccent();
 
   return (
     <Routes>

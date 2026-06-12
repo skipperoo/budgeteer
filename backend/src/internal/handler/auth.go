@@ -187,6 +187,7 @@ func Me(w http.ResponseWriter, r *http.Request) {
 		PublicKey:           user.PublicKey,
 		EncryptedPrivateKey: user.EncryptedPrivateKey,
 		IsVerified:          user.IsVerified,
+		Preferences:         user.Preferences,
 	})
 }
 

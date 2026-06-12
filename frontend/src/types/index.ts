@@ -1,11 +1,16 @@
 export type AccountType = "personal" | "joint" | "savings";
 
+export interface UserPreferences {
+  accent_color: string;
+}
+
 export interface User {
   id: string;
   email: string;
   public_key: string;
   encrypted_private_key: string;
   is_verified: boolean;
+  preferences: UserPreferences;
 }
 
 export interface Account {

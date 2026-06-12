@@ -10,6 +10,7 @@ export const ENDPOINTS = {
   me: `${API_BASE}/auth/me`,
   changePassword: `${API_BASE}/auth/password`,
   userLookup: `${API_BASE}/users/lookup`,
+  preferences: `${API_BASE}/auth/preferences`,
   syncPull: `${API_BASE}/sync/pull`,
   syncPush: `${API_BASE}/sync/push`,
   accounts: `${API_BASE}/accounts`,

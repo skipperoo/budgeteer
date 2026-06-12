@@ -7,6 +7,7 @@ const TEST_USER = {
   public_key: "pk",
   encrypted_private_key: "ek",
   is_verified: true,
+  preferences: { accent_color: "slate" },
 };
 
 beforeEach(() => {
