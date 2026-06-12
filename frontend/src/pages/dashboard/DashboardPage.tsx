@@ -22,18 +22,14 @@ import { fetchAndDecryptTransactions, getAccountKey } from "@/lib/decrypt-transa
 import { TransactionCard } from "@/components/transactions/TransactionCard";
 import type { CreateTransactionRequest } from "@/types";
 import type { DecryptedTransaction } from "@/lib/decrypt-transactions";
+import { BalanceChart } from "@/components/shared/BalanceChart";
 import { getCurrencySymbol, formatCurrency } from "@/lib/format";
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as ChartTooltip,
   PieChart,
   Pie,
   Cell,
+  Tooltip as ChartTooltip,
 } from "recharts";
 
 export default function DashboardPage() {
@@ -134,6 +130,23 @@ export default function DashboardPage() {
 
   const defaultCurrency = localStorage.getItem("budgeteer_default_currency") || "EUR";
   const defaultSymbol = getCurrencySymbol(defaultCurrency);
+
+  // Total net worth per currency (all-time, from all transactions)
+  const netWorthByCurrency = (() => {
+    const perAccount: Record<string, number> = {};
+    for (const tx of allTxs) {
+      if (tx.payload) {
+        perAccount[tx.account_id] = (perAccount[tx.account_id] || 0) + tx.payload.amount;
+      }
+    }
+    const byCur: Record<string, number> = {};
+    for (const acc of accounts) {
+      const balance = perAccount[acc.id] || 0;
+      const cur = acc.currency;
+      byCur[cur] = (byCur[cur] || 0) + balance;
+    }
+    return byCur;
+  })();
 
   // Pastel chart colors — light chroma, high lightness for a soft, harmonious look
   const CHART_COLORS = [
@@ -528,79 +541,35 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: Balance Chart and Recent Transactions */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Balance Chart Card */}
+          {/* All Assets Card */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-bold">Balance Over Time</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-bold">All Assets</CardTitle>
+                <div className="flex items-center gap-3 text-sm font-medium">
+                  {Object.entries(netWorthByCurrency).map(([cur, val]) => (
+                    <span
+                      key={cur}
+                      className={`tabular-nums font-semibold ${
+                        val < 0 ? "text-destructive" : "text-foreground"
+                      }`}
+                    >
+                      {getCurrencySymbol(cur)}
+                      {val.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              {balanceChartData.length === 0 ? (
-                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
-                  No balance data available yet.
-                </div>
-              ) : (
-                <div className="h-64 sm:h-80 w-full font-mono text-[10px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={balanceChartData}
-                      margin={{ top: 5, right: 12, left: 0, bottom: 0 }}
-                    >
-                      <defs>
-                        <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.2}/>
-                          <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0.0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
-                      <XAxis
-                        dataKey="displayDate"
-                        stroke="var(--color-muted-foreground)"
-                        fontSize={10}
-                        tickLine={false}
-                        axisLine={false}
-                        dy={10}
-                        minTickGap={30}
-                      />
-                      <YAxis
-                        stroke="var(--color-muted-foreground)"
-                        fontSize={10}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(value) => `${defaultSymbol}${value}`}
-                        dx={-5}
-                      />
-                      <ChartTooltip
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            const data = payload[0].payload;
-                            return (
-                              <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
-                                <p className="font-semibold mb-1">{data.displayDate}</p>
-                                <p className="font-mono text-foreground font-bold">
-                                  {defaultSymbol}
-                                  {Number(payload[0].value ?? 0).toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
-                                </p>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="balance"
-                        stroke="var(--color-primary)"
-                        strokeWidth={2}
-                        fillOpacity={1}
-                        fill="url(#colorBalance)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
+              <BalanceChart
+                data={balanceChartData}
+                currency={defaultCurrency}
+                gradientId="colorAllAssets"
+              />
             </CardContent>
           </Card>
 

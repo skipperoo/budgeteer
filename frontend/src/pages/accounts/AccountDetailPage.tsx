@@ -13,6 +13,8 @@ import {
 import { useAccountStore } from "@/stores/account-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCategoryStore, type CategoryType } from "@/stores/category-store";
+import { useDateRangeStore } from "@/stores/date-range-store";
+import { BalanceChart } from "@/components/shared/BalanceChart";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64, encryptAccountKeyForRecipient, generateAccountKey } from "@/lib/crypto";
@@ -410,9 +412,63 @@ export default function AccountDetailPage() {
     );
   }
 
+  // Date range
+  const dateRange = useDateRangeStore((s) => s.range);
+
+  // All-time balance for this account
   const totalBalance = transactions
     .filter((tx) => tx.payload)
     .reduce((sum, tx) => sum + (tx.payload?.amount || 0), 0);
+
+  // Filter transactions to the date range for the chart and list
+  const filteredTxs = transactions.filter((tx) => {
+    const d = tx.time.slice(0, 10);
+    return d >= dateRange.start && d <= dateRange.end;
+  });
+
+  // Balance chart data for this account, scoped to the date range
+  const accountChartData = (() => {
+    const startDate = new Date(dateRange.start + "T12:00:00");
+    const endDate = new Date(dateRange.end + "T12:00:00");
+
+    // Opening balance: sum of all transactions before the window
+    let openingBalance = 0;
+    const windowStartEpoch = startDate.getTime();
+    for (const tx of transactions) {
+      if (new Date(tx.time).getTime() < windowStartEpoch && tx.payload) {
+        openingBalance += tx.payload.amount;
+      }
+    }
+
+    // Build contiguous calendar
+    const dayTotals: Record<string, number> = {};
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      dayTotals[d.toISOString().slice(0, 10)] = 0;
+    }
+
+    // Accumulate filtered transactions into daily buckets
+    for (const tx of filteredTxs) {
+      const key = tx.time.slice(0, 10);
+      if (key in dayTotals && tx.payload) {
+        dayTotals[key] += tx.payload.amount;
+      }
+    }
+
+    // Running total
+    const sortedDates = Object.keys(dayTotals).sort();
+    let cumulative = openingBalance;
+    return sortedDates.map((date) => {
+      cumulative += dayTotals[date];
+      return {
+        date,
+        displayDate: new Date(date + "T12:00:00Z").toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        }),
+        balance: Number(cumulative.toFixed(2)),
+      };
+    });
+  })();
 
   return (
     <div className="space-y-6">
@@ -801,6 +857,20 @@ export default function AccountDetailPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Balance chart for this account */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg font-bold">Balance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BalanceChart
+            data={accountChartData}
+            currency={account.currency}
+            gradientId="colorAccountBalance"
+          />
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: Transactions (2/3 width on desktop) */}
         <div className="lg:col-span-2 space-y-6">
@@ -814,13 +884,15 @@ export default function AccountDetailPage() {
                 <p className="text-sm text-muted-foreground">Loading transactions...</p>
               ) : txError ? (
                 <p className="text-sm text-destructive">{txError}</p>
-              ) : transactions.length === 0 ? (
+              ) : filteredTxs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No transactions yet. Click "Add Transaction" to get started. For initial balance, add an opening balance transaction.
+                  {transactions.length === 0
+                    ? `No transactions yet. Click "Add Transaction" to get started. For initial balance, add an opening balance transaction.`
+                    : "No transactions in the selected date range."}
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {transactions.map((tx) => (
+                  {filteredTxs.map((tx) => (
                     <TransactionCard
                       key={tx.id}
                       transaction={tx}
