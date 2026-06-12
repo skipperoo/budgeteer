@@ -518,7 +518,7 @@ export default function AccountDetailPage() {
   })();
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 lg:min-h-screen">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -918,7 +918,7 @@ export default function AccountDetailPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:min-h-[500px] lg:grid-rows-1">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:flex-1 lg:grid-rows-1 lg:min-h-0">
         {/* Left column: Transactions (2/3 width on desktop) */}
         <div className="lg:col-span-2 min-h-0">
           <Card className="h-full">
@@ -997,7 +997,7 @@ export default function AccountDetailPage() {
           ) : (
             <>
               {/* Expenses by Category */}
-              <Card className="flex-1 flex flex-col">
+              <Card className="flex-1 flex flex-col min-h-[260px]">
                 <CardHeader className="pb-2 shrink-0">
                   <CardTitle className="text-sm font-bold">Expenses by Category</CardTitle>
                 </CardHeader>
@@ -1062,7 +1062,7 @@ export default function AccountDetailPage() {
               </Card>
 
               {/* Income by Category */}
-              <Card className="flex-1 flex flex-col">
+              <Card className="flex-1 flex flex-col min-h-[260px]">
                 <CardHeader className="pb-2 shrink-0">
                   <CardTitle className="text-sm font-bold">Income by Category</CardTitle>
                 </CardHeader>
