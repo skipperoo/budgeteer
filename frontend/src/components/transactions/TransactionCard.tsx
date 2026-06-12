@@ -72,10 +72,10 @@ export function TransactionCard({
           className={`
             flex items-center justify-center rounded-full shrink-0
             ${compact ? "h-8 w-8" : "h-10 w-10"}
-            ${payload 
+            $      {payload 
               ? isIncome 
-                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" 
-                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                ? "bg-income/10 text-income" 
+                : "bg-expense/10 text-expense"
               : "bg-muted text-muted-foreground"
             }
           `}
@@ -119,7 +119,7 @@ export function TransactionCard({
               className={`
                 ${compact ? "text-sm" : "text-base"} 
                 font-bold tabular-nums leading-none
-                ${isIncome ? "text-green-600 dark:text-green-400" : "text-foreground"}
+                ${isIncome ? "text-income" : "text-foreground"}
               `}
             >
               {formatCurrency(payload.amount, currency, true)}

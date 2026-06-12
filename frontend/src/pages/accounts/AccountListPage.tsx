@@ -91,7 +91,7 @@ export default function AccountListPage() {
         const accountKey = await getAccountKey(created.id, privKeyBase64 ?? undefined, user?.public_key);
 
         const encryptedPayload = await encryptTransactionPayload(
-          { amount, category: "Opening Balance", notes: "Initial balance", counterparty: "" },
+          { amount, category: "Opening Balance", notes: "Initial balance", counterparty: "Funding transaction" },
           accountKey
         );
 

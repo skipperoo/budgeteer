@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAccountStore } from "@/stores/account-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { useCategoryStore } from "@/stores/category-store";
+import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64 } from "@/lib/crypto";
@@ -167,11 +167,11 @@ export default function DashboardPage() {
     });
   })();
 
-  // Expenses by category
+  // Expenses by category — excludes "Opening Balance" (it's an accounting entry, not a real expense)
   const expenseChartData = (() => {
     const categories: Record<string, number> = {};
     allTxs.forEach((tx) => {
-      if (tx.payload && tx.payload.amount < 0) {
+      if (tx.payload && tx.payload.amount < 0 && tx.payload.category !== "Opening Balance") {
         const cat = tx.payload.category || "General";
         categories[cat] = (categories[cat] || 0) + Math.abs(tx.payload.amount);
       }
@@ -184,11 +184,11 @@ export default function DashboardPage() {
       .sort((a, b) => b.value - a.value);
   })();
 
-  // Income by category
+  // Income by category — excludes "Opening Balance" (it's an accounting entry, not real income)
   const incomeChartData = (() => {
     const categories: Record<string, number> = {};
     allTxs.forEach((tx) => {
-      if (tx.payload && tx.payload.amount > 0) {
+      if (tx.payload && tx.payload.amount > 0 && tx.payload.category !== "Opening Balance") {
         const cat = tx.payload.category || "General";
         categories[cat] = (categories[cat] || 0) + tx.payload.amount;
       }
@@ -211,7 +211,7 @@ export default function DashboardPage() {
   const handleAddNewCategory = () => {
     const cat = newCategory.trim();
     if (!cat) return;
-    if (txAccountId) addCategory(txAccountId, cat);
+    addCategory(txType as CategoryType, cat);
     setTxCategory(cat);
     setShowCategoryInput(false);
     setNewCategory("");
@@ -244,7 +244,7 @@ export default function DashboardPage() {
       );
 
       const category = txCategory || "general";
-      if (txAccountId) addCategory(txAccountId, category);
+      addCategory(txType as CategoryType, category);
 
       const encryptedPayload = await encryptTransactionPayload(
         { amount, category, notes: txNotes, counterparty: txCounterparty },
@@ -322,7 +322,7 @@ export default function DashboardPage() {
                   <div className="flex rounded-md border border-input overflow-hidden shrink-0">
                     <button
                       type="button"
-                      onClick={() => setTxType("expense")}
+                      onClick={() => { setTxType("expense"); setTxCategory(""); }}
                       className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                         txType === "expense"
                           ? "bg-destructive text-destructive-foreground"
@@ -333,7 +333,7 @@ export default function DashboardPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setTxType("income")}
+                      onClick={() => { setTxType("income"); setTxCategory(""); }}
                       className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                         txType === "income"
                           ? "bg-primary text-primary-foreground"
@@ -385,7 +385,7 @@ export default function DashboardPage() {
                     >
                       <option value="">Select category...</option>
                       {txAccountId &&
-                        getCategories(txAccountId).map((cat) => (
+                        getCategories(txType as CategoryType).map((cat) => (
                           <option key={cat} value={cat}>
                             {cat}
                           </option>
@@ -643,7 +643,7 @@ export default function DashboardPage() {
                           dataKey="value"
                         >
                           {expenseChartData.map((_entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
                           ))}
                         </Pie>
                         <ChartTooltip
@@ -716,7 +716,7 @@ export default function DashboardPage() {
                           dataKey="value"
                         >
                           {incomeChartData.map((_entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
                           ))}
                         </Pie>
                         <ChartTooltip
@@ -726,7 +726,7 @@ export default function DashboardPage() {
                               return (
                                 <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
                                   <p className="font-semibold mb-1">{data.name}</p>
-                                  <p className="font-mono text-green-600 dark:text-green-400 font-bold">
+                                  <p className="font-mono text-income font-bold">
                                     {defaultSymbol}
                                     {data.value.toLocaleString(undefined, {
                                       minimumFractionDigits: 2,

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"budgeteer-backend/internal/database"
@@ -44,10 +45,49 @@ func (r *TransactionRepository) FindByID(ctx context.Context, id string) (*model
 }
 
 func (r *TransactionRepository) Update(ctx context.Context, t *model.Transaction) error {
-	query := `UPDATE transactions SET time = $1, encrypted_payload = $2, version = $3, updated_at = $4
-	          WHERE id = $5 AND deleted_at IS NULL`
-	_, err := database.Pool.Exec(ctx, query,
-		t.Time, t.EncryptedPayload, t.Version, t.UpdatedAt, t.ID)
+	// Find the existing transaction to get its original time
+	oldTx, err := r.FindByID(ctx, t.ID)
+	if err != nil {
+		return err
+	}
+	if oldTx == nil {
+		return fmt.Errorf("transaction not found")
+	}
+
+	// If the time has changed, we must delete the old row and insert the new one
+	// to avoid TimescaleDB partition key update restrictions on hypertables
+	if !oldTx.Time.Equal(t.Time) {
+		txConn, err := database.Pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer txConn.Rollback(ctx)
+
+		// Hard delete the old row (since we are replacing it with the new partition key)
+		deleteQuery := `DELETE FROM transactions WHERE id = $1 AND time = $2`
+		_, err = txConn.Exec(ctx, deleteQuery, t.ID, oldTx.Time)
+		if err != nil {
+			return err
+		}
+
+		// Insert the new row
+		insertQuery := `INSERT INTO transactions (id, time, account_id, created_by, encrypted_payload, version, created_at, updated_at)
+		                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+		_, err = txConn.Exec(ctx, insertQuery,
+			t.ID, t.Time, t.AccountID, t.CreatedBy, t.EncryptedPayload,
+			t.Version, t.CreatedAt, t.UpdatedAt)
+		if err != nil {
+			return err
+		}
+
+		return txConn.Commit(ctx)
+	}
+
+	// If time has not changed, we can perform a normal update
+	query := `UPDATE transactions SET encrypted_payload = $1, version = $2, updated_at = $3
+	          WHERE id = $4 AND time = $5 AND deleted_at IS NULL`
+	_, err = database.Pool.Exec(ctx, query,
+		t.EncryptedPayload, t.Version, t.UpdatedAt, t.ID, t.Time)
 	return err
 }
 

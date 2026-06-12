@@ -4,52 +4,86 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* Light mode (default) */
-  --color-background: oklch(1 0 0);
-  --color-foreground: oklch(0.13 0.04 265);
-  --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.13 0.04 265);
-  --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.13 0.04 265);
-  --color-primary: oklch(0.2 0.04 265);
-  --color-primary-foreground: oklch(0.98 0.005 260);
-  --color-secondary: oklch(0.96 0.01 260);
-  --color-secondary-foreground: oklch(0.2 0.04 265);
-  --color-muted: oklch(0.96 0.01 260);
-  --color-muted-foreground: oklch(0.55 0.02 260);
-  --color-accent: oklch(0.96 0.01 260);
-  --color-accent-foreground: oklch(0.2 0.04 265);
-  --color-destructive: oklch(0.58 0.2 25);
-  --color-destructive-foreground: oklch(0.98 0.005 260);
-  --color-border: oklch(0.92 0.01 260);
-  --color-input: oklch(0.92 0.01 260);
-  --color-ring: oklch(0.13 0.04 265);
-  --radius: 0.5rem;
+  /* ─── Fonts ─────────────────────────────────────────── */
+  --font-display: "Lora", Georgia, serif;
+  --font-body:    "DM Sans", system-ui, -apple-system, sans-serif;
+
+  /* ─── Light mode palette ──────────────────────────── */
+  /* Background: near-white with an extremely subtle rose tint (hue 10, C 0.01) */
+  --color-background:         oklch(0.985 0.008 30);
+  --color-foreground:         oklch(0.22 0.025 15);
+
+  --color-card:               oklch(1 0 0);
+  --color-card-foreground:    oklch(0.22 0.025 15);
+
+  --color-popover:            oklch(1 0 0);
+  --color-popover-foreground: oklch(0.22 0.025 15);
+
+  /* Primary: muted dusty rose – used sparingly on primary actions */
+  --color-primary:            oklch(0.52 0.085 12);
+  --color-primary-foreground: oklch(0.99 0.005 30);
+
+  /* Secondary / muted: blush-tinted light surface */
+  --color-secondary:          oklch(0.95 0.018 20);
+  --color-secondary-foreground: oklch(0.30 0.03 15);
+
+  --color-muted:              oklch(0.95 0.018 20);
+  --color-muted-foreground:   oklch(0.48 0.025 15);
+
+  --color-accent:             oklch(0.93 0.025 30);
+  --color-accent-foreground:  oklch(0.25 0.03 15);
+
+  /* Destructive: desaturated terracotta (softer than harsh red) */
+  --color-destructive:        oklch(0.56 0.15 22);
+  --color-destructive-foreground: oklch(0.99 0.005 30);
+
+  --color-border:  oklch(0.90 0.015 25);
+  --color-input:   oklch(0.90 0.015 25);
+  --color-ring:    oklch(0.52 0.085 12);
+
+  /* Income green: soft sage */
+  --color-income:  oklch(0.48 0.1 150);
+  /* Expense red: muted terracotta */
+  --color-expense: oklch(0.52 0.13 22);
+
+  --radius: 0.625rem;
 }
 
-/* Dark mode overrides */
+/* ─── Dark mode overrides ─────────────────────────────── */
 .dark {
-  --color-background: oklch(0.13 0.01 265);
-  --color-foreground: oklch(0.93 0.01 260);
-  --color-card: oklch(0.16 0.015 265);
-  --color-card-foreground: oklch(0.93 0.01 260);
-  --color-popover: oklch(0.16 0.015 265);
-  --color-popover-foreground: oklch(0.93 0.01 260);
-  --color-primary: oklch(0.62 0.06 260);
-  --color-primary-foreground: oklch(0.13 0.01 265);
-  --color-secondary: oklch(0.2 0.015 265);
-  --color-secondary-foreground: oklch(0.93 0.01 260);
-  --color-muted: oklch(0.2 0.015 265);
-  --color-muted-foreground: oklch(0.6 0.02 260);
-  --color-accent: oklch(0.2 0.015 265);
-  --color-accent-foreground: oklch(0.93 0.01 260);
-  --color-destructive: oklch(0.58 0.18 25);
-  --color-destructive-foreground: oklch(0.13 0.01 265);
-  --color-border: oklch(0.25 0.015 265);
-  --color-input: oklch(0.25 0.015 265);
-  --color-ring: oklch(0.62 0.06 260);
+  --color-background:         oklch(0.16 0.02 15);
+  --color-foreground:         oklch(0.93 0.012 30);
+
+  --color-card:               oklch(0.20 0.022 15);
+  --color-card-foreground:    oklch(0.93 0.012 30);
+
+  --color-popover:            oklch(0.20 0.022 15);
+  --color-popover-foreground: oklch(0.93 0.012 30);
+
+  --color-primary:            oklch(0.72 0.075 12);
+  --color-primary-foreground: oklch(0.14 0.02 15);
+
+  --color-secondary:          oklch(0.26 0.025 15);
+  --color-secondary-foreground: oklch(0.88 0.012 30);
+
+  --color-muted:              oklch(0.26 0.025 15);
+  --color-muted-foreground:   oklch(0.62 0.02 20);
+
+  --color-accent:             oklch(0.28 0.03 20);
+  --color-accent-foreground:  oklch(0.90 0.012 30);
+
+  --color-destructive:        oklch(0.60 0.14 22);
+  --color-destructive-foreground: oklch(0.14 0.02 15);
+
+  --color-border: oklch(0.30 0.025 15);
+  --color-input:  oklch(0.30 0.025 15);
+  --color-ring:   oklch(0.72 0.075 12);
+
+  --color-income:  oklch(0.68 0.1 150);
+  --color-expense: oklch(0.68 0.12 22);
 }
 
+/* ─── Global resets ───────────────────────────────────── */
 *, *::before, *::after {
   border-color: var(--color-border);
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
@@ -60,8 +94,30 @@
   }
 }
 
+/* ─── Base typographic styles ─────────────────────────── */
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;        /* 15px – slightly larger than the original 14px */
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-wrap: balance;
+  letter-spacing: -0.01em;
+}
+
+h4, h5, h6, button, label, .font-medium, .font-semibold {
+  font-family: var(--font-body);
+}
+
+/* Monospaced numerics for amounts */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }

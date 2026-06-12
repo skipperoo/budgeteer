@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAccountStore } from "@/stores/account-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { useCategoryStore } from "@/stores/category-store";
+import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64, encryptAccountKeyForRecipient, generateAccountKey } from "@/lib/crypto";
@@ -255,7 +255,7 @@ export default function AccountDetailPage() {
   const handleAddNewCategory = () => {
     const cat = newCategory.trim();
     if (!cat) return;
-    if (id) addCategory(id, cat);
+    if (id) addCategory(txType as CategoryType, cat);
     setTxCategory(cat);
     setShowCategoryInput(false);
     setNewCategory("");
@@ -295,7 +295,7 @@ export default function AccountDetailPage() {
       const amount = editTxType === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
 
       const category = editTxCategory || "general";
-      if (id) addCategory(id, category);
+      addCategory(editTxType as CategoryType, category);
 
       const encryptedPayload = await encryptTransactionPayload(
         { amount, category, notes: editTxNotes, counterparty: editTxCounterparty },
@@ -331,7 +331,7 @@ export default function AccountDetailPage() {
   const handleEditAddNewCategory = () => {
     const cat = editTxNewCategory.trim();
     if (!cat) return;
-    if (id) addCategory(id, cat);
+    addCategory(editTxType, cat);
     setEditTxCategory(cat);
     setEditTxShowCategoryInput(false);
     setEditTxNewCategory("");
@@ -356,7 +356,7 @@ export default function AccountDetailPage() {
       const amount = txType === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
 
       const category = txCategory || "general";
-      if (id) addCategory(id, category);
+      addCategory(txType as CategoryType, category);
 
       const encryptedPayload = await encryptTransactionPayload(
         { amount, category, notes: txNotes, counterparty: txCounterparty },
@@ -462,7 +462,7 @@ export default function AccountDetailPage() {
                     <div className="flex rounded-md border border-input overflow-hidden shrink-0">
                       <button
                         type="button"
-                        onClick={() => setTxType("expense")}
+                        onClick={() => { setTxType("expense"); setTxCategory(""); }}
                         className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                           txType === "expense"
                             ? "bg-destructive text-destructive-foreground"
@@ -473,7 +473,7 @@ export default function AccountDetailPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setTxType("income")}
+                        onClick={() => { setTxType("income"); setTxCategory(""); }}
                         className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                           txType === "income"
                             ? "bg-primary text-primary-foreground"
@@ -525,7 +525,7 @@ export default function AccountDetailPage() {
                       >
                         <option value="">Select category...</option>
                         {id &&
-                          getCategories(id).map((cat) => (
+                          getCategories(txType as CategoryType).map((cat) => (
                             <option key={cat} value={cat}>
                               {cat}
                             </option>
@@ -660,7 +660,7 @@ export default function AccountDetailPage() {
                       >
                         <option value="">Select category...</option>
                         {id &&
-                          getCategories(id).map((cat) => (
+                          getCategories(editTxType as CategoryType).map((cat) => (
                             <option key={cat} value={cat}>
                               {cat}
                             </option>

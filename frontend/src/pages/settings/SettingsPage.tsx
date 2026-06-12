@@ -204,7 +204,7 @@ export default function SettingsPage() {
               />
             </div>
             {pwError && <p className="text-sm text-destructive">{pwError}</p>}
-            {pwSuccess && <p className="text-sm text-green-600">{pwSuccess}</p>}
+            {pwSuccess && <p className="text-sm text-income">{pwSuccess}</p>}
             <Button type="submit">Change Password</Button>
           </form>
 
@@ -233,7 +233,7 @@ export default function SettingsPage() {
               />
             </div>
             {emailError && <p className="text-sm text-destructive">{emailError}</p>}
-            {emailSuccess && <p className="text-sm text-green-600">{emailSuccess}</p>}
+            {emailSuccess && <p className="text-sm text-income">{emailSuccess}</p>}
             <Button type="submit">Change Email</Button>
           </form>
         </CardContent>

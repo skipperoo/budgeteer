@@ -1,60 +1,81 @@
 /**
  * Category Store
  *
- * Categories are stored per-account in localStorage. Each user has their own
- * category list per account. For joint accounts, categories are shared by
- * merging all members' categories (each member adds locally, the merge
- * happens on the client).
+ * Categories are stored globally in localStorage (not per-account), split by
+ * transaction type ("income" | "expense"). This means the same category list
+ * is available across all accounts.
  *
- * Persistence key: "budgeteer_categories_{accountId}"
+ * Persistence key: "budgeteer_categories"
+ * Storage shape:   { income: string[], expense: string[] }
+ *
+ * Legacy migration: if the stored value is a plain string[] (old per-account
+ * flat format), it is silently promoted to { income: [], expense: [...old] }.
  */
 
 import { create } from "zustand";
 
-const STORAGE_PREFIX = "budgeteer_categories_";
+export type CategoryType = "income" | "expense";
 
-function loadCategories(accountId: string): string[] {
+const STORAGE_KEY = "budgeteer_categories";
+
+interface AllCategories {
+  income: string[];
+  expense: string[];
+}
+
+function loadAll(): AllCategories {
   try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + accountId);
-    return raw ? JSON.parse(raw) : [];
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { income: [], expense: [] };
+    const parsed = JSON.parse(raw);
+    // Legacy migration: old format was a flat string[]
+    if (Array.isArray(parsed)) {
+      return { income: [], expense: parsed as string[] };
+    }
+    return {
+      income: Array.isArray(parsed.income) ? parsed.income : [],
+      expense: Array.isArray(parsed.expense) ? parsed.expense : [],
+    };
   } catch {
-    return [];
+    return { income: [], expense: [] };
   }
 }
 
-function saveCategories(accountId: string, categories: string[]): void {
+function saveAll(data: AllCategories): void {
   try {
-    localStorage.setItem(STORAGE_PREFIX + accountId, JSON.stringify(categories));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch { /* ignore quota errors */ }
 }
 
 interface CategoryState {
   /** Version counter bumped on every mutation — drives reactive re-renders */
   version: number;
-  /** Get categories for a specific account (from localStorage) */
-  getCategories: (accountId: string) => string[];
-  /** Add a new category for an account */
-  addCategory: (accountId: string, category: string) => void;
-  /** Remove a category for an account */
-  removeCategory: (accountId: string, category: string) => void;
+  /** Get categories for a given transaction type */
+  getCategories: (type: CategoryType) => string[];
+  /** Add a new category under the given transaction type */
+  addCategory: (type: CategoryType, category: string) => void;
+  /** Remove a category under the given transaction type */
+  removeCategory: (type: CategoryType, category: string) => void;
 }
 
 export const useCategoryStore = create<CategoryState>((set, get) => ({
   version: 0,
 
-  getCategories: (accountId) => loadCategories(accountId),
+  getCategories: (type) => loadAll()[type],
 
-  addCategory: (accountId, category) => {
-    const existing = loadCategories(accountId);
+  addCategory: (type, category) => {
+    const all = loadAll();
     const normalized = category.trim();
-    if (!normalized || existing.includes(normalized)) return;
-    saveCategories(accountId, [...existing, normalized]);
+    if (!normalized || all[type].includes(normalized)) return;
+    all[type] = [...all[type], normalized];
+    saveAll(all);
     set({ version: get().version + 1 });
   },
 
-  removeCategory: (accountId, category) => {
-    const existing = loadCategories(accountId);
-    saveCategories(accountId, existing.filter((c) => c !== category));
+  removeCategory: (type, category) => {
+    const all = loadAll();
+    all[type] = all[type].filter((c) => c !== category);
+    saveAll(all);
     set({ version: get().version + 1 });
   },
 }));
