@@ -21,8 +21,15 @@ import { bytesToBase64, encryptAccountKeyForRecipient, generateAccountKey } from
 import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
 import { getAccountKey } from "@/lib/decrypt-transactions";
 import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
-import { CURRENCIES, getCurrencySymbol } from "@/lib/format";
+import { CURRENCIES, getCurrencySymbol, formatCurrency } from "@/lib/format";
 import type { Transaction, CreateTransactionRequest } from "@/types";
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip as ChartTooltip,
+} from "recharts";
 
 const ACCOUNT_TYPES = ["personal", "joint", "savings"] as const;
 
@@ -425,6 +432,46 @@ export default function AccountDetailPage() {
     const d = tx.time.slice(0, 10);
     return d >= dateRange.start && d <= dateRange.end;
   });
+
+  // Pastel chart colors (matches dashboard)
+  const CHART_COLORS = [
+    "oklch(0.75 0.12 140)",
+    "oklch(0.78 0.10 220)",
+    "oklch(0.76 0.10 280)",
+    "oklch(0.80 0.09 40)",
+    "oklch(0.74 0.12 320)",
+    "oklch(0.77 0.08 100)",
+    "oklch(0.72 0.10 180)",
+    "oklch(0.76 0.11 10)",
+  ];
+
+  // Expenses by category for this account (within date range)
+  const expenseChartData = (() => {
+    const categories: Record<string, number> = {};
+    filteredTxs.forEach((tx) => {
+      if (tx.payload && tx.payload.amount < 0 && tx.payload.category !== "Opening Balance") {
+        const cat = tx.payload.category || "General";
+        categories[cat] = (categories[cat] || 0) + Math.abs(tx.payload.amount);
+      }
+    });
+    return Object.entries(categories)
+      .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
+      .sort((a, b) => b.value - a.value);
+  })();
+
+  // Income by category for this account (within date range)
+  const incomeChartData = (() => {
+    const categories: Record<string, number> = {};
+    filteredTxs.forEach((tx) => {
+      if (tx.payload && tx.payload.amount > 0 && tx.payload.category !== "Opening Balance") {
+        const cat = tx.payload.category || "General";
+        categories[cat] = (categories[cat] || 0) + tx.payload.amount;
+      }
+    });
+    return Object.entries(categories)
+      .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
+      .sort((a, b) => b.value - a.value);
+  })();
 
   // Balance chart data for this account, scoped to the date range
   const accountChartData = (() => {
@@ -871,11 +918,10 @@ export default function AccountDetailPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:min-h-[500px] lg:grid-rows-1">
         {/* Left column: Transactions (2/3 width on desktop) */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Transactions Card */}
-          <Card>
+        <div className="lg:col-span-2 min-h-0">
+          <Card className="h-full">
             <CardHeader>
               <CardTitle>Transactions</CardTitle>
             </CardHeader>
@@ -907,47 +953,180 @@ export default function AccountDetailPage() {
           </Card>
         </div>
 
-        {/* Right column: Members (1/3 width on desktop) */}
-        <div className="space-y-6">
-          {/* Members Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Members</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {accountUsers.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No members.</p>
-              ) : (
-                <div className="space-y-2">
-                  {accountUsers.map((user) => (
-                    <div
-                      key={user.user_id}
-                      className="flex items-center justify-between p-3 rounded-lg border bg-card text-card-foreground text-xs"
-                    >
-                      <div className="min-w-0 pr-2">
-                        <span className="font-medium capitalize">{user.role}</span>
-                        <span className="text-muted-foreground ml-2 truncate block sm:inline">
-                          {user.user_id === currentUser?.id
-                            ? "(you)"
-                            : `ID: ${user.user_id.slice(0, 8)}...`}
-                        </span>
+        {/* Right column (1/3 width on desktop): Members for joint, charts otherwise */}
+        <div className="min-h-0 flex flex-col gap-6">
+          {account.type === "joint" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Members</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {accountUsers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No members.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {accountUsers.map((user) => (
+                      <div
+                        key={user.user_id}
+                        className="flex items-center justify-between p-3 rounded-lg border bg-card text-card-foreground text-xs"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <span className="font-medium capitalize">{user.role}</span>
+                          <span className="text-muted-foreground ml-2 truncate block sm:inline">
+                            {user.user_id === currentUser?.id
+                              ? "(you)"
+                              : `ID: ${user.user_id.slice(0, 8)}...`}
+                          </span>
+                        </div>
+                        {user.role !== "owner" && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => id && removeUser(id, user.user_id)}
+                            className="h-7 px-2 text-[10px]"
+                          >
+                            Remove
+                          </Button>
+                        )}
                       </div>
-                      {user.role !== "owner" && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => id && removeUser(id, user.user_id)}
-                          className="h-7 px-2 text-[10px]"
-                        >
-                          Remove
-                        </Button>
-                      )}
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Expenses by Category */}
+              <Card className="flex-1 flex flex-col">
+                <CardHeader className="pb-2 shrink-0">
+                  <CardTitle className="text-sm font-bold">Expenses by Category</CardTitle>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col justify-center min-h-0">
+                  {expenseChartData.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center">No expense data.</p>
+                  ) : (
+                    <div className="h-full w-full flex flex-col justify-between font-mono text-[10px]">
+                      <div className="flex-1 min-h-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={expenseChartData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={50}
+                              outerRadius={70}
+                              paddingAngle={2}
+                              dataKey="value"
+                            >
+                              {expenseChartData.map((_entry, index) => (
+                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
+                              ))}
+                            </Pie>
+                            <ChartTooltip
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  return (
+                                    <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                                      <p className="font-semibold mb-1">{data.name}</p>
+                                      <p className="font-mono text-destructive font-bold">
+                                        {getCurrencySymbol(account.currency)}
+                                        {data.value.toLocaleString(undefined, {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        })}
+                                      </p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex flex-wrap justify-center gap-x-2 gap-y-0.5 mt-1.5 text-xs font-sans text-muted-foreground font-medium">
+                        {expenseChartData.slice(0, 4).map((entry, index) => (
+                          <div key={entry.name} className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
+                            <span className="truncate max-w-[60px]">{entry.name}</span>
+                          </div>
+                        ))}
+                        {expenseChartData.length > 4 && (
+                          <span className="text-muted-foreground italic">+{expenseChartData.length - 4} more</span>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Income by Category */}
+              <Card className="flex-1 flex flex-col">
+                <CardHeader className="pb-2 shrink-0">
+                  <CardTitle className="text-sm font-bold">Income by Category</CardTitle>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col justify-center min-h-0">
+                  {incomeChartData.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center">No income data.</p>
+                  ) : (
+                    <div className="h-full w-full flex flex-col justify-between font-mono text-[10px]">
+                      <div className="flex-1 min-h-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={incomeChartData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={50}
+                              outerRadius={70}
+                              paddingAngle={2}
+                              dataKey="value"
+                            >
+                              {incomeChartData.map((_entry, index) => (
+                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
+                              ))}
+                            </Pie>
+                            <ChartTooltip
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  return (
+                                    <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                                      <p className="font-semibold mb-1">{data.name}</p>
+                                      <p className="font-mono text-income font-bold">
+                                        {getCurrencySymbol(account.currency)}
+                                        {data.value.toLocaleString(undefined, {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        })}
+                                      </p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex flex-wrap justify-center gap-x-2 gap-y-0.5 mt-1.5 text-xs font-sans text-muted-foreground font-medium">
+                        {incomeChartData.slice(0, 4).map((entry, index) => (
+                          <div key={entry.name} className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
+                            <span className="truncate max-w-[60px]">{entry.name}</span>
+                          </div>
+                        ))}
+                        {incomeChartData.length > 4 && (
+                          <span className="text-muted-foreground italic">+{incomeChartData.length - 4} more</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       </div>
     </div>
