@@ -417,17 +417,22 @@ export default function AccountDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={() => navigate("/accounts")}>
+          <Button variant="outline" size="sm" onClick={() => navigate("/accounts")} className="h-9 w-9 p-0 shrink-0">
             &larr;
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">{account.name || account.currency}</h1>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold truncate">{account.name || account.currency}</h1>
+              <Button variant="outline" size="sm" onClick={openEdit} className="h-7 px-2 text-[10px] shrink-0">
+                Edit
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
               <span
-                className={`text-xl font-semibold ${
-                  totalBalance < 0 ? "text-destructive" : "text-primary"
+                className={`text-lg sm:text-xl font-semibold font-mono ${
+                  totalBalance < 0 ? "text-destructive" : "text-foreground"
                 }`}
               >
                 {getCurrencySymbol(account.currency)}
@@ -436,14 +441,11 @@ export default function AccountDetailPage() {
                   maximumFractionDigits: 2,
                 })}
               </span>
-              <span className="text-sm text-muted-foreground capitalize">• {account.type} account</span>
+              <span className="text-xs sm:text-sm text-muted-foreground capitalize">• {account.type} account</span>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={openEdit}>
-            Edit
-          </Button>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 self-start sm:self-auto shrink-0">
           {/* Create Transaction */}
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
@@ -799,74 +801,83 @@ export default function AccountDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Members Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Members</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {accountUsers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No members.</p>
-          ) : (
-            <div className="space-y-2">
-              {accountUsers.map((user) => (
-                <div
-                  key={user.user_id}
-                  className="flex items-center justify-between p-3 rounded-lg border"
-                >
-                  <div>
-                    <span className="text-sm font-medium capitalize">{user.role}</span>
-                    <span className="text-xs text-muted-foreground ml-2">
-                      {user.user_id === currentUser?.id
-                        ? "(you)"
-                        : `ID: ${user.user_id.slice(0, 8)}...`}
-                    </span>
-                  </div>
-                  {user.role !== "owner" && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => id && removeUser(id, user.user_id)}
-                    >
-                      Remove
-                    </Button>
-                  )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left column: Transactions (2/3 width on desktop) */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Transactions Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Transactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {txLoading ? (
+                <p className="text-sm text-muted-foreground">Loading transactions...</p>
+              ) : txError ? (
+                <p className="text-sm text-destructive">{txError}</p>
+              ) : transactions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No transactions yet. Click "Add Transaction" to get started. For initial balance, add an opening balance transaction.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {transactions.map((tx) => (
+                    <TransactionCard
+                      key={tx.id}
+                      transaction={tx}
+                      currency={account.currency}
+                      onDelete={handleDeleteTransaction}
+                      onEdit={tx.payload ? openEditTx : undefined}
+                    />
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-      {/* Transactions Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Transactions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {txLoading ? (
-            <p className="text-sm text-muted-foreground">Loading transactions...</p>
-          ) : txError ? (
-            <p className="text-sm text-destructive">{txError}</p>
-          ) : transactions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No transactions yet. Click "Add Transaction" to get started. For initial balance, add an opening balance transaction.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {transactions.map((tx) => (
-                <TransactionCard
-                  key={tx.id}
-                  transaction={tx}
-                  currency={account.currency}
-                  onDelete={handleDeleteTransaction}
-                  onEdit={tx.payload ? openEditTx : undefined}
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        {/* Right column: Members (1/3 width on desktop) */}
+        <div className="space-y-6">
+          {/* Members Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Members</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {accountUsers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No members.</p>
+              ) : (
+                <div className="space-y-2">
+                  {accountUsers.map((user) => (
+                    <div
+                      key={user.user_id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-card text-card-foreground text-xs"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <span className="font-medium capitalize">{user.role}</span>
+                        <span className="text-muted-foreground ml-2 truncate block sm:inline">
+                          {user.user_id === currentUser?.id
+                            ? "(you)"
+                            : `ID: ${user.user_id.slice(0, 8)}...`}
+                        </span>
+                      </div>
+                      {user.role !== "owner" && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => id && removeUser(id, user.user_id)}
+                          className="h-7 px-2 text-[10px]"
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

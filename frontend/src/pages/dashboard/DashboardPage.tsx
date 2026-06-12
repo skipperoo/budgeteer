@@ -21,6 +21,19 @@ import { fetchAndDecryptTransactions, getAccountKey } from "@/lib/decrypt-transa
 import { TransactionCard } from "@/components/transactions/TransactionCard";
 import type { CreateTransactionRequest } from "@/types";
 import type { DecryptedTransaction } from "@/lib/decrypt-transactions";
+import { getCurrencySymbol, formatCurrency } from "@/lib/format";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as ChartTooltip,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -108,6 +121,85 @@ export default function DashboardPage() {
   const incomeCount = allTxs.filter((tx) => tx.payload.amount > 0).length;
   const expenseCount = allTxs.filter((tx) => tx.payload.amount < 0).length;
   const avgAmount = allTxs.length > 0 ? totalBalance / allTxs.length : 0;
+
+  const defaultCurrency = localStorage.getItem("budgeteer_default_currency") || "EUR";
+  const defaultSymbol = getCurrencySymbol(defaultCurrency);
+
+  const CHART_COLORS = [
+    "oklch(0.6 0.18 140)", // Soft Teal/Green
+    "oklch(0.65 0.16 220)", // Slate Blue
+    "oklch(0.62 0.15 280)", // Purple
+    "oklch(0.68 0.14 40)",   // Ochre / Warm orange
+    "oklch(0.58 0.16 320)", // Rose / Pink
+    "oklch(0.64 0.11 100)", // Sage
+    "oklch(0.55 0.13 180)", // Ocean Blue
+    "oklch(0.62 0.17 10)",  // Reddish-coral
+  ];
+
+  // Group and compute balance over time
+  const balanceChartData = (() => {
+    if (allTxs.length === 0) return [];
+    
+    // Sort ascending by time
+    const sorted = [...allTxs]
+      .filter((t) => t.payload)
+      .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+      
+    // Compute running total grouped by day
+    const dailyTotals: Record<string, number> = {};
+    sorted.forEach((tx) => {
+      const dateStr = tx.time.slice(0, 10);
+      dailyTotals[dateStr] = (dailyTotals[dateStr] || 0) + tx.payload.amount;
+    });
+    
+    const sortedDates = Object.keys(dailyTotals).sort();
+    let cumulative = 0;
+    return sortedDates.map((date) => {
+      cumulative += dailyTotals[date];
+      return {
+        date,
+        displayDate: new Date(date + "T12:00:00Z").toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        }),
+        balance: Number(cumulative.toFixed(2)),
+      };
+    });
+  })();
+
+  // Expenses by category
+  const expenseChartData = (() => {
+    const categories: Record<string, number> = {};
+    allTxs.forEach((tx) => {
+      if (tx.payload && tx.payload.amount < 0) {
+        const cat = tx.payload.category || "General";
+        categories[cat] = (categories[cat] || 0) + Math.abs(tx.payload.amount);
+      }
+    });
+    return Object.entries(categories)
+      .map(([name, value]) => ({
+        name,
+        value: Number(value.toFixed(2)),
+      }))
+      .sort((a, b) => b.value - a.value);
+  })();
+
+  // Income by category
+  const incomeChartData = (() => {
+    const categories: Record<string, number> = {};
+    allTxs.forEach((tx) => {
+      if (tx.payload && tx.payload.amount > 0) {
+        const cat = tx.payload.category || "General";
+        categories[cat] = (categories[cat] || 0) + tx.payload.amount;
+      }
+    });
+    return Object.entries(categories)
+      .map(([name, value]) => ({
+        name,
+        value: Number(value.toFixed(2)),
+      }))
+      .sort((a, b) => b.value - a.value);
+  })();
 
   // Handle category selection
   const handleSelectCategory = (cat: string) => {
@@ -398,57 +490,281 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">
               {allTxs.length > 0
-                ? avgAmount.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })
+                ? formatCurrency(avgAmount, defaultCurrency)
                 : "—"}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Transactions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Transactions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {recentTxs.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-muted-foreground mb-4">
-                No transactions yet. Add one to get started.
-              </p>
-              <Button
-                onClick={() => {
-                  if (accounts.length > 0) {
-                    setTxAccountId(accounts[0].id);
-                  }
-                  setCreateOpen(true);
-                }}
-              >
-                Add Transaction
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {recentTxs.map((tx) => (
-                <TransactionCard
-                  key={tx.id}
-                  transaction={{
-                    id: tx.id,
-                    time: tx.time,
-                    payload: tx.payload,
-                  }}
-                  currency={currencyMap[tx.account_id]}
-                  onClick={() => navigate(`/accounts/${tx.account_id}`)}
-                  compact
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Main Grid: charts and recent movements */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left column: Balance Chart and Recent Transactions */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Balance Chart Card */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold">Balance Over Time</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {balanceChartData.length === 0 ? (
+                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                  No balance data available yet.
+                </div>
+              ) : (
+                <div className="h-64 sm:h-80 w-full font-mono text-[10px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={balanceChartData}>
+                      <defs>
+                        <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0.0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                      <XAxis
+                        dataKey="displayDate"
+                        stroke="var(--color-muted-foreground)"
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                        dy={10}
+                      />
+                      <YAxis
+                        stroke="var(--color-muted-foreground)"
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) => `${defaultSymbol}${value}`}
+                        dx={-5}
+                      />
+                      <ChartTooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                                <p className="font-semibold mb-1">{data.displayDate}</p>
+                                <p className="font-mono text-foreground font-bold">
+                                  {defaultSymbol}
+                                  {Number(payload[0].value ?? 0).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="balance"
+                        stroke="var(--color-primary)"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorBalance)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Transactions Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {recentTxs.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    No transactions yet. Add one to get started.
+                  </p>
+                  <Button
+                    onClick={() => {
+                      if (accounts.length > 0) {
+                        setTxAccountId(accounts[0].id);
+                      }
+                      setCreateOpen(true);
+                    }}
+                  >
+                    Add Transaction
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {recentTxs.map((tx) => (
+                    <TransactionCard
+                      key={tx.id}
+                      transaction={{
+                        id: tx.id,
+                        time: tx.time,
+                        payload: tx.payload,
+                      }}
+                      currency={currencyMap[tx.account_id]}
+                      onClick={() => navigate(`/accounts/${tx.account_id}`)}
+                      compact
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right column: Distribution Charts */}
+        <div className="space-y-6">
+          {/* Expenses Chart */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold">Expenses by Category</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {expenseChartData.length === 0 ? (
+                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                  No expense data available.
+                </div>
+              ) : (
+                <div className="h-64 w-full flex flex-col justify-between font-mono text-[10px]">
+                  <div className="h-44 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={expenseChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={2}
+                          dataKey="value"
+                        >
+                          {expenseChartData.map((_entry, index) => (
+                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <ChartTooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                                  <p className="font-semibold mb-1">{data.name}</p>
+                                  <p className="font-mono text-destructive font-bold">
+                                    {defaultSymbol}
+                                    {data.value.toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* Custom Legend to fit nicely and avoid text overflow */}
+                  <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 text-xs font-sans text-muted-foreground font-medium">
+                    {expenseChartData.slice(0, 5).map((entry, index) => (
+                      <div key={entry.name} className="flex items-center gap-1">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                        />
+                        <span className="truncate max-w-[80px]">{entry.name}</span>
+                      </div>
+                    ))}
+                    {expenseChartData.length > 5 && (
+                      <div className="text-muted-foreground italic text-[11px] self-center">
+                        +{expenseChartData.length - 5} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Income Chart */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold">Income by Category</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {incomeChartData.length === 0 ? (
+                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                  No income data available.
+                </div>
+              ) : (
+                <div className="h-64 w-full flex flex-col justify-between font-mono text-[10px]">
+                  <div className="h-44 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={incomeChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={2}
+                          dataKey="value"
+                        >
+                          {incomeChartData.map((_entry, index) => (
+                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <ChartTooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                                  <p className="font-semibold mb-1">{data.name}</p>
+                                  <p className="font-mono text-green-600 dark:text-green-400 font-bold">
+                                    {defaultSymbol}
+                                    {data.value.toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* Custom Legend to fit nicely and avoid text overflow */}
+                  <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 text-xs font-sans text-muted-foreground font-medium">
+                    {incomeChartData.slice(0, 5).map((entry, index) => (
+                      <div key={entry.name} className="flex items-center gap-1">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                        />
+                        <span className="truncate max-w-[80px]">{entry.name}</span>
+                      </div>
+                    ))}
+                    {incomeChartData.length > 5 && (
+                      <div className="text-muted-foreground italic text-[11px] self-center">
+                        +{incomeChartData.length - 5} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
