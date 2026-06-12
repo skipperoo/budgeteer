@@ -5,8 +5,11 @@ import {
   Wallet,
   Settings,
   LogOut,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
+import { useTheme } from "@/hooks/use-theme";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 
@@ -18,6 +21,7 @@ const navItems = [
 
 export function Sidebar() {
   const logout = useAuthStore((s) => s.logout);
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = async () => {
     try {
@@ -52,13 +56,24 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="p-4 border-t">
+      <div className="p-4 border-t flex items-center justify-between">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-secondary-foreground w-full transition-colors"
+          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-secondary-foreground transition-colors cursor-pointer"
         >
           <LogOut className="h-4 w-4" />
           Logout
+        </button>
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-secondary-foreground transition-colors cursor-pointer"
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+        >
+          {theme === "dark" ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
         </button>
       </div>
     </aside>

@@ -8,7 +8,7 @@ import { API_BASE, ENDPOINTS } from "@/lib/constants";
 import { useAuthStore } from "@/stores/auth-store";
 import { decryptWithPassword, encryptWithPassword } from "@/lib/crypto";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
-import { useAccent, type AccentKey } from "@/hooks/use-accent";
+import { useAccent, type ThemeKey } from "@/hooks/use-accent";
 
 const CURRENCIES = [
   { code: "EUR", symbol: "€", name: "Euro" },
@@ -73,7 +73,7 @@ export default function SettingsPage() {
   );
 
   // --- Accent color ---
-  const { accentKey, setAccent, presets } = useAccent();
+  const { themeKey, setAccent, presets } = useAccent();
 
   // Persist currency and locale to localStorage on change
   useEffect(() => {
@@ -316,14 +316,14 @@ export default function SettingsPage() {
                 Choose your preferred accent color for buttons and highlights.
               </p>
               <div className="grid grid-cols-3 gap-2">
-                {(Object.entries(presets) as [AccentKey, typeof presets[AccentKey]][]).map(([key, def]) => (
+                {(Object.entries(presets) as [ThemeKey, typeof presets[ThemeKey]][]).map(([key, def]) => (
                   <button
                     key={key}
                     type="button"
                     onClick={() => setAccent(key)}
                     className={`
                       flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all duration-150 cursor-pointer
-                      ${accentKey === key
+                      ${themeKey === key
                         ? "border-ring ring-1 ring-ring"
                         : "border-border hover:border-muted-foreground/30"
                       }

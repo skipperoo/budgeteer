@@ -72,7 +72,7 @@ export function TransactionCard({
           className={`
             flex items-center justify-center rounded-full shrink-0
             ${compact ? "h-8 w-8" : "h-10 w-10"}
-            $      {payload 
+            ${payload 
               ? isIncome 
                 ? "bg-income/10 text-income" 
                 : "bg-expense/10 text-expense"

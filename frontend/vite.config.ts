@@ -7,15 +7,19 @@ import fs from "fs";
 const certDir = path.resolve(__dirname, "../certs");
 const httpsKey = path.join(certDir, "dev-key.pem");
 const httpsCert = path.join(certDir, "dev-cert.pem");
-const hasCerts = fs.existsSync(httpsKey) && fs.existsSync(httpsCert);
 
 /** @type {import('vite').HttpsServerOptions | boolean} */
-const httpsConfig = hasCerts
-  ? {
+let httpsConfig = false;
+try {
+  if (fs.existsSync(httpsKey) && fs.existsSync(httpsCert)) {
+    httpsConfig = {
       key: fs.readFileSync(httpsKey),
       cert: fs.readFileSync(httpsCert),
-    }
-  : false;
+    };
+  }
+} catch {
+  // Certs exist but might be unreadable — skip HTTPS
+}
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],

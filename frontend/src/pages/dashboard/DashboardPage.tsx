@@ -13,6 +13,7 @@ import {
 import { useAccountStore } from "@/stores/account-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCategoryStore, type CategoryType } from "@/stores/category-store";
+import { useDateRangeStore } from "@/stores/date-range-store";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64 } from "@/lib/crypto";
@@ -45,6 +46,15 @@ export default function DashboardPage() {
   // Transaction data
   const [allTxs, setAllTxs] = useState<DecryptedTransaction[]>([]);
   const [rawTxCount, setRawTxCount] = useState(0);
+
+  // Date range
+  const dateRange = useDateRangeStore((s) => s.range);
+
+  // Filter transactions to the selected date range
+  const filteredTxs = allTxs.filter((tx) => {
+    const d = tx.time.slice(0, 10);
+    return d >= dateRange.start && d <= dateRange.end;
+  });
 
   // Create transaction dialog state
   const [createOpen, setCreateOpen] = useState(false);
@@ -107,20 +117,20 @@ export default function DashboardPage() {
     refreshTransactions();
   }, [refreshTransactions]);
 
-  const recentTxs = allTxs.slice(0, 10);
+  const recentTxs = filteredTxs.slice(0, 10);
   const currencyMap = Object.fromEntries(accounts.map((a) => [a.id, a.currency]));
 
-  // Balance computations
-  const totalBalance = allTxs.reduce((sum, tx) => sum + tx.payload.amount, 0);
-  const totalIncome = allTxs
+  // Balance computations (within date range)
+  const totalBalance = filteredTxs.reduce((sum, tx) => sum + tx.payload.amount, 0);
+  const totalIncome = filteredTxs
     .filter((tx) => tx.payload.amount > 0)
     .reduce((sum, tx) => sum + tx.payload.amount, 0);
-  const totalExpenses = allTxs
+  const totalExpenses = filteredTxs
     .filter((tx) => tx.payload.amount < 0)
     .reduce((sum, tx) => sum + Math.abs(tx.payload.amount), 0);
-  const incomeCount = allTxs.filter((tx) => tx.payload.amount > 0).length;
-  const expenseCount = allTxs.filter((tx) => tx.payload.amount < 0).length;
-  const avgAmount = allTxs.length > 0 ? totalBalance / allTxs.length : 0;
+  const incomeCount = filteredTxs.filter((tx) => tx.payload.amount > 0).length;
+  const expenseCount = filteredTxs.filter((tx) => tx.payload.amount < 0).length;
+  const avgAmount = filteredTxs.length > 0 ? totalBalance / filteredTxs.length : 0;
 
   const defaultCurrency = localStorage.getItem("budgeteer_default_currency") || "EUR";
   const defaultSymbol = getCurrencySymbol(defaultCurrency);
@@ -137,26 +147,43 @@ export default function DashboardPage() {
     "oklch(0.76 0.11 10)",   // Pastel coral
   ];
 
-  // Group and compute balance over time
+  // Group and compute balance over time — contiguous window from dateRange.start to dateRange.end.
+  // Cumulative starts from the day before the window (using all transactions) so the trajectory
+  // is a true balance, not just the net change within the window.
   const balanceChartData = (() => {
-    if (allTxs.length === 0) return [];
-    
-    // Sort ascending by time
-    const sorted = [...allTxs]
-      .filter((t) => t.payload)
-      .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-      
-    // Compute running total grouped by day
-    const dailyTotals: Record<string, number> = {};
-    sorted.forEach((tx) => {
-      const dateStr = tx.time.slice(0, 10);
-      dailyTotals[dateStr] = (dailyTotals[dateStr] || 0) + tx.payload.amount;
-    });
-    
-    const sortedDates = Object.keys(dailyTotals).sort();
-    let cumulative = 0;
+    const startDate = new Date(dateRange.start + "T12:00:00");
+    const endDate = new Date(dateRange.end + "T12:00:00");
+
+    // 1. Compute the cumulative balance up to the day BEFORE the window starts
+    let openingBalance = 0;
+    const windowStartEpoch = startDate.getTime();
+    for (const tx of allTxs) {
+      const txTime = new Date(tx.time).getTime();
+      if (txTime < windowStartEpoch) {
+        openingBalance += tx.payload ? tx.payload.amount : 0;
+      }
+    }
+
+    // 2. Build a contiguous calendar for the window
+    const dayTotals: Record<string, number> = {};
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      dayTotals[key] = 0;
+    }
+
+    // 3. Accumulate filtered transactions into the daily buckets
+    for (const tx of filteredTxs) {
+      const key = tx.time.slice(0, 10);
+      if (key in dayTotals) {
+        dayTotals[key] += tx.payload ? tx.payload.amount : 0;
+      }
+    }
+
+    // 4. Compute running total starting from the opening balance
+    const sortedDates = Object.keys(dayTotals).sort();
+    let cumulative = openingBalance;
     return sortedDates.map((date) => {
-      cumulative += dailyTotals[date];
+      cumulative += dayTotals[date];
       return {
         date,
         displayDate: new Date(date + "T12:00:00Z").toLocaleDateString(undefined, {
@@ -171,7 +198,7 @@ export default function DashboardPage() {
   // Expenses by category — excludes "Opening Balance" (it's an accounting entry, not a real expense)
   const expenseChartData = (() => {
     const categories: Record<string, number> = {};
-    allTxs.forEach((tx) => {
+    filteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount < 0 && tx.payload.category !== "Opening Balance") {
         const cat = tx.payload.category || "General";
         categories[cat] = (categories[cat] || 0) + Math.abs(tx.payload.amount);
@@ -188,7 +215,7 @@ export default function DashboardPage() {
   // Income by category — excludes "Opening Balance" (it's an accounting entry, not real income)
   const incomeChartData = (() => {
     const categories: Record<string, number> = {};
-    allTxs.forEach((tx) => {
+    filteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount > 0 && tx.payload.category !== "Opening Balance") {
         const cat = tx.payload.category || "General";
         categories[cat] = (categories[cat] || 0) + tx.payload.amount;
@@ -385,10 +412,9 @@ export default function DashboardPage() {
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                     >
                       <option value="">Select category...</option>
-                      {txAccountId &&
-                        getCategories(txType as CategoryType).map((cat) => (
-                          <option key={cat} value={cat}>
-                            {cat}
+                      {getCategories(txType as CategoryType).map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
                           </option>
                         ))}
                       <option value="__new__">+ Add new category...</option>
@@ -490,7 +516,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {allTxs.length > 0
+              {filteredTxs.length > 0
                 ? formatCurrency(avgAmount, defaultCurrency)
                 : "—"}
             </div>
@@ -515,7 +541,10 @@ export default function DashboardPage() {
               ) : (
                 <div className="h-64 sm:h-80 w-full font-mono text-[10px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={balanceChartData}>
+                    <AreaChart
+                      data={balanceChartData}
+                      margin={{ top: 5, right: 12, left: 0, bottom: 0 }}
+                    >
                       <defs>
                         <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.2}/>
@@ -530,6 +559,7 @@ export default function DashboardPage() {
                         tickLine={false}
                         axisLine={false}
                         dy={10}
+                        minTickGap={30}
                       />
                       <YAxis
                         stroke="var(--color-muted-foreground)"
