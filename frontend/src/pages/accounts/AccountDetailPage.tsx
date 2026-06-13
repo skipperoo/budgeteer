@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -99,9 +99,14 @@ export default function AccountDetailPage() {
 
   // --- File upload state (create) ---
   const [txFile, setTxFile] = useState<File | null>(null);
+  const createFileRef = useRef<HTMLInputElement>(null);
 
   // --- File upload state (edit) ---
   const [editTxFile, setEditTxFile] = useState<File | null>(null);
+  const editFileRef = useRef<HTMLInputElement>(null);
+
+  // --- File input error state (debug: show file input errors) ---
+  const [fileInputError, setFileInputError] = useState("");
 
   // Category combobox state
   const { getCategories, addCategory, version: _catVersion } = useCategoryStore();
@@ -719,17 +724,26 @@ export default function AccountDetailPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Receipt / Document</label>
                   <Input
+                    ref={createFileRef}
                     type="file"
                     accept="image/*,.pdf"
                     onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      setTxFile(file);
+                      try {
+                        const file = e.target.files?.[0] ?? null;
+                        setTxFile(file);
+                        setFileInputError("");
+                      } catch (err: any) {
+                        setFileInputError(err?.message ?? String(err));
+                      }
                     }}
                   />
                   {txFile && (
                     <p className="text-xs text-muted-foreground">
                       {txFile.name} ({(txFile.size / 1024).toFixed(1)} KB)
                     </p>
+                  )}
+                  {fileInputError && (
+                    <p className="text-xs text-destructive">{fileInputError}</p>
                   )}
                 </div>
                 {txCreateError && <p className="text-sm text-destructive">{txCreateError}</p>}
@@ -870,17 +884,26 @@ export default function AccountDetailPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Receipt / Document</label>
                   <Input
+                    ref={editFileRef}
                     type="file"
                     accept="image/*,.pdf"
                     onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      setEditTxFile(file);
+                      try {
+                        const file = e.target.files?.[0] ?? null;
+                        setEditTxFile(file);
+                        setFileInputError("");
+                      } catch (err: any) {
+                        setFileInputError(err?.message ?? String(err));
+                      }
                     }}
                   />
                   {editTxFile && (
                     <p className="text-xs text-muted-foreground">
                       {editTxFile.name} ({(editTxFile.size / 1024).toFixed(1)} KB)
                     </p>
+                  )}
+                  {fileInputError && (
+                    <p className="text-xs text-destructive">{fileInputError}</p>
                   )}
                 </div>
                 {editTxError && <p className="text-sm text-destructive">{editTxError}</p>}
