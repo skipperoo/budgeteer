@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,13 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
   const setPrivateKey = useAuthStore((s) => s.setPrivateKey);
+
+  // Clear any stale sessionStorage caches (account keys, etc.) so that
+  // fresh keys are always retrieved from the backend after login.
+  useEffect(() => {
+    sessionStorage.clear();
+  }, []);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
