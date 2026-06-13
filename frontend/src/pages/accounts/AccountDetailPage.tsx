@@ -19,10 +19,12 @@ import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64, encryptAccountKeyForRecipient } from "@/lib/crypto";
 import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
+import { encryptFile } from "@/lib/crypto-file";
 import { getAccountKey } from "@/lib/decrypt-transactions";
 import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
+import { TransactionDetailOverlay } from "@/components/transactions/TransactionDetailOverlay";
 import { CURRENCIES, getCurrencySymbol, formatCurrency } from "@/lib/format";
-import type { Transaction, CreateTransactionRequest } from "@/types";
+import type { Transaction, CreateTransactionRequest, DocumentMetadata } from "@/types";
 import {
   ResponsiveContainer,
   PieChart,
@@ -90,6 +92,16 @@ export default function AccountDetailPage() {
   const [editTxError, setEditTxError] = useState("");
   const [editTxShowCategoryInput, setEditTxShowCategoryInput] = useState(false);
   const [editTxNewCategory, setEditTxNewCategory] = useState("");
+
+  // --- Detail overlay state ---
+  const [detailTx, setDetailTx] = useState<TransactionDisplay | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  // --- File upload state (create) ---
+  const [txFile, setTxFile] = useState<File | null>(null);
+
+  // --- File upload state (edit) ---
+  const [editTxFile, setEditTxFile] = useState<File | null>(null);
 
   // Category combobox state
   const { getCategories, addCategory, version: _catVersion } = useCategoryStore();
@@ -307,8 +319,32 @@ export default function AccountDetailPage() {
         } as CreateTransactionRequest),
       });
 
+      // If a new file was selected, delete old documents and upload new one
+      if (editTxFile && accountKeyBase64) {
+        // First, delete any existing documents for this transaction
+        const existingDocs = await apiFetch<DocumentMetadata[]>(
+          ENDPOINTS.transactionDocuments(editTxId),
+        );
+        if (existingDocs) {
+          await Promise.all(
+            existingDocs.map((doc) =>
+              apiFetch(ENDPOINTS.transactionDocument(editTxId, doc.id), {
+                method: "DELETE",
+              }),
+            ),
+          );
+        }
+        // Upload the new file
+        const fileData = await encryptFile(editTxFile, accountKeyBase64);
+        await apiFetch(ENDPOINTS.transactionDocuments(editTxId), {
+          method: "POST",
+          body: JSON.stringify(fileData),
+        });
+      }
+
       setEditTxOpen(false);
       setEditTxId(null);
+      setEditTxFile(null);
       await fetchTransactions();
     } catch (err: any) {
       setEditTxError(err.message);
@@ -360,13 +396,23 @@ export default function AccountDetailPage() {
 
       const time = new Date(txDate + "T12:00:00Z").toISOString();
 
-      await apiFetch(ENDPOINTS.transactions(id), {
+      // Create the transaction first
+      const createdTx = await apiFetch<Transaction>(ENDPOINTS.transactions(id), {
         method: "POST",
         body: JSON.stringify({
           time,
           encrypted_payload: encryptedPayload,
         } as CreateTransactionRequest),
       });
+
+      // If there's a file, encrypt and upload as a document
+      if (txFile && createdTx?.id) {
+        const fileData = await encryptFile(txFile, accountKeyBase64);
+        await apiFetch(ENDPOINTS.transactionDocuments(createdTx.id), {
+          method: "POST",
+          body: JSON.stringify(fileData),
+        });
+      }
 
       setCreateOpen(false);
       setTxType("expense");
@@ -375,6 +421,7 @@ export default function AccountDetailPage() {
       setTxNotes("");
       setTxCounterparty("");
       setTxDate(new Date().toISOString().slice(0, 10));
+      setTxFile(null);
       setShowCategoryInput(false);
       await fetchTransactions();
     } catch (err: any) {
@@ -669,6 +716,22 @@ export default function AccountDetailPage() {
                     placeholder="Optional notes"
                   />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Receipt / Document</label>
+                  <Input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setTxFile(file);
+                    }}
+                  />
+                  {txFile && (
+                    <p className="text-xs text-muted-foreground">
+                      {txFile.name} ({(txFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
+                </div>
                 {txCreateError && <p className="text-sm text-destructive">{txCreateError}</p>}
                 <Button onClick={handleCreateTransaction} className="w-full" disabled={txCreating}>
                   {txCreating ? "Creating..." : "Create"}
@@ -804,6 +867,22 @@ export default function AccountDetailPage() {
                     placeholder="Optional notes"
                   />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Receipt / Document</label>
+                  <Input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setEditTxFile(file);
+                    }}
+                  />
+                  {editTxFile && (
+                    <p className="text-xs text-muted-foreground">
+                      {editTxFile.name} ({(editTxFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
+                </div>
                 {editTxError && <p className="text-sm text-destructive">{editTxError}</p>}
                 <Button onClick={handleUpdateTransaction} className="w-full" disabled={editTxSaving}>
                   {editTxSaving ? "Saving..." : "Save"}
@@ -894,6 +973,28 @@ export default function AccountDetailPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Transaction Detail Overlay */}
+      {detailTx?.payload && (
+        <TransactionDetailOverlay
+          transaction={{ id: detailTx.id, time: detailTx.time, payload: detailTx.payload }}
+          currency={account.currency}
+          accountKeyBase64={accountKeyBase64}
+          open={detailOpen}
+          onOpenChange={(open) => {
+            setDetailOpen(open);
+            if (!open) setDetailTx(null);
+          }}
+          onEdit={(txId) => {
+            setDetailOpen(false);
+            openEditTx(txId);
+          }}
+          onDelete={(txId) => {
+            setDetailOpen(false);
+            handleDeleteTransaction(txId);
+          }}
+        />
+      )}
+
       {/* Balance chart for this account */}
       <Card>
         <CardHeader className="pb-2">
@@ -935,6 +1036,14 @@ export default function AccountDetailPage() {
                       currency={account.currency}
                       onDelete={handleDeleteTransaction}
                       onEdit={tx.payload ? openEditTx : undefined}
+                      onClick={
+                        tx.payload
+                          ? () => {
+                              setDetailTx(tx);
+                              setDetailOpen(true);
+                            }
+                          : undefined
+                      }
                     />
                   ))}
                 </div>

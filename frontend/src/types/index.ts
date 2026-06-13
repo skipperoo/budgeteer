@@ -100,3 +100,19 @@ export interface SyncPullResponse {
   next_cursor?: string;
   has_more: boolean;
 }
+
+export interface DocumentMetadata {
+  id: string;
+  transaction_id: string;
+  mime_type: string;
+  file_name: string;
+  file_size: number;
+  created_at: string;
+}
+
+export interface DocumentDataResponse {
+  id: string;
+  encrypted_data: string;
+  mime_type: string;
+  file_name: string;
+}

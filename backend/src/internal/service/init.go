@@ -5,5 +5,6 @@ func InitServices() {
 	InitUserService()
 	InitAccountService()
 	InitTransactionService()
+	InitTransactionDocumentService()
 	InitSyncService()
 }

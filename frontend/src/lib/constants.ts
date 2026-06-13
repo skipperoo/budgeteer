@@ -24,4 +24,9 @@ export const ENDPOINTS = {
   transaction: (id: string) => `${API_BASE}/transactions/${id}`,
   categories: `${API_BASE}/categories`,
   category: (id: string) => `${API_BASE}/categories/${id}`,
+  transactionDocuments: (id: string) => `${API_BASE}/transactions/${id}/documents`,
+  transactionDocumentData: (id: string, docId: string) =>
+    `${API_BASE}/transactions/${id}/documents/${docId}/data`,
+  transactionDocument: (id: string, docId: string) =>
+    `${API_BASE}/transactions/${id}/documents/${docId}`,
 } as const;

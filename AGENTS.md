@@ -111,6 +111,10 @@ _Note: All Sync, Accounts, and Users endpoints require Auth middleware (JWT vali
 | **GET**    | `/api/v1/categories`                | Categories | Lists all categories for the authenticated user.                                                                                                                 |
 | **POST**   | `/api/v1/categories`                | Categories | Creates a new category (body: `{ name, type }`).                                                                                                                 |
 | **DELETE** | `/api/v1/categories/{id}`           | Categories | Deletes a category by its ID.                                                                                                                                    |
+| **POST**   | `/api/v1/transactions/{id}/documents`             | Documents | Uploads an encrypted document (receipt) for a transaction. Body: `{ encrypted_data, mime_type, file_name, file_size }`. Max 10 MB. |
+| **GET**    | `/api/v1/transactions/{id}/documents`             | Documents | Lists document metadata for a transaction (no encrypted data).                                                                                                   |
+| **GET**    | `/api/v1/transactions/{id}/documents/{docId}/data` | Documents | Returns a document's encrypted data (to be decrypted client-side with the account key).                                                                          |
+| **DELETE** | `/api/v1/transactions/{id}/documents/{docId}`      | Documents | Deletes a document from a transaction.                                                                                                                           |
 
 ### Router Setup (`routy`)
 
@@ -324,6 +328,22 @@ CREATE TABLE transactions (
 SELECT create_hypertable('transactions', 'time');
 
 -- ============================================================
+-- TRANSACTION DOCUMENTS
+-- Stores encrypted document files (receipts, invoices, etc.)
+-- linked to a transaction. Encrypted with the same AES-256 account
+-- key used for transaction payloads. Metadata is plaintext for UI.
+-- ============================================================
+CREATE TABLE transaction_documents (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    transaction_id  UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    encrypted_data  BYTEA NOT NULL,
+    mime_type       VARCHAR(255) NOT NULL,
+    file_name       VARCHAR(255) NOT NULL,
+    file_size       BIGINT NOT NULL,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
 -- RECURRING TRANSACTIONS
 -- Defines a template and schedule for auto-generated transactions.
 -- ============================================================
@@ -421,6 +441,9 @@ CREATE INDEX ON sync_queue (target_user_id, created_at) WHERE consumed_at IS NUL
 
 -- Email dispatcher polling
 CREATE INDEX ON email_outbox (status, scheduled_for) WHERE status = 'pending';
+
+-- Transaction documents
+CREATE INDEX ON transaction_documents (transaction_id);
 
 -- User categories
 CREATE INDEX ON user_categories (user_id);
