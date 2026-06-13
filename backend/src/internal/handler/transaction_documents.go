@@ -9,7 +9,7 @@ import (
 	"budgeteer-backend/internal/service"
 )
 
-const maxDocumentSize = 5 * 1024 * 1024 // 5 MB
+const maxDocumentSize = 20 * 1024 * 1024 // 20 MB
 
 // UploadDocument handles POST /v1/transactions/{id}/documents
 func UploadDocument(w http.ResponseWriter, r *http.Request) {
@@ -27,7 +27,7 @@ func UploadDocument(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDocumentSize)).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body or file too large (max 5MB)"})
+		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body or file too large (max 20MB)"})
 		return
 	}
 	defer r.Body.Close()
