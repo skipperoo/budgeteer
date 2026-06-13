@@ -8,7 +8,7 @@
 -- ============================================================
 CREATE TABLE transaction_documents (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    transaction_id  UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    transaction_id  UUID NOT NULL,
     encrypted_data  BYTEA NOT NULL,
     mime_type       VARCHAR(255) NOT NULL,
     file_name       VARCHAR(255) NOT NULL,
