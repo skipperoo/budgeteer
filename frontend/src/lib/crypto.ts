@@ -26,14 +26,27 @@ function checkCrypto(): void {
 // Base64 helpers
 // ---------------------------------------------------------------------------
 
-/** Encode a Uint8Array to base64 string. */
+/** Encode a Uint8Array to base64 string.
+ *  Uses chunked processing to avoid stack overflow on large arrays
+ *  (the spread operator ...bytes fails on multi-MB photos). */
 export function bytesToBase64(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes));
+  let binary = "";
+  const chunkSize = 8192; // 8 KB chunks
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
 }
 
 /** Decode a base64 string to Uint8Array. */
 export function base64ToBytes(b64: string): Uint8Array {
-  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  const binary = atob(b64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 // ---------------------------------------------------------------------------
