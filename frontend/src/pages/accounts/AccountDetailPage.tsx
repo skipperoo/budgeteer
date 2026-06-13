@@ -1053,7 +1053,7 @@ export default function AccountDetailPage() {
       {/* Main Grid: Balance chart + Recent Transactions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="lg:col-span-2">
-          <Card className="flex flex-col h-full">
+          <Card className="flex flex-col h-[400px]">
             <CardHeader className="pb-2 shrink-0">
               <CardTitle className="text-lg font-bold">Balance</CardTitle>
             </CardHeader>
@@ -1067,7 +1067,7 @@ export default function AccountDetailPage() {
           </Card>
         </div>
         <div>
-          <Card className="flex flex-col h-full">
+          <Card className="flex flex-col h-[400px]">
             <CardHeader className="shrink-0">
               <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
             </CardHeader>
