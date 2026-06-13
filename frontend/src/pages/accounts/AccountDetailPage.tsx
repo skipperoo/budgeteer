@@ -1067,15 +1067,15 @@ export default function AccountDetailPage() {
           </Card>
         </div>
         <div>
-          <Card className="h-full flex flex-col">
+          <Card className="flex flex-col">
             <CardHeader className="shrink-0">
               <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 min-h-0 overflow-y-auto">
+            <CardContent className="overflow-y-auto max-h-[350px] min-h-0">
               {txLoading ? (
                 <p className="text-sm text-muted-foreground">Loading...</p>
               ) : recentAccountTxs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center">
+                <div className="flex flex-col items-center justify-center h-[260px] text-center">
                   <p className="text-sm text-muted-foreground">
                     {transactions.length === 0
                       ? `No transactions yet. Click "Add Transaction" to get started.`
