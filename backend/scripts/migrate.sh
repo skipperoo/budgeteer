@@ -17,7 +17,7 @@ set -euo pipefail
 # if available, falling back to the DB_PASSWORD env var.
 # -------------------------------------------------------------------
 
-MIGRATIONS_DIR="$(cd "$(dirname "$0")/../migrations" && pwd)"
+MIGRATIONS_DIR="$(cd "$(dirname "$0")/../src/migrations" && pwd)"
 
 # --- Connection ----------------------------------------------------
 : "${DB_HOST:=localhost}"
