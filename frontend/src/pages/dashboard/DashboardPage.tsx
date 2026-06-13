@@ -523,18 +523,19 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Average Amount
+              Average Tx Amount
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold tabular-nums leading-tight">
               {filteredTxs.length > 0 ? (
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-income text-sm font-semibold">
-                    {formatCurrency(incomeAvg, defaultCurrency)} avg income
+                <div className="flex flex-row gap-0.5">
+                  <span className="text-income text-sm font-semibold tabular-nums">
+                    {formatCurrency(incomeAvg, defaultCurrency)}
                   </span>
-                  <span className="text-expense text-sm font-semibold">
-                    {formatCurrency(expenseAvg, defaultCurrency)} avg expense
+                  <span className="text-sm font-bold">/</span>
+                  <span className="text-expense text-sm font-semibold tabular-nums">
+                    {formatCurrency(expenseAvg, defaultCurrency)}
                   </span>
                 </div>
               ) : (
@@ -587,7 +588,7 @@ export default function DashboardPage() {
             <CardHeader className="shrink-0">
               <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 min-h-0">
+            <CardContent className="flex-1 min-h-0 overflow-y-auto">
               {recentTxs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <p className="text-sm text-muted-foreground mb-4">
@@ -605,7 +606,7 @@ export default function DashboardPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="h-full overflow-y-auto space-y-2 pr-1">
+                <div className="space-y-2">
                   {recentTxs.map((tx) => (
                     <TransactionCard
                       key={tx.id}

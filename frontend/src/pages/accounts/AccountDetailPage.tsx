@@ -1029,17 +1029,18 @@ export default function AccountDetailPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Average Amount
+              Average Tx Amount
             </CardTitle>
           </CardHeader>
           <CardContent>
             {filteredTxs.length > 0 ? (
-              <div className="flex flex-col gap-0.5">
-                <span className="text-income text-sm font-semibold">
-                  {formatCurrency(incomeAvgAcc, account.currency)} avg income
+              <div className="flex flex-row gap-0.5">
+                <span className="text-income text-sm font-semibold tabular-nums">
+                  {formatCurrency(incomeAvgAcc, account.currency)}
                 </span>
-                <span className="text-expense text-sm font-semibold">
-                  {formatCurrency(expenseAvgAcc, account.currency)} avg expense
+                <span className="text-sm font-bold">/</span>
+                <span className="text-expense text-sm font-semibold tabular-nums">
+                  {formatCurrency(expenseAvgAcc, account.currency)}
                 </span>
               </div>
             ) : (
@@ -1070,7 +1071,7 @@ export default function AccountDetailPage() {
             <CardHeader className="shrink-0">
               <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 min-h-0">
+            <CardContent className="flex-1 min-h-0 overflow-y-auto">
               {txLoading ? (
                 <p className="text-sm text-muted-foreground">Loading...</p>
               ) : recentAccountTxs.length === 0 ? (
@@ -1082,7 +1083,7 @@ export default function AccountDetailPage() {
                   </p>
                 </div>
               ) : (
-                <div className="h-full overflow-y-auto space-y-2 pr-1">
+                <div className="space-y-2">
                   {recentAccountTxs.map((tx) => (
                     <TransactionCard
                       key={tx.id}
@@ -1337,45 +1338,6 @@ export default function AccountDetailPage() {
         </div>
       )}
 
-      {/* Full Transactions List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Transactions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {txLoading ? (
-            <p className="text-sm text-muted-foreground">Loading transactions...</p>
-          ) : txError ? (
-            <p className="text-sm text-destructive">{txError}</p>
-          ) : filteredTxs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {transactions.length === 0
-                ? `No transactions yet. Click "Add Transaction" to get started. For initial balance, add an opening balance transaction.`
-                : "No transactions in the selected date range."}
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {filteredTxs.map((tx) => (
-                <TransactionCard
-                  key={tx.id}
-                  transaction={tx}
-                  currency={account.currency}
-                  onDelete={handleDeleteTransaction}
-                  onEdit={tx.payload ? openEditTx : undefined}
-                  onClick={
-                    tx.payload
-                      ? () => {
-                          setDetailTx(tx);
-                          setDetailOpen(true);
-                        }
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+      </div>
   );
 }
