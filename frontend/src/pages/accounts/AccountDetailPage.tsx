@@ -1051,27 +1051,29 @@ export default function AccountDetailPage() {
       </div>
 
       {/* Main Grid: Balance chart + Recent Transactions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader className="pb-2">
+          <Card className="flex flex-col h-full">
+            <CardHeader className="pb-2 shrink-0">
               <CardTitle className="text-lg font-bold">Balance</CardTitle>
             </CardHeader>
-            <CardContent>
-              <BalanceChart
-                data={accountChartData}
-                currency={account.currency}
-                gradientId="colorAccountBalance"
-              />
+            <CardContent className="flex-1 min-h-0">
+              <div className="h-full w-full">
+                <BalanceChart
+                  data={accountChartData}
+                  currency={account.currency}
+                  gradientId="colorAccountBalance"
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
         <div>
-          <Card className="flex flex-col">
+          <Card className="flex flex-col h-full">
             <CardHeader className="shrink-0">
               <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-y-auto max-h-[350px] min-h-0">
+            <CardContent className="flex-1 min-h-0 overflow-y-auto">
               {txLoading ? (
                 <p className="text-sm text-muted-foreground">Loading...</p>
               ) : recentAccountTxs.length === 0 ? (
@@ -1108,7 +1110,7 @@ export default function AccountDetailPage() {
       </div>
 
       {/* Members for joint accounts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* If joint: Members card */}
         {account.type === "joint" && (
           <Card>
@@ -1154,7 +1156,7 @@ export default function AccountDetailPage() {
 
       {/* Pie charts side by side (for non-joint accounts) */}
       {account.type !== "joint" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-bold">Expenses by Category</CardTitle>

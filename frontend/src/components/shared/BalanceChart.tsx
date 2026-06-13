@@ -41,7 +41,7 @@ export function BalanceChart({ data, currency = "EUR", gradientId }: BalanceChar
   }
 
   return (
-    <div className="h-64 sm:h-80 w-full font-mono text-[10px]">
+    <div className="h-full w-full font-mono text-[10px]">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}
