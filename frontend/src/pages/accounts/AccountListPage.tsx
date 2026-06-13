@@ -3,13 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { useAccountStore } from "@/stores/account-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { apiFetch } from "@/lib/api";
@@ -124,14 +118,7 @@ export default function AccountListPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Accounts</h1>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>Create Account</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>New Account</DialogTitle>
-            </DialogHeader>
+        <ResponsiveDialog open={open} onOpenChange={setOpen} title="New Account" trigger={<Button>Create Account</Button>}>
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Name</label>
@@ -219,11 +206,10 @@ export default function AccountListPage() {
                 {isCreating ? "Creating..." : "Create Account"}
               </Button>
             </div>
-          </DialogContent>
-        </Dialog>
+        </ResponsiveDialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {accounts.map((account) => (
           <Card
             key={account.id}

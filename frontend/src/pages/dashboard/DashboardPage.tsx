@@ -3,13 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { useAccountStore } from "@/stores/account-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCategoryStore, type CategoryType } from "@/stores/category-store";
@@ -126,7 +120,16 @@ export default function DashboardPage() {
     .reduce((sum, tx) => sum + Math.abs(tx.payload.amount), 0);
   const incomeCount = filteredTxs.filter((tx) => tx.payload.amount > 0).length;
   const expenseCount = filteredTxs.filter((tx) => tx.payload.amount < 0).length;
-  const avgAmount = filteredTxs.length > 0 ? totalBalance / filteredTxs.length : 0;
+
+  // Average income and expense amounts
+  const incomeTx = filteredTxs.filter((tx) => tx.payload.amount > 0);
+  const expenseTx = filteredTxs.filter((tx) => tx.payload.amount < 0);
+  const incomeAvg = incomeTx.length > 0
+    ? incomeTx.reduce((sum, tx) => sum + tx.payload.amount, 0) / incomeTx.length
+    : 0;
+  const expenseAvg = expenseTx.length > 0
+    ? Math.abs(expenseTx.reduce((sum, tx) => sum + tx.payload.amount, 0)) / expenseTx.length
+    : 0;
 
   const defaultCurrency = localStorage.getItem("budgeteer_default_currency") || "EUR";
   const defaultSymbol = getCurrencySymbol(defaultCurrency);
@@ -333,15 +336,8 @@ export default function DashboardPage() {
       {/* Header with Add Transaction button */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="lg">+ New Transaction</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>New Transaction</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
+        <ResponsiveDialog open={createOpen} onOpenChange={setCreateOpen} title="New Transaction" trigger={<Button size="lg">+ New Transaction</Button>}>
+          <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Account</label>
                 <select
@@ -485,8 +481,7 @@ export default function DashboardPage() {
                 {txCreating ? "Creating..." : "Create"}
               </Button>
             </div>
-          </DialogContent>
-        </Dialog>
+        </ResponsiveDialog>
       </div>
 
       {/* Summary cards */}
@@ -528,24 +523,32 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Avg Amount
+              Average Amount
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {filteredTxs.length > 0
-                ? formatCurrency(avgAmount, defaultCurrency)
-                : "—"}
+            <div className="text-2xl font-bold tabular-nums leading-tight">
+              {filteredTxs.length > 0 ? (
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-income text-sm font-semibold">
+                    {formatCurrency(incomeAvg, defaultCurrency)} avg income
+                  </span>
+                  <span className="text-expense text-sm font-semibold">
+                    {formatCurrency(expenseAvg, defaultCurrency)} avg expense
+                  </span>
+                </div>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Grid: charts and recent movements */}
+      {/* Main Grid: All Assets chart + Recent Transactions side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column: Balance Chart and Recent Transactions */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* All Assets Card */}
+        {/* Left column: All Assets chart (2/3) */}
+        <div className="lg:col-span-2">
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -576,15 +579,17 @@ export default function DashboardPage() {
               />
             </CardContent>
           </Card>
+        </div>
 
-          {/* Recent Transactions Card */}
-          <Card>
-            <CardHeader>
+        {/* Right column: Recent Transactions (1/3) — same height as chart, scrollable */}
+        <div>
+          <Card className="h-full flex flex-col">
+            <CardHeader className="shrink-0">
               <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 min-h-0">
               {recentTxs.length === 0 ? (
-                <div className="text-center py-8">
+                <div className="flex flex-col items-center justify-center h-full text-center">
                   <p className="text-sm text-muted-foreground mb-4">
                     No transactions yet. Add one to get started.
                   </p>
@@ -600,7 +605,7 @@ export default function DashboardPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="h-full overflow-y-auto space-y-2 pr-1">
                   {recentTxs.map((tx) => (
                     <TransactionCard
                       key={tx.id}
@@ -619,205 +624,203 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+      </div>
 
-        {/* Right column: Distribution Charts */}
-        <div className="space-y-6">
-          {/* Expenses Chart */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-bold">Expenses by Category</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {expenseChartData.length === 0 ? (
-                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
-                  No expense data available.
+      {/* Pie charts: side by side below the main grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Expenses Chart */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-bold">Expenses by Category</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {expenseChartData.length === 0 ? (
+              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                No expense data available.
+              </div>
+            ) : (
+              <div className="h-64 w-full flex flex-col justify-between font-mono text-[10px]">
+                <div className="h-44 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={expenseChartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {expenseChartData.map((_entry, index) => (
+                          <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
+                        ))}
+                      </Pie>
+                      <ChartTooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                                <p className="font-semibold mb-1">{data.name}</p>
+                                <p className="font-mono text-destructive font-bold">
+                                  {defaultSymbol}
+                                  {data.value.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <text
+                        x="50%"
+                        y="50%"
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="fill-destructive"
+                        style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                      >
+                        {defaultSymbol}
+                        {expenseTotal.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </text>
+                      <text
+                        x="50%"
+                        y="50%"
+                        dy={16}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="fill-muted-foreground"
+                        style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                      >
+                        expenses
+                      </text>
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ) : (
-                <div className="h-64 w-full flex flex-col justify-between font-mono text-[10px]">
-                  <div className="h-44 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={expenseChartData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={2}
-                          dataKey="value"
-                        >
-                          {expenseChartData.map((_entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
-                          ))}
-                        </Pie>
-                        <ChartTooltip
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              return (
-                                <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
-                                  <p className="font-semibold mb-1">{data.name}</p>
-                                  <p className="font-mono text-destructive font-bold">
-                                    {defaultSymbol}
-                                    {data.value.toLocaleString(undefined, {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    })}
-                                  </p>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                        <text
-                          x="50%"
-                          y="50%"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="fill-destructive"
-                          style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                        >
-                          {defaultSymbol}
-                          {expenseTotal.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </text>
-                        <text
-                          x="50%"
-                          y="50%"
-                          dy={16}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="fill-muted-foreground"
-                          style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                        >
-                          expenses
-                        </text>
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {/* Custom Legend to fit nicely and avoid text overflow */}
-                  <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 text-xs font-sans text-muted-foreground font-medium">
-                    {expenseChartData.slice(0, 5).map((entry, index) => (
-                      <div key={entry.name} className="flex items-center gap-1">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
-                        />
-                        <span className="truncate max-w-[80px]">{entry.name}</span>
-                      </div>
-                    ))}
-                    {expenseChartData.length > 5 && (
-                      <div className="text-muted-foreground italic text-[11px] self-center">
-                        +{expenseChartData.length - 5} more
-                      </div>
-                    )}
-                  </div>
+                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 text-xs font-sans text-muted-foreground font-medium">
+                  {expenseChartData.slice(0, 5).map((entry, index) => (
+                    <div key={entry.name} className="flex items-center gap-1">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                      />
+                      <span className="truncate max-w-[80px]">{entry.name}</span>
+                    </div>
+                  ))}
+                  {expenseChartData.length > 5 && (
+                    <div className="text-muted-foreground italic text-[11px] self-center">
+                      +{expenseChartData.length - 5} more
+                    </div>
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-          {/* Income Chart */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-bold">Income by Category</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {incomeChartData.length === 0 ? (
-                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
-                  No income data available.
+        {/* Income Chart */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-bold">Income by Category</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {incomeChartData.length === 0 ? (
+              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                No income data available.
+              </div>
+            ) : (
+              <div className="h-64 w-full flex flex-col justify-between font-mono text-[10px]">
+                <div className="h-44 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={incomeChartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {incomeChartData.map((_entry, index) => (
+                          <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
+                        ))}
+                      </Pie>
+                      <ChartTooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                                <p className="font-semibold mb-1">{data.name}</p>
+                                <p className="font-mono text-income font-bold">
+                                  {defaultSymbol}
+                                  {data.value.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <text
+                        x="50%"
+                        y="50%"
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="fill-income"
+                        style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                      >
+                        {defaultSymbol}
+                        {incomeTotal.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </text>
+                      <text
+                        x="50%"
+                        y="50%"
+                        dy={16}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="fill-muted-foreground"
+                        style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                      >
+                        income
+                      </text>
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ) : (
-                <div className="h-64 w-full flex flex-col justify-between font-mono text-[10px]">
-                  <div className="h-44 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={incomeChartData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={2}
-                          dataKey="value"
-                        >
-                          {incomeChartData.map((_entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
-                          ))}
-                        </Pie>
-                        <ChartTooltip
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              return (
-                                <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
-                                  <p className="font-semibold mb-1">{data.name}</p>
-                                  <p className="font-mono text-income font-bold">
-                                    {defaultSymbol}
-                                    {data.value.toLocaleString(undefined, {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    })}
-                                  </p>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                        <text
-                          x="50%"
-                          y="50%"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="fill-income"
-                          style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                        >
-                          {defaultSymbol}
-                          {incomeTotal.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </text>
-                        <text
-                          x="50%"
-                          y="50%"
-                          dy={16}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="fill-muted-foreground"
-                          style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                        >
-                          income
-                        </text>
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {/* Custom Legend to fit nicely and avoid text overflow */}
-                  <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 text-xs font-sans text-muted-foreground font-medium">
-                    {incomeChartData.slice(0, 5).map((entry, index) => (
-                      <div key={entry.name} className="flex items-center gap-1">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
-                        />
-                        <span className="truncate max-w-[80px]">{entry.name}</span>
-                      </div>
-                    ))}
-                    {incomeChartData.length > 5 && (
-                      <div className="text-muted-foreground italic text-[11px] self-center">
-                        +{incomeChartData.length - 5} more
-                      </div>
-                    )}
-                  </div>
+                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 text-xs font-sans text-muted-foreground font-medium">
+                  {incomeChartData.slice(0, 5).map((entry, index) => (
+                    <div key={entry.name} className="flex items-center gap-1">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                      />
+                      <span className="truncate max-w-[80px]">{entry.name}</span>
+                    </div>
+                  ))}
+                  {incomeChartData.length > 5 && (
+                    <div className="text-muted-foreground italic text-[11px] self-center">
+                      +{incomeChartData.length - 5} more
+                    </div>
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

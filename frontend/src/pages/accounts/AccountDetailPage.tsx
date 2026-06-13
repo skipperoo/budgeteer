@@ -3,13 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useAccountStore } from "@/stores/account-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCategoryStore, type CategoryType } from "@/stores/category-store";
@@ -559,6 +554,19 @@ export default function AccountDetailPage() {
     });
   })();
 
+  // Summary stats for dashboard-like layout
+  const incomeTx = filteredTxs.filter((tx) => tx.payload && tx.payload.amount > 0);
+  const expenseTxFromFiltered = filteredTxs.filter((tx) => tx.payload && tx.payload.amount < 0);
+  const incomeCountAcc = incomeTx.length;
+  const expenseCountAcc = expenseTxFromFiltered.length;
+  const incomeAvgAcc = incomeTx.length > 0
+    ? incomeTx.reduce((sum, tx) => sum + (tx.payload?.amount ?? 0), 0) / incomeTx.length
+    : 0;
+  const expenseAvgAcc = expenseTxFromFiltered.length > 0
+    ? Math.abs(expenseTxFromFiltered.reduce((sum, tx) => sum + (tx.payload?.amount ?? 0), 0)) / expenseTxFromFiltered.length
+    : 0;
+  const recentAccountTxs = filteredTxs.slice(0, 10);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -592,14 +600,7 @@ export default function AccountDetailPage() {
         </div>
         <div className="flex gap-2 self-start sm:self-auto shrink-0">
           {/* Create Transaction */}
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>Add Transaction</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>New Transaction</DialogTitle>
-              </DialogHeader>
+          <ResponsiveDialog open={createOpen} onOpenChange={setCreateOpen} title="New Transaction" trigger={<Button>Add Transaction</Button>}>
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Amount</label>
@@ -751,15 +752,10 @@ export default function AccountDetailPage() {
                   {txCreating ? "Creating..." : "Create"}
                 </Button>
               </div>
-            </DialogContent>
-          </Dialog>
+          </ResponsiveDialog>
 
           {/* Edit Transaction Dialog */}
-          <Dialog open={editTxOpen} onOpenChange={setEditTxOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Edit Transaction</DialogTitle>
-              </DialogHeader>
+          <ResponsiveDialog open={editTxOpen} onOpenChange={setEditTxOpen} title="Edit Transaction">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Amount</label>
@@ -911,46 +907,33 @@ export default function AccountDetailPage() {
                   {editTxSaving ? "Saving..." : "Save"}
                 </Button>
               </div>
-            </DialogContent>
-          </Dialog>
+          </ResponsiveDialog>
 
           {/* Invite (for joint accounts) */}
           {account.type === "joint" && (
-            <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">Invite User</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Invite to Account</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">User Email</label>
-                    <Input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="user@example.com"
-                    />
+            <ResponsiveDialog open={inviteOpen} onOpenChange={setInviteOpen} title="Invite to Account" trigger={<Button variant="outline">Invite User</Button>}>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">User Email</label>
+                      <Input
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        placeholder="user@example.com"
+                      />
+                    </div>
+                    {inviteError && <p className="text-sm text-destructive">{inviteError}</p>}
+                    <Button onClick={handleInvite} className="w-full" disabled={inviting}>
+                      {inviting ? "Sending..." : "Send Invite"}
+                    </Button>
                   </div>
-                  {inviteError && <p className="text-sm text-destructive">{inviteError}</p>}
-                  <Button onClick={handleInvite} className="w-full" disabled={inviting}>
-                    {inviting ? "Sending..." : "Send Invite"}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+            </ResponsiveDialog>
           )}
         </div>
       </div>
 
       {/* Edit Account Dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Account</DialogTitle>
-          </DialogHeader>
+      <ResponsiveDialog open={editOpen} onOpenChange={setEditOpen} title="Edit Account">
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Name</label>
@@ -993,8 +976,7 @@ export default function AccountDetailPage() {
               {editing ? "Saving..." : "Save"}
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+      </ResponsiveDialog>
 
       {/* Transaction Detail Overlay */}
       {detailTx?.payload && (
@@ -1018,47 +1000,94 @@ export default function AccountDetailPage() {
         />
       )}
 
-      {/* Balance chart for this account */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-bold">Balance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <BalanceChart
-            data={accountChartData}
-            currency={account.currency}
-            gradientId="colorAccountBalance"
-          />
-        </CardContent>
-      </Card>
+      {/* Summary cards (dashboard-style, no Total Accounts) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Transactions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{filteredTxs.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Income / Expenses
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {incomeCountAcc}
+              <span className="text-sm font-normal text-muted-foreground"> / </span>
+              {expenseCountAcc}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Average Amount
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {filteredTxs.length > 0 ? (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-income text-sm font-semibold">
+                  {formatCurrency(incomeAvgAcc, account.currency)} avg income
+                </span>
+                <span className="text-expense text-sm font-semibold">
+                  {formatCurrency(expenseAvgAcc, account.currency)} avg expense
+                </span>
+              </div>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
+      {/* Main Grid: Balance chart + Recent Transactions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column: Transactions (2/3 width on desktop) */}
         <div className="lg:col-span-2">
           <Card>
-            <CardHeader>
-              <CardTitle>Transactions</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold">Balance</CardTitle>
             </CardHeader>
             <CardContent>
+              <BalanceChart
+                data={accountChartData}
+                currency={account.currency}
+                gradientId="colorAccountBalance"
+              />
+            </CardContent>
+          </Card>
+        </div>
+        <div>
+          <Card className="h-full flex flex-col">
+            <CardHeader className="shrink-0">
+              <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 min-h-0">
               {txLoading ? (
-                <p className="text-sm text-muted-foreground">Loading transactions...</p>
-              ) : txError ? (
-                <p className="text-sm text-destructive">{txError}</p>
-              ) : filteredTxs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {transactions.length === 0
-                    ? `No transactions yet. Click "Add Transaction" to get started. For initial balance, add an opening balance transaction.`
-                    : "No transactions in the selected date range."}
-                </p>
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : recentAccountTxs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {transactions.length === 0
+                      ? `No transactions yet. Click "Add Transaction" to get started.`
+                      : "No transactions in selected range."}
+                  </p>
+                </div>
               ) : (
-                <div className="space-y-2">
-                  {filteredTxs.map((tx) => (
+                <div className="h-full overflow-y-auto space-y-2 pr-1">
+                  {recentAccountTxs.map((tx) => (
                     <TransactionCard
                       key={tx.id}
                       transaction={tx}
                       currency={account.currency}
-                      onDelete={handleDeleteTransaction}
-                      onEdit={tx.payload ? openEditTx : undefined}
                       onClick={
                         tx.payload
                           ? () => {
@@ -1067,6 +1096,7 @@ export default function AccountDetailPage() {
                             }
                           : undefined
                       }
+                      compact
                     />
                   ))}
                 </div>
@@ -1074,233 +1104,278 @@ export default function AccountDetailPage() {
             </CardContent>
           </Card>
         </div>
+      </div>
 
-        {/* Right column (1/3 width on desktop): Members for joint, charts otherwise */}
-        <div className="min-h-0 flex flex-col gap-6">
-          {account.type === "joint" ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Members</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {accountUsers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No members.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {accountUsers.map((user) => (
-                      <div
-                        key={user.user_id}
-                        className="flex items-center justify-between p-3 rounded-lg border bg-card text-card-foreground text-xs"
-                      >
-                        <div className="min-w-0 pr-2">
-                          <span className="font-medium capitalize">{user.role}</span>
-                          <span className="text-muted-foreground ml-2 truncate block sm:inline">
-                            {user.user_id === currentUser?.id
-                              ? "(you)"
-                              : `ID: ${user.user_id.slice(0, 8)}...`}
-                          </span>
-                        </div>
-                        {user.role !== "owner" && (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => id && removeUser(id, user.user_id)}
-                            className="h-7 px-2 text-[10px]"
-                          >
-                            Remove
-                          </Button>
-                        )}
+      {/* Members for joint accounts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* If joint: Members card */}
+        {account.type === "joint" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Members</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {accountUsers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No members.</p>
+              ) : (
+                <div className="space-y-2">
+                  {accountUsers.map((user) => (
+                    <div
+                      key={user.user_id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-card text-card-foreground text-xs"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <span className="font-medium capitalize">{user.role}</span>
+                        <span className="text-muted-foreground ml-2 truncate block sm:inline">
+                          {user.user_id === currentUser?.id
+                            ? "(you)"
+                            : `ID: ${user.user_id.slice(0, 8)}...`}
+                        </span>
+                      </div>
+                      {user.role !== "owner" && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => id && removeUser(id, user.user_id)}
+                          className="h-7 px-2 text-[10px]"
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Pie charts side by side (for non-joint accounts) */}
+      {account.type !== "joint" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold">Expenses by Category</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {expenseChartData.length === 0 ? (
+                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                  No expense data.
+                </div>
+              ) : (
+                <div className="h-64 w-full flex flex-col justify-between font-mono text-[10px]">
+                  <div className="h-44 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={expenseChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={2}
+                          dataKey="value"
+                        >
+                          {expenseChartData.map((_entry, index) => (
+                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
+                          ))}
+                        </Pie>
+                        <ChartTooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                                  <p className="font-semibold mb-1">{data.name}</p>
+                                  <p className="font-mono text-destructive font-bold">
+                                    {getCurrencySymbol(account.currency)}
+                                    {data.value.toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <text
+                          x="50%"
+                          y="50%"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="fill-destructive"
+                          style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                        >
+                          {getCurrencySymbol(account.currency)}
+                          {expenseTotal.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </text>
+                        <text
+                          x="50%"
+                          y="50%"
+                          dy={16}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="fill-muted-foreground"
+                          style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                        >
+                          expenses
+                        </text>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 text-xs font-sans text-muted-foreground font-medium">
+                    {expenseChartData.slice(0, 5).map((entry, index) => (
+                      <div key={entry.name} className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
+                        <span className="truncate max-w-[80px]">{entry.name}</span>
                       </div>
                     ))}
+                    {expenseChartData.length > 5 && (
+                      <span className="text-muted-foreground italic text-[11px] self-center">+{expenseChartData.length - 5} more</span>
+                    )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              {/* Expenses by Category */}
-              <Card className="flex-1 flex flex-col min-h-[260px]">
-                <CardHeader className="pb-2 shrink-0">
-                  <CardTitle className="text-sm font-bold">Expenses by Category</CardTitle>
-                </CardHeader>
-                <CardContent className="flex-1 flex flex-col justify-center min-h-0">
-                  {expenseChartData.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center">No expense data.</p>
-                  ) : (
-                    <div className="h-full w-full flex flex-col justify-between font-mono text-[10px]">
-                      <div className="flex-1 min-h-0">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={expenseChartData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={50}
-                              outerRadius={70}
-                              paddingAngle={2}
-                              dataKey="value"
-                            >
-                              {expenseChartData.map((_entry, index) => (
-                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
-                              ))}
-                            </Pie>
-                            <ChartTooltip
-                              content={({ active, payload }) => {
-                                if (active && payload && payload.length) {
-                                  const data = payload[0].payload;
-                                  return (
-                                    <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
-                                      <p className="font-semibold mb-1">{data.name}</p>
-                                      <p className="font-mono text-destructive font-bold">
-                                        {getCurrencySymbol(account.currency)}
-                                        {data.value.toLocaleString(undefined, {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2,
-                                        })}
-                                      </p>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              }}
-                            />
-                            <text
-                              x="50%"
-                              y="50%"
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              className="fill-destructive"
-                              style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                            >
-                              {getCurrencySymbol(account.currency)}
-                              {expenseTotal.toLocaleString(undefined, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </text>
-                            <text
-                              x="50%"
-                              y="50%"
-                              dy={16}
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              className="fill-muted-foreground"
-                              style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                            >
-                              expenses
-                            </text>
-                          </PieChart>
-                        </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold">Income by Category</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {incomeChartData.length === 0 ? (
+                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                  No income data.
+                </div>
+              ) : (
+                <div className="h-64 w-full flex flex-col justify-between font-mono text-[10px]">
+                  <div className="h-44 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={incomeChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={2}
+                          dataKey="value"
+                        >
+                          {incomeChartData.map((_entry, index) => (
+                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
+                          ))}
+                        </Pie>
+                        <ChartTooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                                  <p className="font-semibold mb-1">{data.name}</p>
+                                  <p className="font-mono text-income font-bold">
+                                    {getCurrencySymbol(account.currency)}
+                                    {data.value.toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <text
+                          x="50%"
+                          y="50%"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="fill-income"
+                          style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                        >
+                          {getCurrencySymbol(account.currency)}
+                          {incomeTotal.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </text>
+                        <text
+                          x="50%"
+                          y="50%"
+                          dy={16}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="fill-muted-foreground"
+                          style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
+                        >
+                          income
+                        </text>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 text-xs font-sans text-muted-foreground font-medium">
+                    {incomeChartData.slice(0, 5).map((entry, index) => (
+                      <div key={entry.name} className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
+                        <span className="truncate max-w-[80px]">{entry.name}</span>
                       </div>
-                      <div className="flex flex-wrap justify-center gap-x-2 gap-y-0.5 mt-1.5 text-xs font-sans text-muted-foreground font-medium">
-                        {expenseChartData.slice(0, 4).map((entry, index) => (
-                          <div key={entry.name} className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
-                            <span className="truncate max-w-[60px]">{entry.name}</span>
-                          </div>
-                        ))}
-                        {expenseChartData.length > 4 && (
-                          <span className="text-muted-foreground italic">+{expenseChartData.length - 4} more</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Income by Category */}
-              <Card className="flex-1 flex flex-col min-h-[260px]">
-                <CardHeader className="pb-2 shrink-0">
-                  <CardTitle className="text-sm font-bold">Income by Category</CardTitle>
-                </CardHeader>
-                <CardContent className="flex-1 flex flex-col justify-center min-h-0">
-                  {incomeChartData.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center">No income data.</p>
-                  ) : (
-                    <div className="h-full w-full flex flex-col justify-between font-mono text-[10px]">
-                      <div className="flex-1 min-h-0">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={incomeChartData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={50}
-                              outerRadius={70}
-                              paddingAngle={2}
-                              dataKey="value"
-                            >
-                              {incomeChartData.map((_entry, index) => (
-                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
-                              ))}
-                            </Pie>
-                            <ChartTooltip
-                              content={({ active, payload }) => {
-                                if (active && payload && payload.length) {
-                                  const data = payload[0].payload;
-                                  return (
-                                    <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
-                                      <p className="font-semibold mb-1">{data.name}</p>
-                                      <p className="font-mono text-income font-bold">
-                                        {getCurrencySymbol(account.currency)}
-                                        {data.value.toLocaleString(undefined, {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2,
-                                        })}
-                                      </p>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              }}
-                            />
-                            <text
-                              x="50%"
-                              y="50%"
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              className="fill-income"
-                              style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                            >
-                              {getCurrencySymbol(account.currency)}
-                              {incomeTotal.toLocaleString(undefined, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </text>
-                            <text
-                              x="50%"
-                              y="50%"
-                              dy={16}
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              className="fill-muted-foreground"
-                              style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                            >
-                              income
-                            </text>
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                      <div className="flex flex-wrap justify-center gap-x-2 gap-y-0.5 mt-1.5 text-xs font-sans text-muted-foreground font-medium">
-                        {incomeChartData.slice(0, 4).map((entry, index) => (
-                          <div key={entry.name} className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
-                            <span className="truncate max-w-[60px]">{entry.name}</span>
-                          </div>
-                        ))}
-                        {incomeChartData.length > 4 && (
-                          <span className="text-muted-foreground italic">+{incomeChartData.length - 4} more</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          )}
+                    ))}
+                    {incomeChartData.length > 5 && (
+                      <span className="text-muted-foreground italic text-[11px] self-center">+{incomeChartData.length - 5} more</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
-      </div>
+      )}
+
+      {/* Full Transactions List */}
+      <Card>
+        <CardHeader>
+          <CardTitle>All Transactions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {txLoading ? (
+            <p className="text-sm text-muted-foreground">Loading transactions...</p>
+          ) : txError ? (
+            <p className="text-sm text-destructive">{txError}</p>
+          ) : filteredTxs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {transactions.length === 0
+                ? `No transactions yet. Click "Add Transaction" to get started. For initial balance, add an opening balance transaction.`
+                : "No transactions in the selected date range."}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {filteredTxs.map((tx) => (
+                <TransactionCard
+                  key={tx.id}
+                  transaction={tx}
+                  currency={account.currency}
+                  onDelete={handleDeleteTransaction}
+                  onEdit={tx.payload ? openEditTx : undefined}
+                  onClick={
+                    tx.payload
+                      ? () => {
+                          setDetailTx(tx);
+                          setDetailOpen(true);
+                        }
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

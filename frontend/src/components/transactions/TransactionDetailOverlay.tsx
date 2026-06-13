@@ -9,12 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { decryptFile } from "@/lib/crypto-file";
@@ -188,12 +183,7 @@ export function TransactionDetailOverlay({
   const isImage = (mime: string) => mime.startsWith("image/");
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Transaction Details</DialogTitle>
-        </DialogHeader>
-
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Transaction Details">
         <div className="space-y-6">
           {/* Type icon + Amount */}
           <div className="flex items-center gap-4">
@@ -434,7 +424,6 @@ export function TransactionDetailOverlay({
             )}
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

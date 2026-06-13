@@ -29,33 +29,33 @@ export function BottomNav() {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card md:hidden">
-      <div className="flex items-center justify-around h-16 px-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card md:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <div className="flex items-center justify-around h-20 px-2">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-md text-xs font-medium transition-colors min-w-0",
+                "flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-md text-xs font-medium transition-colors min-w-0 flex-1",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:text-primary"
               )
             }
           >
-            <item.icon className="h-5 w-5" />
-            <span className="truncate">{item.label}</span>
+            <item.icon className="h-6 w-6" />
+            <span className="truncate text-[11px]">{item.label}</span>
           </NavLink>
         ))}
 
         {/* Logout */}
         <button
           onClick={handleLogout}
-          className="flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-destructive transition-colors min-w-0"
+          className="flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-destructive transition-colors min-w-0 flex-1"
         >
-          <LogOut className="h-5 w-5" />
-          <span className="truncate">Logout</span>
+          <LogOut className="h-6 w-6" />
+          <span className="truncate text-[11px]">Logout</span>
         </button>
       </div>
     </nav>
