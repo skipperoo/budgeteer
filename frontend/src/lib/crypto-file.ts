@@ -21,10 +21,10 @@ export async function encryptFile(
   file: File,
   accountKeyBase64: string,
 ): Promise<{
-  encryptedData: string;
-  mimeType: string;
-  fileName: string;
-  fileSize: number;
+  encrypted_data: string;
+  mime_type: string;
+  file_name: string;
+  file_size: number;
 }> {
   const fileBytes = await file.arrayBuffer();
   const encryptedBase64 = await encryptBytes(
@@ -33,10 +33,10 @@ export async function encryptFile(
   );
 
   return {
-    encryptedData: encryptedBase64,
-    mimeType: file.type || "application/octet-stream",
-    fileName: file.name,
-    fileSize: fileBytes.byteLength,
+    encrypted_data: encryptedBase64,
+    mime_type: file.type || "application/octet-stream",
+    file_name: file.name,
+    file_size: fileBytes.byteLength,
   };
 }
 
