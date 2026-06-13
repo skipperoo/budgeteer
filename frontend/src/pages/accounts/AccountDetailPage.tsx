@@ -568,7 +568,7 @@ export default function AccountDetailPage() {
   const recentAccountTxs = filteredTxs.slice(0, 10);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -1053,7 +1053,7 @@ export default function AccountDetailPage() {
       {/* Main Grid: Balance chart + Recent Transactions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="lg:col-span-2">
-          <Card className="flex flex-col h-full">
+          <Card className="flex flex-col min-h-full">
             <CardHeader className="pb-2 shrink-0">
               <CardTitle className="text-lg font-bold">Balance</CardTitle>
             </CardHeader>
@@ -1069,7 +1069,7 @@ export default function AccountDetailPage() {
           </Card>
         </div>
         <div>
-          <Card className="flex flex-col h-full">
+          <Card className="flex flex-col min-h-full">
             <CardHeader className="shrink-0">
               <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
             </CardHeader>

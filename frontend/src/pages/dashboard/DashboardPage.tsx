@@ -332,7 +332,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Header with Add Transaction button */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard</h1>
@@ -550,7 +550,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Left column: All Assets chart (2/3) */}
         <div className="lg:col-span-2">
-          <Card className="flex flex-col h-full">
+          <Card className="flex flex-col min-h-full">
             <CardHeader className="pb-2 shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg font-bold">All Assets</CardTitle>
@@ -586,7 +586,7 @@ export default function DashboardPage() {
 
         {/* Right column: Recent Transactions (1/3) */}
         <div>
-          <Card className="flex flex-col h-full">
+          <Card className="flex flex-col min-h-full">
             <CardHeader className="shrink-0">
               <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
             </CardHeader>
