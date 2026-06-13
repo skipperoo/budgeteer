@@ -378,7 +378,7 @@ export function TransactionDetailOverlay({
                       </div>
                     )}
 
-                    {/* Non-image: show file size + decrypt to view */}
+                    {/* Non-image: show file size + download button */}
                     {!isImage(doc.mime_type) && (
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>
@@ -388,11 +388,11 @@ export function TransactionDetailOverlay({
                           variant="outline"
                           size="sm"
                           className="h-7 text-[10px]"
-                          onClick={() => decryptAndPreview(doc)}
+                          onClick={() => downloadDocument(doc)}
                           disabled={!accountKeyBase64}
                         >
-                          <FileText className="h-3 w-3 mr-1" />
-                          Decrypt & Open
+                          <Download className="h-3 w-3 mr-1" />
+                          Download
                         </Button>
                       </div>
                     )}
