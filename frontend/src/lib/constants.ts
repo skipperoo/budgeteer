@@ -22,4 +22,6 @@ export const ENDPOINTS = {
     `${API_BASE}/accounts/${aid}/users/${uid}`,
   transactions: (accountId: string) => `${API_BASE}/accounts/${accountId}/transactions`,
   transaction: (id: string) => `${API_BASE}/transactions/${id}`,
+  categories: `${API_BASE}/categories`,
+  category: (id: string) => `${API_BASE}/categories/${id}`,
 } as const;

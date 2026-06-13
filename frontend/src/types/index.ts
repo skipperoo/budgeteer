@@ -75,6 +75,14 @@ export interface KeysResponse {
   encrypted_private_key: string;
 }
 
+export interface UserCategory {
+  id: string;
+  user_id: string;
+  name: string;
+  type: "income" | "expense";
+  created_at: string;
+}
+
 export interface CreateAccountRequest {
   name: string;
   currency: string;

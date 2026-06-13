@@ -90,7 +90,10 @@ func main() {
 		AddHandler("GET    /v1/accounts/{id}/transactions",  handler.ListTransactions).
 		AddHandler("POST   /v1/accounts/{id}/transactions",  handler.CreateTransaction).
 		AddHandler("PUT    /v1/transactions/{id}",           handler.UpdateTransaction).
-		AddHandler("DELETE /v1/transactions/{id}",           handler.DeleteTransaction)
+		AddHandler("DELETE /v1/transactions/{id}",           handler.DeleteTransaction).
+		AddHandler("GET    /v1/categories",                  handler.ListCategories).
+		AddHandler("POST   /v1/categories",                  handler.CreateCategory).
+		AddHandler("DELETE /v1/categories/{id}",             handler.DeleteCategory)
 
 	router.AddSubroute("/api/", protected.Finalize())
 	final := router.Finalize()
