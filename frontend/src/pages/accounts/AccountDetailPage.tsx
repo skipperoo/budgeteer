@@ -17,7 +17,7 @@ import { useDateRangeStore } from "@/stores/date-range-store";
 import { BalanceChart } from "@/components/shared/BalanceChart";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
-import { bytesToBase64, encryptAccountKeyForRecipient, generateAccountKey } from "@/lib/crypto";
+import { bytesToBase64, encryptAccountKeyForRecipient } from "@/lib/crypto";
 import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
 import { getAccountKey } from "@/lib/decrypt-transactions";
 import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
@@ -212,33 +212,19 @@ export default function AccountDetailPage() {
         `${ENDPOINTS.userLookup}?email=${encodeURIComponent(inviteEmail)}`
       );
 
-      // Reuse the existing account key if we have it, otherwise generate one
+      // Reuse the existing account key if we have it
       let keyToUse: string;
       if (accountKeyBase64) {
         keyToUse = accountKeyBase64;
       } else {
-        // Try to get via shared utility (which checks cache & can generate)
-        try {
-          keyToUse = await getAccountKey(
-            id,
-            privKeyBase64 ?? undefined,
-            currentUser?.public_key
-          );
-        } catch {
-          keyToUse = generateAccountKey();
-        }
-        // Also store it for ourselves
-        const ownPubKey = currentUser?.public_key;
-        if (ownPubKey) {
-          const enc = await encryptAccountKeyForRecipient(keyToUse, ownPubKey);
-          await apiFetch(ENDPOINTS.accountKey(id), {
-            method: "PUT",
-            body: JSON.stringify({
-              encrypted_account_key: `${enc.ephemeralPublicKey}:${enc.ciphertext}`,
-            }),
-          });
-          setAccountKeyBase64(keyToUse);
-        }
+        // Fetch the account key via shared utility (checks cache, sessionStorage,
+        // or decrypts the server-side entry). This will throw if the key cannot
+        // be retrieved (e.g. missing private key or no matching entry).
+        keyToUse = await getAccountKey(
+          id,
+          privKeyBase64 ?? undefined,
+          currentUser?.public_key
+        );
       }
 
       const encrypted = await encryptAccountKeyForRecipient(keyToUse, public_key);

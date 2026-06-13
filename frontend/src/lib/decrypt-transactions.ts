@@ -111,10 +111,16 @@ function setCachedAccountKey(accountId: string, key: string): void {
  * The encrypted_account_key is stored as "ephemeralPublicKey:ciphertext"
  * (both base64). We need the user's X25519 private key to decrypt it.
  *
- * @param userPrivateKeyBase64 - Optional. If omitted, only the sessionStorage
- *   cache is checked (and key generation with userPublicKey).
- * @param userPublicKey - Optional. If no encrypted key matches and this is
- *   provided, a new account key is generated and stored server-side.
+ * IMPORTANT: This function will NEVER overwrite an existing account key.
+ * If a key exists on the server but cannot be decrypted (no private key
+ * available, or private key doesn't match), an error is thrown instead.
+ * A new key is only generated when there are ZERO account_users entries
+ * for this account (i.e., a brand-new account with no data yet).
+ *
+ * @param userPrivateKeyBase64 - The current user's X25519 private key (base64).
+ *   Required to decrypt an existing key. If omitted and entries exist, throws.
+ * @param userPublicKey - The current user's X25519 public key (base64).
+ *   Used to encrypt a newly generated key for a fresh account.
  */
 export async function getAccountKey(
   accountId: string,
@@ -125,9 +131,11 @@ export async function getAccountKey(
   const cached = getCachedAccountKey(accountId);
   if (cached) return cached;
 
-  // 2. If we have the private key, try to decrypt the server-side key
-  if (userPrivateKeyBase64) {
-    const users = await apiFetch<AccountUser[]>(ENDPOINTS.accountUsers(accountId));
+  // 2. Fetch account_users to see what entries exist
+  const users = await apiFetch<AccountUser[]>(ENDPOINTS.accountUsers(accountId));
+
+  // 3. If we have the private key, try to decrypt an existing entry
+  if (userPrivateKeyBase64 && users.length > 0) {
     for (const au of users) {
       const parts = au.encrypted_account_key.split(":");
       if (parts.length === 2) {
@@ -144,9 +152,23 @@ export async function getAccountKey(
         }
       }
     }
+    // We have the private key but couldn't decrypt any entry
+    throw new Error(
+      "Could not decrypt the account key with your private key. " +
+      "You may not have access to this account, or your encryption keys are out of sync."
+    );
   }
 
-  // 3. No decryptable key found — generate a new one and store it
+  // 4. Entries exist but no private key provided — cannot decrypt
+  if (users.length > 0) {
+    throw new Error(
+      "Encryption key unavailable. " +
+      "Please re-enter your password to restore your encryption keys."
+    );
+  }
+
+  // 5. No entries exist yet and userPublicKey is provided — this is a
+  //    brand-new account with no data. Safe to generate a fresh key.
   if (userPublicKey) {
     const newKey = generateAccountKey();
     const enc = await encryptAccountKeyForRecipient(newKey, userPublicKey);

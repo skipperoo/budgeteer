@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth-store";
 import { AppLayout } from "@/components/layout/AppLayout";
+import PrivateKeyGate from "@/components/auth/PrivateKeyGate";
 import { useAccent } from "@/hooks/use-accent";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
@@ -24,7 +25,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!token) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  // Wrap with PrivateKeyGate so that if the private key hasn't been
+  // decrypted yet (e.g. after a page refresh), the user is prompted
+  // for their password before any data-decrypting pages render.
+  return <PrivateKeyGate>{children}</PrivateKeyGate>;
 }
 
 export default function App() {
