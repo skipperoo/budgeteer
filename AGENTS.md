@@ -67,13 +67,16 @@ Upon login, the user's `encrypted_private_key` is fetched from the server and de
 
 ### Category Model
 
-Categories are managed **client-side** only (per AGENTS.md E2E encryption model — the category field is part of the encrypted transaction payload):
+Categories are stored on the **backend** under the user's profile (the `user_categories` table):
 
-- **Storage:** Categories are stored in `localStorage` keyed by account ID (`budgeteer_categories_{accountId}`). No backend API is needed for categories.
-- **Per-user:** Each user maintains their own category list per account. When a user creates a transaction with a new category, it is saved to their local list.
-- **Joint accounts:** Categories from all members are implicitly merged because each member adds locally; the union of all members' categories is available when creating transactions (since each client only sees its own local list, the merge can be enhanced by syncing category lists through the sync queue in future).
-- **UI:** A dropdown/combobox in the transaction creation form shows existing categories for the selected account plus an "Add new category..." option. Selecting this shows a text input to type and save a new category.
-- **Shared categories via sync (future):** When syncing, transaction payloads contain the category string. A future enhancement could sync category lists through the sync queue so joint account members see each other's categories.
+- **Storage:** Categories are persisted in the `user_categories` database table, scoped per user. The frontend fetches them via `GET /api/v1/categories` on first access and keeps an in-memory cache (Zustand store) with optimistic updates.
+- **Per-user:** Each user maintains their own category list, split by transaction type (`income` / `expense`). When a user creates a transaction with a new category, a `POST /api/v1/categories` call persists it server-side.
+- **Joint accounts:** Categories are per-user, not per-account. Each member sees only their own categories. The category string is part of the encrypted transaction payload, so decrypted transactions from joint accounts contain the category as typed by the creator.
+- **UI:** A dropdown/combobox in the transaction creation form shows existing categories for the selected type plus an "Add new category..." option. Selecting this shows a text input to type and save a new category.
+- **Endpoints:**
+  - `GET    /api/v1/categories` — List all categories for the authenticated user.
+  - `POST   /api/v1/categories` — Create a new category (body: `{ name, type }`).
+  - `DELETE /api/v1/categories/{id}` — Delete a category by its ID.
 
 ---
 
@@ -105,6 +108,9 @@ _Note: All Sync, Accounts, and Users endpoints require Auth middleware (JWT vali
 | **POST**   | `/api/v1/accounts/{id}/invite`      | Accounts | Submits an Account Key encrypted with the target user's Public Key.                                                                                              |
 | **GET**    | `/api/v1/accounts/{id}/users`       | Accounts | Lists users belonging to a joint account.                                                                                                                        |
 | **DELETE** | `/api/v1/accounts/{id}/users/{uid}` | Accounts | Removes a user from a joint account (revokes write access; see key-rotation limitation).                                                                         |
+| **GET**    | `/api/v1/categories`                | Categories | Lists all categories for the authenticated user.                                                                                                                 |
+| **POST**   | `/api/v1/categories`                | Categories | Creates a new category (body: `{ name, type }`).                                                                                                                 |
+| **DELETE** | `/api/v1/categories/{id}`           | Categories | Deletes a category by its ID.                                                                                                                                    |
 
 ### Router Setup (`routy`)
 
@@ -284,6 +290,20 @@ CREATE TABLE subcategories (
 );
 
 -- ============================================================
+-- USER CATEGORIES (user-defined, scoped per user)
+-- Each user maintains their own category list, split by
+-- transaction type (income / expense).
+-- ============================================================
+CREATE TABLE user_categories (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name       VARCHAR(100) NOT NULL,
+    type       VARCHAR(10) NOT NULL CHECK (type IN ('income', 'expense')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, name, type)
+);
+
+-- ============================================================
 -- TRANSACTIONS (TimescaleDB Hypertable)
 -- Encrypted payload contains: amount, category, notes, counterparty.
 -- Routing metadata (account_id, time) is intentionally plain text.
@@ -401,7 +421,25 @@ CREATE INDEX ON sync_queue (target_user_id, created_at) WHERE consumed_at IS NUL
 
 -- Email dispatcher polling
 CREATE INDEX ON email_outbox (status, scheduled_for) WHERE status = 'pending';
+
+-- User categories
+CREATE INDEX ON user_categories (user_id);
 ```
+
+### Migration Workflow
+
+Incremental schema changes are stored as numbered SQL files in `backend/migrations/` (e.g. `0002_add_account_name.sql`, `0003_add_user_preferences.sql`). To apply pending migrations:
+
+```bash
+# Using the migration script (reads DB_HOST, DB_PORT, DB_USER, DB_NAME
+# from environment, and db_password from Docker secret or env var):
+./backend/scripts/migrate.sh
+
+# Or apply a single file manually via psql:
+psql "$DATABASE_URL" -f backend/migrations/0004_add_user_categories.sql
+```
+
+The migration script (`backend/scripts/migrate.sh`) tracks applied files in a `_migrations` table and only applies each file once. It is safe to run multiple times.
 
 ---
 
