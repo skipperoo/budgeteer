@@ -172,7 +172,7 @@ func (s *InvitationService) AcceptRuleInvitation(ctx context.Context, invitation
 	if inv.Status != "pending" {
 		return fmt.Errorf("invitation is not pending")
 	}
-	if inv.InvitedUserID == nil || *inv.InvitedUserID != userID {
+	if !s.invitationBelongsToUser(ctx, inv, userID) {
 		return fmt.Errorf("this invitation is not for you")
 	}
 
@@ -210,7 +210,7 @@ func (s *InvitationService) AcceptAccountInvitation(ctx context.Context, invitat
 	if inv.Status != "pending" {
 		return fmt.Errorf("invitation is not pending")
 	}
-	if inv.InvitedUserID == nil || *inv.InvitedUserID != userID {
+	if !s.invitationBelongsToUser(ctx, inv, userID) {
 		return fmt.Errorf("this invitation is not for you")
 	}
 
@@ -311,7 +311,7 @@ func (s *InvitationService) DeclineInvitation(ctx context.Context, invitationID,
 	if inv.Status != "pending" {
 		return fmt.Errorf("invitation is not pending")
 	}
-	if inv.InvitedUserID == nil || *inv.InvitedUserID != userID {
+	if !s.invitationBelongsToUser(ctx, inv, userID) {
 		return fmt.Errorf("this invitation is not for you")
 	}
 
@@ -375,6 +375,23 @@ func (s *InvitationService) handleExpiredInvitation(ctx context.Context, inv *mo
 	s.sendExpiryNotificationEmail(ctx, inv.InvitedBy, inv.InvitedEmail)
 
 	return nil
+}
+
+// invitationBelongsToUser checks if an invitation belongs to a given user.
+// First checks by user ID, then falls back to email match (for users who
+// registered after the invitation was created and LinkInvitationsToUser
+// hasn't been called yet).
+func (s *InvitationService) invitationBelongsToUser(ctx context.Context, inv *model.Invitation, userID string) bool {
+	if inv.InvitedUserID != nil && *inv.InvitedUserID == userID {
+		return true
+	}
+
+	// Fallback: check by email
+	user, err := s.UserRepo.FindByID(ctx, userID)
+	if err != nil || user == nil {
+		return false
+	}
+	return user.Email == inv.InvitedEmail
 }
 
 func (s *InvitationService) notifyInviter(ctx context.Context, inviterID, notifType, title, body, invitationID, entityID, accountID string) {

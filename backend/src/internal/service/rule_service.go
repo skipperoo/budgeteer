@@ -288,12 +288,13 @@ func (s *RuleService) executePayment(ctx context.Context, rule *model.Rule, payl
 		return errors.New("source account not found")
 	}
 
-	// Check balance
+	// Check balance (balance is in cents, payload.Amount is in dollars)
 	balance, err := s.RuleRepo.GetAccountBalance(ctx, payload.SourceAccountID)
 	if err != nil {
 		return fmt.Errorf("get balance: %w", err)
 	}
-	if float64(balance) < payload.Amount {
+	amountCents := int64(math.Round(payload.Amount * 100))
+	if balance < amountCents {
 		logger.Warning("Rule %s: insufficient balance in account %s (balance=%d, amount=%.2f)",
 			rule.ID, payload.SourceAccountID, balance, payload.Amount)
 		return errors.New("insufficient balance")
@@ -342,7 +343,6 @@ func (s *RuleService) executePayment(ctx context.Context, rule *model.Rule, payl
 	}
 
 	// All database operations in a transaction
-	amountCents := int64(math.Round(payload.Amount))
 
 	// Use a pool-level transaction for atomicity
 	txErr := database.WithTx(ctx, func(txCtx context.Context) error {
@@ -409,12 +409,13 @@ func (s *RuleService) executeTransfer(ctx context.Context, rule *model.Rule, pay
 		return errors.New("currency mismatch between accounts")
 	}
 
-	// Check balance
+	// Check balance (balance is in cents, payload.Amount is in dollars)
 	balance, err := s.RuleRepo.GetAccountBalance(ctx, payload.SourceAccountID)
 	if err != nil {
 		return fmt.Errorf("get balance: %w", err)
 	}
-	if float64(balance) < payload.Amount {
+	amountCents := int64(math.Round(payload.Amount * 100))
+	if balance < amountCents {
 		logger.Warning("Rule %s: insufficient balance in account %s (balance=%d, amount=%.2f)",
 			rule.ID, payload.SourceAccountID, balance, payload.Amount)
 		return errors.New("insufficient balance")
@@ -481,8 +482,6 @@ func (s *RuleService) executeTransfer(ctx context.Context, rule *model.Rule, pay
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
-
-	amountCents := int64(math.Round(payload.Amount))
 
 	txErr := database.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.RuleRepo.InsertRuleTransaction(txCtx, expenseTx); err != nil {
@@ -560,7 +559,7 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 	if err != nil {
 		return fmt.Errorf("get source currency: %w", err)
 	}
-	tgtCurrency, err := s.RuleRepo.GetAccountCurrency(ctx, payload.TargetAccountID)
+	tgtCurrency, err := s.RuleRepo.GetAccountCurrency(ctx, targetAccountID)
 	if err != nil {
 		return fmt.Errorf("get target currency: %w", err)
 	}
@@ -571,12 +570,13 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 		return errors.New("currency mismatch between accounts")
 	}
 
-	// Check balance
+	// Check balance (balance is in cents, payload.Amount is in dollars)
 	balance, err := s.RuleRepo.GetAccountBalance(ctx, payload.SourceAccountID)
 	if err != nil {
 		return fmt.Errorf("get balance: %w", err)
 	}
-	if float64(balance) < payload.Amount {
+	amountCents := int64(math.Round(payload.Amount * 100))
+	if balance < amountCents {
 		logger.Warning("Rule %s: insufficient balance in account %s (balance=%d, amount=%.2f)",
 			rule.ID, payload.SourceAccountID, balance, payload.Amount)
 		return errors.New("insufficient balance")
@@ -587,7 +587,7 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 	if err != nil {
 		return fmt.Errorf("get sender public key: %w", err)
 	}
-	receiverPubKey, err := s.RuleRepo.GetUserPublicKey(ctx, payload.TargetUserID)
+	receiverPubKey, err := s.RuleRepo.GetUserPublicKey(ctx, targetUserID)
 	if err != nil {
 		return fmt.Errorf("get receiver public key: %w", err)
 	}
@@ -608,7 +608,7 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 	expensePayload := map[string]interface{}{
 		"amount":       -payload.Amount,
 		"notes":        payload.Notes,
-		"counterparty": payload.TargetUserID,
+		"counterparty": targetUserID,
 		"rule_id":      rule.ID,
 	}
 	incomePayload := map[string]interface{}{
@@ -652,8 +652,6 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
-
-	amountCents := int64(math.Round(payload.Amount))
 
 	txErr := database.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.RuleRepo.InsertRuleTransaction(txCtx, expenseTx); err != nil {

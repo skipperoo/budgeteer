@@ -137,6 +137,7 @@ func TestAccountRepoListByUserID(t *testing.T) {
 		AccountID: account.ID,
 		UserID:    user.ID,
 		Role:      "owner",
+		Status:    "active",
 		JoinedAt:  time.Now(),
 	})
 

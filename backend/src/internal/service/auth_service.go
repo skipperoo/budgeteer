@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"budgeteer-backend/internal/database"
+	"budgeteer-backend/internal/logger"
 	"budgeteer-backend/internal/model"
 	"budgeteer-backend/internal/repository"
 
@@ -147,6 +148,13 @@ func (s *AuthService) VerifyOTP(ctx context.Context, email, code string) (*model
 
 	if err := s.UserRepo.Create(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Link any pending invitations that were created before the user registered
+	if Invitations != nil {
+		if err := Invitations.LinkInvitationsToUser(ctx, email, user.ID); err != nil {
+			logger.Error("Failed to link invitations for user %s: %v", user.ID, err)
+		}
 	}
 
 	// Clean up pending registration

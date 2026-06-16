@@ -10,7 +10,7 @@ import { useInvitationStore, type Invitation } from "@/stores/invitation-store";
 import { useAccountStore } from "@/stores/account-store";
 import { encryptForRecipient } from "@/lib/crypto-rules";
 import { useRuleStore } from "@/stores/rule-store";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateTimeWithOffset } from "@/lib/format";
 import {
   Loader2,
   AlertCircle,
@@ -200,7 +200,7 @@ export default function NotificationsPage() {
                             From: {inv.invited_email}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            Expires: {formatDate(inv.expires_at)}
+                            Expires: {formatDateTimeWithOffset(inv.expires_at)}
                           </p>
                         </div>
                         <div className="flex gap-2 shrink-0">

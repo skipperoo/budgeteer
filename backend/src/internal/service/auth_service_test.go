@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"budgeteer-backend/internal/database"
+	"budgeteer-backend/internal/logger"
 	"budgeteer-backend/internal/model"
 	"budgeteer-backend/internal/repository"
 	"budgeteer-backend/internal/testhelpers"
@@ -35,15 +36,20 @@ func setupTestDB(t *testing.T) context.CancelFunc {
 		t.Skipf("Skipping integration test: redis connect failed: %v", err)
 	}
 
+	logger.InitLogger()
+
 	cleanup := func() {
 		// Clean up Redis pending registrations
 		keys, _ := database.Redis.Keys(ctx, "pending_reg:*").Result()
 		for _, k := range keys {
 			database.Redis.Del(ctx, k)
 		}
+		database.Pool.Exec(ctx, "DELETE FROM notifications")
+		database.Pool.Exec(ctx, "DELETE FROM invitations")
 		database.Pool.Exec(ctx, "DELETE FROM email_outbox")
 		database.Pool.Exec(ctx, "DELETE FROM otps")
 		database.Pool.Exec(ctx, "DELETE FROM sync_queue")
+		database.Pool.Exec(ctx, "DELETE FROM rules")
 		database.Pool.Exec(ctx, "DELETE FROM account_users")
 		database.Pool.Exec(ctx, "DELETE FROM accounts")
 		database.Pool.Exec(ctx, "DELETE FROM transactions")

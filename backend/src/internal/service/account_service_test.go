@@ -4,7 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"budgeteer-backend/internal/database"
 	"budgeteer-backend/internal/model"
+	"budgeteer-backend/internal/repository"
 )
 
 func TestAccountServiceCreate(t *testing.T) {
@@ -68,6 +70,7 @@ func TestAccountServiceInviteUser(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 	InitAccountService()
+	InitInvitationService()
 
 	owner, _, _ := createTestUser(t, "inviter@test.com")
 	member, _, _ := createTestUser(t, "invitee@test.com")
@@ -78,12 +81,26 @@ func TestAccountServiceInviteUser(t *testing.T) {
 		t.Fatalf("InviteUser failed: %v", err)
 	}
 
+	// Verify invitation was created (new flow uses invitations table)
+	invRepo := &repository.InvitationRepository{}
+	invitations, err := invRepo.FindPendingByUserID(context.Background(), member.ID)
+	if err != nil {
+		t.Fatalf("FindPendingByUserID failed: %v", err)
+	}
+	if len(invitations) != 1 {
+		t.Fatalf("Expected 1 invitation, got %d", len(invitations))
+	}
+	if invitations[0].EntityType != "account" {
+		t.Fatalf("Expected account invitation, got %s", invitations[0].EntityType)
+	}
+
+	// Account should still only have 1 user (owner)
 	users, err := Accounts.ListUsers(context.Background(), account.ID)
 	if err != nil {
 		t.Fatalf("ListUsers failed: %v", err)
 	}
-	if len(users) != 2 {
-		t.Fatalf("Expected 2 users, got %d", len(users))
+	if len(users) != 1 {
+		t.Fatalf("Expected 1 user (owner only), got %d", len(users))
 	}
 }
 
@@ -91,6 +108,7 @@ func TestAccountServiceInviteDuplicatedFails(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 	InitAccountService()
+	InitInvitationService()
 
 	owner, _, _ := createTestUser(t, "inviter2@test.com")
 	member, _, _ := createTestUser(t, "invitee2@test.com")
@@ -107,13 +125,25 @@ func TestAccountServiceInviteNonExistentUser(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 	InitAccountService()
+	InitInvitationService()
 
 	owner, _, _ := createTestUser(t, "inviter3@test.com")
 	account, _ := Accounts.Create(context.Background(), owner.ID, &model.CreateAccountRequest{Currency: "USD", Type: "joint"})
 
+	// New flow: inviting a nonexistent user creates a pending invitation
+	// so the user can accept after registering
 	err := Accounts.InviteUser(context.Background(), account.ID, owner.ID, "nonexistent@test.com", "key")
-	if err == nil {
-		t.Fatal("Inviting nonexistent user should fail")
+	if err != nil {
+		t.Fatalf("InviteUser failed for nonexistent email: %v", err)
+	}
+
+	// Verify invitation was created
+	var invCount int
+	database.Pool.QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM invitations WHERE invited_email = $1 AND entity_type = 'account'`,
+		"nonexistent@test.com").Scan(&invCount)
+	if invCount != 1 {
+		t.Fatalf("Expected 1 invitation for nonexistent user, got %d", invCount)
 	}
 }
 

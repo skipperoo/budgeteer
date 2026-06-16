@@ -59,7 +59,7 @@ services:
       - SMTP_FROM=${SMTP_FROM:-}
       - SMTP_SSL=${SMTP_SSL:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - RULES_CHECK_INTERVAL=${RULES_CHECK_INTERVAL:-300}
+      - RULES_CHECK_INTERVAL=${RULES_CHECK_INTERVAL:-10}
     ports:
       - "8080:8080"
     depends_on:

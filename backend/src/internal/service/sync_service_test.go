@@ -62,7 +62,16 @@ func TestSyncServicePushInsertTransaction(t *testing.T) {
 	jointUser, _, _ := createTestUser(t, "sync-push-joint@test.com")
 
 	account, _ := Accounts.Create(context.Background(), payer.ID, &model.CreateAccountRequest{Currency: "USD", Type: "joint"})
-	Accounts.InviteUser(context.Background(), account.ID, payer.ID, jointUser.Email, "encrypted-key")
+	// Directly add joint user to account_users (not via invitation flow)
+	acctUserRepo := &repository.AccountUserRepository{}
+	acctUserRepo.Create(context.Background(), &model.AccountUser{
+		AccountID:           account.ID,
+		UserID:              jointUser.ID,
+		EncryptedAccountKey: "encrypted-key",
+		Role:                "member",
+		Status:              "active",
+		JoinedAt:            time.Now(),
+	})
 
 	payload := "encrypted-transaction-data"
 	ops := []model.SyncOperation{
@@ -141,7 +150,15 @@ func TestSyncServicePushDeleteSyncsToJointUsers(t *testing.T) {
 	member, _, _ := createTestUser(t, "sync-delete-member@test.com")
 
 	account, _ := Accounts.Create(context.Background(), owner.ID, &model.CreateAccountRequest{Currency: "USD", Type: "joint"})
-	Accounts.InviteUser(context.Background(), account.ID, owner.ID, member.Email, "key")
+	acctUserRepo := &repository.AccountUserRepository{}
+	acctUserRepo.Create(context.Background(), &model.AccountUser{
+		AccountID:           account.ID,
+		UserID:              member.ID,
+		EncryptedAccountKey: "key",
+		Role:                "member",
+		Status:              "active",
+		JoinedAt:            time.Now(),
+	})
 
 	ops := []model.SyncOperation{
 		{

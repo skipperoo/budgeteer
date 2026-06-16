@@ -8,7 +8,7 @@ import { useRuleStore, type Rule, type CreateRuleRequest } from "@/stores/rule-s
 import { useAccountStore } from "@/stores/account-store";
 import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { encryptForRecipient } from "@/lib/crypto-rules";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateTimeWithOffset, utcToLocalDatetime, getGMTOffset } from "@/lib/format";
 import { Trash2, Plus, Pencil, Loader2, AlertCircle } from "lucide-react";
 
 type RuleType = "payment" | "transfer" | "user_transfer";
@@ -82,7 +82,7 @@ export default function RulesPage() {
     setFormNotes("");
     setFormCounterparty("");
     setFormFrequency("monthly");
-    setFormNextOccurrence(new Date(Date.now() + 86400000).toISOString().slice(0, 16));
+    setFormNextOccurrence(utcToLocalDatetime(new Date(Date.now() + 86400000).toISOString()));
     setFormEndDate("");
     setFormMaxOccurrences("");
     setShowCategoryInput(false);
@@ -108,7 +108,7 @@ export default function RulesPage() {
     setFormNotes("");
     setFormCounterparty("");
     setFormFrequency(rule.frequency);
-    setFormNextOccurrence(new Date(rule.next_occurrence).toISOString().slice(0, 16));
+    setFormNextOccurrence(utcToLocalDatetime(rule.next_occurrence));
     setFormEndDate(rule.end_date
       ? new Date(rule.end_date).toISOString().slice(0, 16)
       : "");
@@ -152,7 +152,7 @@ export default function RulesPage() {
       return;
     }
     if (
-      (formType === "transfer" || formType === "user_transfer") &&
+      formType === "transfer" &&
       !formTargetAccountId
     ) {
       setFormError("Target account is required for transfers");
@@ -340,7 +340,7 @@ export default function RulesPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Next</span>
-                    <span>{formatDate(rule.next_occurrence)}</span>
+                    <span className="text-right text-xs sm:text-sm">{formatDateTimeWithOffset(rule.next_occurrence)}</span>
                   </div>
                   {rule.max_occurrences && (
                     <div className="flex justify-between">
@@ -459,8 +459,8 @@ export default function RulesPage() {
               </select>
             </div>
 
-            {/* Target Account (for transfers) */}
-            {(formType === "transfer" || formType === "user_transfer") && (
+            {/* Target Account (for self transfers only — user_transfer receiver chooses their own account) */}
+            {formType === "transfer" && (
               <div className="space-y-1">
                 <Label htmlFor="rule-target-account">Target Account</Label>
                 <select
