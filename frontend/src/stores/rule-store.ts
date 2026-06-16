@@ -7,13 +7,16 @@ export interface Rule {
   created_by: string;
   name: string;
   encrypted_payload: string;
-  frequency: "once" | "daily" | "weekly" | "monthly" | "yearly";
+  frequency: "daily" | "weekly" | "monthly" | "yearly";
   next_occurrence: string;
   end_date?: string;
   max_occurrences?: number;
   occurrences_so_far: number;
   last_triggered_at?: string;
   is_active: boolean;
+  status: "pending_accepted" | "active";
+  target_email?: string;
+  target_account_encrypted?: string;
   created_at: string;
   updated_at: string;
 }
@@ -25,6 +28,7 @@ export interface CreateRuleRequest {
   next_occurrence: string;
   end_date?: string;
   max_occurrences?: number;
+  target_email?: string;
 }
 
 export interface UpdateRuleRequest {

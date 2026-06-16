@@ -1,6 +1,6 @@
 # Budgeteer - Technical Specifications
 
-> **Revision 3** — Added rules engine for automated payments and transfers. Key changes: server X25519 keypair for ECIES encryption, rules table, rule scheduler worker, balance tracking on accounts, ECIES transaction payload format, frontend rules management page. See Section 2 (Key Management) for server keypair, Section 4 (Background Workers / API) for rules endpoints and scheduler, Section 5 for the `rules` table, Section 6 for the `server_encryption_key` Docker secret.
+> **Revision 4** — Added invitation system for user_transfer rules and joint accounts. Key changes: generic `invitations` table, `notifications` table (in-app panel), `target_email` + `status` on rules, `status` on account_users, invitation expiry worker, email-based account invites (encrypt with server's public key, re-encrypt on accept), notification badge in nav bar. See Section 4 (Background Workers / API) for invitation/notification endpoints, Section 5 for the `invitations` and `notifications` tables.
 
 ---
 
@@ -32,6 +32,11 @@ To balance E2E encryption with the requirements of TimescaleDB and joint account
 - **Server Keypair:** The server generates an X25519 keypair on first startup. The **private key** is stored as a Docker secret (`server_encryption_key`) and is never exposed. The **public key** is served at `GET /api/v1/rules/public-key` (unauthenticated). Clients use this public key to encrypt rule payloads via ECIES, ensuring only the server can read rule details. Rule-generated transactions are similarly encrypted with the recipient user's X25519 public key (using the same ECIES format with a `1|` prefix to distinguish from account-key AES-GCM).
 - **Trust Boundary Note:** Because the encrypted private key is stored on the server, a compromised server can attempt an offline dictionary attack against weak user passwords. Argon2id parameters above are chosen to make this computationally expensive. Users should be encouraged to use strong passwords.
 - **Joint Accounts:** An AES-256 "Account Key" is generated for each account. To invite a user, the inviter fetches the invitee's Public Key, encrypts the Account Key with it via ECIES (X25519 + AES-GCM), and stores the result in the `account_users` table.
+- **Invitation Flow (Accounts + Rules):** Instead of requiring the inviter to fetch the invitee's public key upfront, the inviter can encrypt the account key (or rule payload) with the **server's X25519 public key** and submit it. The server stores this in the `invitations` table. When the invitee accepts, the server decrypts with its private key and re-encrypts with the invitee's public key. This allows inviting unregistered users (who don't have a keypair yet).
+  - For account invitations: the inviter encrypts `{"account_key": "base64..."}` with the server's public key.
+  - For user_transfer rule invitations: the sender creates the rule with `target_email`, the rule starts as `pending_accepted`. When the receiver accepts, they select an account. The chosen account ID is encrypted with the server's public key and stored on the rule as `target_account_encrypted`.
+- **In-App Notifications:** The `notifications` table stores in-app messages. A notification badge in the sidebar/bottom nav shows the unread count, polled every 30 seconds.
+- **30-Day Expiry:** Pending invitations that are not accepted within 30 days are automatically expired. For rules, the rule is deleted. For accounts, just the invitation record is expired. The inviter receives both an in-app notification and an email.
 - **Known Limitation — Member Removal:** When a user is removed from a joint account, they retain their copy of the Account Key. Full forward secrecy would require re-keying the account (generating a new Account Key and re-encrypting all future transactions). This is deferred to a post-v1 milestone; removal should be documented as revoking write access only.
 
 ---
@@ -94,7 +99,8 @@ Categories are stored on the **backend** under the user's profile (the `user_cat
   - **Email Dispatcher:** Polls the `email_outbox` table (status = `pending`, respecting `scheduled_for`) to send OTPs, registration validations, and notification emails via SMTP. Increments `retry_count` on failure; stops retrying after 5 attempts (`status = 'failed'`).
   - **Savings Plan Cron:** Daily job checking for savings plans where `tracking_end` has passed or where `last_logged_at` is older than 30 days. If no recent activity is detected from plain-text metadata, it queues a reminder email.
   - **Sync Queue Cleanup:** Daily job deleting `sync_queue` rows where `consumed_at IS NOT NULL AND consumed_at < NOW() - INTERVAL '30 days'`. Prevents unbounded table growth.
-  - **Rule Scheduler:** Polls the `rules` table for active rules where `next_occurrence <= NOW()`, decrypts the rule payload with the server's X25519 private key, checks preconditions (sufficient balance, matching currencies), and atomically creates transactions (encrypted with the user's X25519 public key via ECIES) and updates account balances. Configurable interval via `RULES_CHECK_INTERVAL` env var (default: 300 seconds).
+  - **Rule Scheduler:** Polls the `rules` table for active rules where `next_occurrence <= NOW()`, decrypts the rule payload with the server's X25519 private key, checks preconditions (sufficient balance, matching currencies), and atomically creates transactions (encrypted with the user's X25519 public key via ECIES) and updates account balances. For `user_transfer` rules created via invitation, the target account is decrypted from `target_account_encrypted` and the target user is looked up from the invitation. Configurable interval via `RULES_CHECK_INTERVAL` env var (default: 300 seconds).
+  - **Invitation Expiry:** Runs every 6 hours, checks the `invitations` table for pending invitations where `expires_at < NOW()`. For expired rule invitations, the rule is deleted. The invitation is marked `expired`, the inviter receives an in-app notification and an email via the email_outbox.
 
 ### API Design
 
@@ -113,7 +119,7 @@ _Note: All Sync, Accounts, and Users endpoints require Auth middleware (JWT vali
 | **POST**   | `/api/v1/sync/push`                 | Sync     | Accepts an array of offline operations. Generates `sync_queue` entries for joint users.                                                                          |
 | **POST**   | `/api/v1/accounts/`                 | Accounts | Creates a new account entity.                                                                                                                                    |
 | **DELETE** | `/api/v1/accounts/{id}`             | Accounts | Soft-deletes the account; queues a `DELETE` sync event for all joint users.                                                                                      |
-| **POST**   | `/api/v1/accounts/{id}/invite`      | Accounts | Submits an Account Key encrypted with the target user's Public Key.                                                                                              |
+| **POST**   | `/api/v1/accounts/{id}/invite`      | Accounts | Invites a user by email. Body: `{ user_email, encrypted_account_key }` where encrypted_account_key is the account key encrypted with the server's X25519 public key. |
 | **GET**    | `/api/v1/accounts/{id}/users`       | Accounts | Lists users belonging to a joint account.                                                                                                                        |
 | **DELETE** | `/api/v1/accounts/{id}/users/{uid}` | Accounts | Removes a user from a joint account (revokes write access; see key-rotation limitation).                                                                         |
 | **GET**    | `/api/v1/categories`                | Categories | Lists all categories for the authenticated user.                                                                                                                 |
@@ -125,9 +131,15 @@ _Note: All Sync, Accounts, and Users endpoints require Auth middleware (JWT vali
 | **DELETE** | `/api/v1/transactions/{id}/documents/{docId}`      | Documents | Deletes a document from a transaction.                                                                                                                           |
 | **GET**    | `/api/v1/rules/public-key`                         | Rules     | Returns the server's X25519 public key (unauthenticated). Used by the frontend to encrypt rule payloads.                                                         |
 | **GET**    | `/api/v1/rules`                                    | Rules     | Lists all rules for the authenticated user.                                                                                                                      |
-| **POST**   | `/api/v1/rules`                                    | Rules     | Creates a new rule. Body: `{ name, encrypted_payload, frequency, next_occurrence, end_date?, max_occurrences? }`.                                                |
+| **POST**   | `/api/v1/rules`                                    | Rules     | Creates a new rule. Body: `{ name, encrypted_payload, frequency, next_occurrence, end_date?, max_occurrences?, target_email? }`. `target_email` triggers pending_accepted flow for user_transfer rules. |
 | **PUT**    | `/api/v1/rules/{id}`                               | Rules     | Updates a rule. Only the owner can update.                                                                                                                       |
 | **DELETE** | `/api/v1/rules/{id}`                               | Rules     | Deletes a rule. Only the owner can delete.                                                                                                                       |
+| **GET**    | `/api/v1/notifications`                            | Notifications | Lists in-app notifications for the authenticated user.                                                                                                        |
+| **GET**    | `/api/v1/notifications/count`                      | Notifications | Returns unread notification count.                                                                                                                            |
+| **PUT**    | `/api/v1/notifications/{id}/read`                  | Notifications | Marks a notification as read.                                                                                                                                 |
+| **GET**    | `/api/v1/invitations`                              | Invitations | Lists pending invitations for the authenticated user (by user ID or email).                                                                                   |
+| **POST**   | `/api/v1/invitations/{id}/accept`                  | Invitations | Accepts a pending invitation. For rule invitations, body may contain `{ encrypted_account }` (receiver's chosen account ID encrypted with server's public key). |
+| **POST**   | `/api/v1/invitations/{id}/decline`                 | Invitations | Declines a pending invitation. Deletes the rule if it's a rule invitation.                                                                                    |
 
 ### Router Setup (`routy`)
 
@@ -185,7 +197,15 @@ func main() {
         AddHandler("GET    /api/v1/rules",          handler.ListRules).
         AddHandler("POST   /api/v1/rules",          handler.CreateRule).
         AddHandler("PUT    /api/v1/rules/{id}",     handler.UpdateRule).
-        AddHandler("DELETE /api/v1/rules/{id}",     handler.DeleteRule)
+        AddHandler("DELETE /api/v1/rules/{id}",     handler.DeleteRule).
+        // Notifications
+        AddHandler("GET    /api/v1/notifications",                handler.ListNotifications).
+        AddHandler("GET    /api/v1/notifications/count",          handler.CountUnreadNotifications).
+        AddHandler("PUT    /api/v1/notifications/{id}/read",      handler.MarkNotificationRead).
+        // Invitations
+        AddHandler("GET    /api/v1/invitations",                  handler.ListPendingInvitations).
+        AddHandler("POST   /api/v1/invitations/{id}/accept",      handler.AcceptInvitation).
+        AddHandler("POST   /api/v1/invitations/{id}/decline",     handler.DeclineInvitation)
     protected.Finalize()
 
     router.AddSubroute("/api/", protected)
@@ -456,6 +476,40 @@ CREATE TABLE email_outbox (
 );
 
 -- ============================================================
+-- NOTIFICATIONS
+-- In-app notification panel for invitations and updates.
+-- ============================================================
+CREATE TABLE notifications (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type       VARCHAR(50) NOT NULL,
+    title      TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    data       JSONB,
+    is_read    BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- INVITATIONS
+-- Generic polymorphic invitations for rules and accounts.
+-- encrypted_data stores the account key (for account invites)
+-- encrypted with the server's X25519 public key.
+-- ============================================================
+CREATE TABLE invitations (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    entity_type     VARCHAR(20) NOT NULL CHECK (entity_type IN ('rule', 'account')),
+    entity_id       UUID NOT NULL,
+    invited_by      UUID NOT NULL REFERENCES users(id),
+    invited_email   VARCHAR(255) NOT NULL,
+    invited_user_id UUID REFERENCES users(id),
+    encrypted_data  TEXT,
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'expired')),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    expires_at      TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '30 days'
+);
+
+-- ============================================================
 -- INDEXES
 -- ============================================================
 
@@ -490,6 +544,15 @@ CREATE INDEX ON user_categories (user_id);
 
 -- Rules scheduling
 CREATE INDEX ON rules (next_occurrence) WHERE is_active = TRUE;
+
+-- Notifications
+CREATE INDEX ON notifications (user_id, created_at DESC);
+CREATE INDEX ON notifications (user_id, is_read) WHERE is_read = FALSE;
+
+-- Invitations
+CREATE INDEX ON invitations (invited_user_id, status) WHERE status = 'pending';
+CREATE INDEX ON invitations (status, expires_at) WHERE status = 'pending';
+CREATE INDEX ON invitations (entity_type, entity_id);
 ```
 
 ### Migration Workflow

@@ -12,10 +12,12 @@ import { useDateRangeStore } from "@/stores/date-range-store";
 import { BalanceChart } from "@/components/shared/BalanceChart";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
-import { bytesToBase64, encryptAccountKeyForRecipient } from "@/lib/crypto";
+import { bytesToBase64 } from "@/lib/crypto";
+import { encryptForRecipient } from "@/lib/crypto-rules";
 import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
 import { encryptFile } from "@/lib/crypto-file";
 import { getAccountKey } from "@/lib/decrypt-transactions";
+import { useRuleStore } from "@/stores/rule-store";
 import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
 import { TransactionDetailOverlay } from "@/components/transactions/TransactionDetailOverlay";
 import { CURRENCIES, getCurrencySymbol, formatCurrency } from "@/lib/format";
@@ -220,18 +222,11 @@ export default function AccountDetailPage() {
     setInviting(true);
 
     try {
-      const { public_key } = await apiFetch<{ public_key: string }>(
-        `${ENDPOINTS.userLookup}?email=${encodeURIComponent(inviteEmail)}`
-      );
-
-      // Reuse the existing account key if we have it
+      // Get the account key
       let keyToUse: string;
       if (accountKeyBase64) {
         keyToUse = accountKeyBase64;
       } else {
-        // Fetch the account key via shared utility (checks cache, sessionStorage,
-        // or decrypts the server-side entry). This will throw if the key cannot
-        // be retrieved (e.g. missing private key or no matching entry).
         keyToUse = await getAccountKey(
           id,
           privKeyBase64 ?? undefined,
@@ -239,8 +234,23 @@ export default function AccountDetailPage() {
         );
       }
 
-      const encrypted = await encryptAccountKeyForRecipient(keyToUse, public_key);
-      const encryptedAccountKey = `${encrypted.ephemeralPublicKey}:${encrypted.ciphertext}`;
+      // Get the server's public key (to encrypt account key for pending invitation)
+      let serverPubKey = useRuleStore.getState().serverPublicKey;
+      if (!serverPubKey) {
+        serverPubKey = await useRuleStore.getState().fetchServerPublicKey();
+      }
+      if (!serverPubKey) {
+        setInviteError("Server public key not available");
+        setInviting(false);
+        return;
+      }
+
+      // Encrypt the account key with the server's public key so the server
+      // can re-encrypt it for the invitee when they accept.
+      const encryptedAccountKey = await encryptForRecipient(
+        { account_key: keyToUse },
+        serverPubKey
+      );
 
       await inviteUser(id, inviteEmail, encryptedAccountKey);
       setInviteOpen(false);

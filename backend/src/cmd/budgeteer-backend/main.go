@@ -104,7 +104,15 @@ func main() {
 		AddHandler("GET    /v1/rules",          handler.ListRules).
 		AddHandler("POST   /v1/rules",          handler.CreateRule).
 		AddHandler("PUT    /v1/rules/{id}",     handler.UpdateRule).
-		AddHandler("DELETE /v1/rules/{id}",     handler.DeleteRule)
+		AddHandler("DELETE /v1/rules/{id}",     handler.DeleteRule).
+		// Notifications
+		AddHandler("GET    /v1/notifications",          handler.ListNotifications).
+		AddHandler("GET    /v1/notifications/count",    handler.CountUnreadNotifications).
+		AddHandler("PUT    /v1/notifications/{id}/read", handler.MarkNotificationRead).
+		// Invitations
+		AddHandler("GET    /v1/invitations",              handler.ListPendingInvitations).
+		AddHandler("POST   /v1/invitations/{id}/accept",  handler.AcceptInvitation).
+		AddHandler("POST   /v1/invitations/{id}/decline", handler.DeclineInvitation)
 
 	router.AddSubroute("/api/", protected.Finalize())
 	final := router.Finalize()
@@ -121,6 +129,9 @@ func main() {
 
 	ruleScheduler := worker.NewRuleScheduler()
 	go ruleScheduler.Run(ctx)
+
+	invitationExpiry := worker.NewInvitationExpiryWorker()
+	go invitationExpiry.Run(ctx)
 
 	server := &http.Server{
 		Addr:         ":8080",

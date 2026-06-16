@@ -39,6 +39,7 @@ export default function RulesPage() {
   const [formSourceAccountId, setFormSourceAccountId] = useState("");
   const [formTargetAccountId, setFormTargetAccountId] = useState("");
   const [formTargetUserId, setFormTargetUserId] = useState("");
+  const [formTargetEmail, setFormTargetEmail] = useState("");
   const [formCategory, setFormCategory] = useState("");
   const [formNotes, setFormNotes] = useState("");
   const [formCounterparty, setFormCounterparty] = useState("");
@@ -157,8 +158,8 @@ export default function RulesPage() {
       setFormError("Target account is required for transfers");
       return;
     }
-    if (formType === "user_transfer" && !formTargetUserId.trim()) {
-      setFormError("Target user is required for user transfers");
+    if (formType === "user_transfer" && !formTargetEmail.trim()) {
+      setFormError("Target email is required for user transfers");
       return;
     }
 
@@ -169,11 +170,11 @@ export default function RulesPage() {
         amount: parseFloat(formAmount),
         source_account_id: formSourceAccountId,
         target_account_id:
-          formType === "transfer" || formType === "user_transfer"
+          formType === "transfer"
             ? formTargetAccountId
             : undefined,
-        target_user_id:
-          formType === "user_transfer" ? formTargetUserId : undefined,
+        // For user_transfer with invitation flow, target_account_id and
+        // target_user_id are set by the server upon acceptance (not by sender).
         category_id: formCategory || undefined,
         notes: formNotes || undefined,
         counterparty: formCounterparty || undefined,
@@ -217,6 +218,7 @@ export default function RulesPage() {
           max_occurrences: formMaxOccurrences
             ? parseInt(formMaxOccurrences, 10)
             : undefined,
+          target_email: formType === "user_transfer" ? formTargetEmail.trim() : undefined,
         };
         await createRule(req);
       }
@@ -326,6 +328,12 @@ export default function RulesPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-1 text-sm">
+                  {rule.status === "pending_accepted" && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Status</span>
+                      <span className="text-amber-500 font-medium">Waiting for acceptance</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Frequency</span>
                     <span>{getFrequencyLabel(rule.frequency)}</span>
@@ -471,16 +479,21 @@ export default function RulesPage() {
               </div>
             )}
 
-            {/* Target User ID (for user_transfer) */}
+            {/* Target Email (for user_transfer) */}
             {formType === "user_transfer" && (
               <div className="space-y-1">
-                <Label htmlFor="rule-target-user">Target User ID</Label>
+                <Label htmlFor="rule-target-email">Target Email</Label>
                 <Input
-                  id="rule-target-user"
-                  value={formTargetUserId}
-                  onChange={(e) => setFormTargetUserId(e.target.value)}
-                  placeholder="User UUID"
+                  id="rule-target-email"
+                  type="email"
+                  value={formTargetEmail}
+                  onChange={(e) => setFormTargetEmail(e.target.value)}
+                  placeholder="user@example.com"
                 />
+                <p className="text-xs text-muted-foreground">
+                  The user will receive an invitation and will choose which
+                  account receives the money. You won't see their account details.
+                </p>
               </div>
             )}
 

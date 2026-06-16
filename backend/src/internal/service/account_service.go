@@ -126,28 +126,24 @@ func (s *AccountService) InviteUser(ctx context.Context, accountID, inviterID, u
 		return fmt.Errorf("only owners and admins can invite users")
 	}
 
-	targetUser, err := s.UserRepo.FindByEmail(ctx, userEmail)
-	if err != nil {
-		return fmt.Errorf("database error: %w", err)
-	}
-	if targetUser == nil {
-		return fmt.Errorf("user not found")
-	}
-
-	existing, _ := s.AccountUserRepo.FindByAccountAndUser(ctx, accountID, targetUser.ID)
-	if existing != nil {
-		return fmt.Errorf("user is already a member of this account")
+	// Check if the user is already a member
+	if targetUser, _ := s.UserRepo.FindByEmail(ctx, userEmail); targetUser != nil {
+		existing, _ := s.AccountUserRepo.FindByAccountAndUser(ctx, accountID, targetUser.ID)
+		if existing != nil {
+			return fmt.Errorf("user is already a member of this account")
+		}
 	}
 
-	newAU := &model.AccountUser{
-		AccountID:           accountID,
-		UserID:              targetUser.ID,
-		EncryptedAccountKey: encryptedAccountKey,
-		Role:                "member",
-		JoinedAt:            time.Now(),
+	// Use the invitation service to create a pending invitation
+	if Invitations == nil {
+		return fmt.Errorf("invitation service not available")
 	}
 
-	return s.AccountUserRepo.Create(ctx, newAU)
+	if err := Invitations.CreateAccountInvitation(ctx, accountID, inviterID, userEmail, encryptedAccountKey); err != nil {
+		return fmt.Errorf("create invitation: %w", err)
+	}
+
+	return nil
 }
 
 func (s *AccountService) ListUsers(ctx context.Context, accountID string) ([]*model.AccountUser, error) {

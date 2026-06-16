@@ -29,6 +29,18 @@ This is the backlog of Budgeteer
   - [x] Atomic multi-transaction execution (pgx.WithTx + SELECT FOR UPDATE)
   - [x] Frontend rules management page (create/list/edit/delete)
   - [x] Rules nav link in sidebar and bottom nav
+- [x] Implement invitation system for rules and joint accounts
+  - [x] target_email field for user_transfer rules
+  - [x] In-app notification panel (notifications table, list/mark-read API)
+  - [x] Generic invitations table (rules + accounts)
+  - [x] Accept/decline flow for invitations
+  - [x] Receiver picks target account for rule invitations (encrypted with server's public key)
+  - [x] Email notifications for invites (registered + unregistered users)
+  - [x] 30-day expiry worker (deletes rules, marks expired, notifies sender)
+  - [x] Unregistered invite flow (subscription email → register → see pending invites)
+  - [x] Email-based account invitations (encrypt with server's public key, re-encrypt on accept)
+  - [x] Unread notification badge in sidebar + bottom nav
+  - [x] Periodic unread count polling
 - [ ] Implement mortgages and split payments
   - [ ] Select the amount, the duration period and the interest rate
   - [ ] Automatically create a transaction each month (the day of payment has to be settable) of the correct amount

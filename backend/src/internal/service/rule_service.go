@@ -20,9 +20,9 @@ import (
 )
 
 type RuleService struct {
-	RuleRepo *repository.RuleRepository
-	serverPrivateKey []byte // raw X25519 private key
-	serverPublicKey  []byte // raw X25519 public key
+	RuleRepo         *repository.RuleRepository
+	ServerPrivateKey []byte // raw X25519 private key (exported for invitation service)
+	ServerPublicKey  []byte // raw X25519 public key (exported for invitation service)
 }
 
 var Rules *RuleService
@@ -64,18 +64,18 @@ func InitRuleService() {
 
 	Rules = &RuleService{
 		RuleRepo:         &repository.RuleRepository{},
-		serverPrivateKey: privKey,
-		serverPublicKey:  pubKey,
+		ServerPrivateKey: privKey,
+		ServerPublicKey:  pubKey,
 	}
 	logger.Info("Rule service initialized with server encryption key")
 }
 
-// ServerPublicKey returns the server's X25519 public key as base64.
-func (s *RuleService) ServerPublicKey() string {
-	if s.serverPublicKey == nil {
+// ServerPublicKeyString returns the server's X25519 public key as base64.
+func (s *RuleService) ServerPublicKeyString() string {
+	if s.ServerPublicKey == nil {
 		return ""
 	}
-	return base64.StdEncoding.EncodeToString(s.serverPublicKey)
+	return base64.StdEncoding.EncodeToString(s.ServerPublicKey)
 }
 
 // CreateRule creates a new rule.
@@ -96,6 +96,30 @@ func (s *RuleService) CreateRule(ctx context.Context, userID string, req *model.
 		endDate = &t
 	}
 
+	// Determine rule type by decrypting the payload
+	ruleType := "payment" // default
+	var targetEmail *string
+	status := "active"
+
+	if s.ServerPrivateKey != nil && req.TargetEmail != "" {
+		// Decrypt the payload to check if it's a user_transfer
+		payloadJSON, err := crypto.DecryptWithPrivateKey(req.EncryptedPayload, s.ServerPrivateKey)
+		if err == nil {
+			var payload model.RulePayload
+			if err := json.Unmarshal(payloadJSON, &payload); err == nil {
+				ruleType = payload.Type
+				if payload.Type == "user_transfer" {
+					targetEmail = &req.TargetEmail
+					status = "pending_accepted"
+				}
+			}
+		}
+	}
+
+	if req.TargetEmail != "" && ruleType != "user_transfer" {
+		return nil, fmt.Errorf("target_email is only valid for user_transfer rules")
+	}
+
 	rule := &model.Rule{
 		ID:               uuid.New().String(),
 		CreatedBy:        userID,
@@ -107,12 +131,23 @@ func (s *RuleService) CreateRule(ctx context.Context, userID string, req *model.
 		MaxOccurrences:   req.MaxOccurrences,
 		OccurrencesSoFar: 0,
 		IsActive:         true,
+		Status:           status,
+		TargetEmail:      targetEmail,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
 
 	if err := s.RuleRepo.Create(ctx, rule); err != nil {
 		return nil, fmt.Errorf("create rule: %w", err)
+	}
+
+	// If this is a user_transfer rule with a target email, create the invitation
+	if targetEmail != nil && Invitations != nil {
+		if err := Invitations.CreateRuleInvitation(ctx, rule.ID, userID, *targetEmail); err != nil {
+			logger.Error("Failed to create rule invitation: %v", err)
+			// Don't fail the rule creation — the rule is created as pending_accepted
+			// and can be retried later
+		}
 	}
 
 	return rule, nil
@@ -195,7 +230,7 @@ func (s *RuleService) DeleteRule(ctx context.Context, ruleID, userID string) err
 // ProcessDueRules is called by the scheduler. It finds all due rules and
 // executes them atomically.
 func (s *RuleService) ProcessDueRules(ctx context.Context) {
-	if s.serverPrivateKey == nil {
+	if s.ServerPrivateKey == nil {
 		logger.Warning("Rule service not initialized — skipping rule processing")
 		return
 	}
@@ -217,7 +252,7 @@ func (s *RuleService) ProcessDueRules(ctx context.Context) {
 
 func (s *RuleService) executeRule(ctx context.Context, rule *model.Rule, now time.Time) error {
 	// Decrypt rule payload
-	payloadJSON, err := crypto.DecryptWithPrivateKey(rule.EncryptedPayload, s.serverPrivateKey)
+	payloadJSON, err := crypto.DecryptWithPrivateKey(rule.EncryptedPayload, s.ServerPrivateKey)
 	if err != nil {
 		return fmt.Errorf("decrypt rule payload: %w", err)
 	}
@@ -493,7 +528,30 @@ func (s *RuleService) executeTransfer(ctx context.Context, rule *model.Rule, pay
 }
 
 func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule, payload *model.RulePayload, now time.Time) error {
-	if payload.TargetAccountID == "" || payload.TargetUserID == "" {
+	// For user_transfer rules, the target_account_id may be in the encrypted payload
+	// (legacy format) or in the rule's target_account_encrypted field (receiver-chosen).
+	targetAccountID := payload.TargetAccountID
+
+	if targetAccountID == "" && rule.TargetAccountEncrypted != nil && *rule.TargetAccountEncrypted != "" {
+		// Decrypt the receiver's chosen account using the server's private key
+		decrypted, err := crypto.DecryptWithPrivateKey(*rule.TargetAccountEncrypted, s.ServerPrivateKey)
+		if err != nil {
+			return fmt.Errorf("decrypt target account: %w", err)
+		}
+		targetAccountID = string(decrypted)
+	}
+
+	// For user_transfer rules created via invitation, the target_user_id
+	// may not be in the encrypted payload. Look it up from the invitation.
+	targetUserID := payload.TargetUserID
+	if targetUserID == "" && Invitations != nil {
+		inv, err := Invitations.FindInvitationByEntity(ctx, "rule", rule.ID)
+		if err == nil && inv != nil && inv.InvitedUserID != nil {
+			targetUserID = *inv.InvitedUserID
+		}
+	}
+
+	if targetAccountID == "" || targetUserID == "" {
 		return errors.New("user_transfer rule missing target_account_id or target_user_id")
 	}
 

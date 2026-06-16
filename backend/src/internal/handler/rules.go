@@ -19,7 +19,7 @@ func RulePublicKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pubKey := service.Rules.ServerPublicKey()
+	pubKey := service.Rules.ServerPublicKeyString()
 	if pubKey == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
