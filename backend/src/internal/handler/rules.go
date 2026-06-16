@@ -83,11 +83,11 @@ func CreateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validFrequencies := map[string]bool{"once": true, "daily": true, "weekly": true, "monthly": true, "yearly": true}
+	validFrequencies := map[string]bool{"daily": true, "weekly": true, "monthly": true, "yearly": true}
 	if !validFrequencies[req.Frequency] {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(model.Error{Error: "frequency must be once, daily, weekly, monthly, or yearly"})
+		json.NewEncoder(w).Encode(model.Error{Error: "frequency must be daily, weekly, monthly, or yearly"})
 		return
 	}
 

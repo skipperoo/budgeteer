@@ -1,47 +1,17 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRuleStore, type Rule, type CreateRuleRequest } from "@/stores/rule-store";
+import { useAccountStore } from "@/stores/account-store";
+import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { encryptForRecipient } from "@/lib/crypto-rules";
 import { formatDate } from "@/lib/format";
 import { Trash2, Plus, Pencil, Loader2, AlertCircle } from "lucide-react";
 
 type RuleType = "payment" | "transfer" | "user_transfer";
-
-interface RuleFormData {
-  name: string;
-  type: RuleType;
-  amount: string;
-  sourceAccountId: string;
-  targetAccountId: string;
-  targetUserId: string;
-  categoryId: string;
-  notes: string;
-  counterparty: string;
-  frequency: string;
-  nextOccurrence: string;
-  endDate: string;
-  maxOccurrences: string;
-}
-
-const emptyForm: RuleFormData = {
-  name: "",
-  type: "payment",
-  amount: "",
-  sourceAccountId: "",
-  targetAccountId: "",
-  targetUserId: "",
-  categoryId: "",
-  notes: "",
-  counterparty: "",
-  frequency: "monthly",
-  nextOccurrence: "",
-  endDate: "",
-  maxOccurrences: "",
-};
 
 export default function RulesPage() {
   const {
@@ -56,9 +26,31 @@ export default function RulesPage() {
     error: storeError,
   } = useRuleStore();
 
+  const { accounts, fetchAccounts } = useAccountStore();
+  const { getCategories, addCategory } = useCategoryStore();
+
   const [open, setOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
-  const [form, setForm] = useState<RuleFormData>(emptyForm);
+
+  // Form state (individual fields matching existing codebase pattern)
+  const [formName, setFormName] = useState("");
+  const [formType, setFormType] = useState<RuleType>("payment");
+  const [formAmount, setFormAmount] = useState("");
+  const [formSourceAccountId, setFormSourceAccountId] = useState("");
+  const [formTargetAccountId, setFormTargetAccountId] = useState("");
+  const [formTargetUserId, setFormTargetUserId] = useState("");
+  const [formCategory, setFormCategory] = useState("");
+  const [formNotes, setFormNotes] = useState("");
+  const [formCounterparty, setFormCounterparty] = useState("");
+  const [formFrequency, setFormFrequency] = useState("monthly");
+  const [formNextOccurrence, setFormNextOccurrence] = useState("");
+  const [formEndDate, setFormEndDate] = useState("");
+  const [formMaxOccurrences, setFormMaxOccurrences] = useState("");
+
+  // Category "add new" state
+  const [showCategoryInput, setShowCategoryInput] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -67,68 +59,105 @@ export default function RulesPage() {
       fetchServerPublicKey().catch(() => {});
     }
     fetchRules();
+    fetchAccounts();
+  }, []);
+
+  // Get categories for the selected type (payment rules use "expense" categories)
+  const categories = useMemo(() => {
+    if (formType === "payment") {
+      return getCategories("expense");
+    }
+    return [];
+  }, [formType, getCategories, useCategoryStore.getState().version]);
+
+  const resetForm = useCallback(() => {
+    setFormName("");
+    setFormType("payment");
+    setFormAmount("");
+    setFormSourceAccountId("");
+    setFormTargetAccountId("");
+    setFormTargetUserId("");
+    setFormCategory("");
+    setFormNotes("");
+    setFormCounterparty("");
+    setFormFrequency("monthly");
+    setFormNextOccurrence(new Date(Date.now() + 86400000).toISOString().slice(0, 16));
+    setFormEndDate("");
+    setFormMaxOccurrences("");
+    setShowCategoryInput(false);
+    setNewCategoryName("");
+    setFormError(null);
   }, []);
 
   const openCreate = useCallback(() => {
     setEditingRule(null);
-    setForm({
-      ...emptyForm,
-      nextOccurrence: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
-    });
+    resetForm();
+    setOpen(true);
+  }, [resetForm]);
+
+  const openEdit = useCallback((rule: Rule) => {
+    setEditingRule(rule);
+    setFormName(rule.name);
+    setFormType("payment");
+    setFormAmount("");
+    setFormSourceAccountId("");
+    setFormTargetAccountId("");
+    setFormTargetUserId("");
+    setFormCategory("");
+    setFormNotes("");
+    setFormCounterparty("");
+    setFormFrequency(rule.frequency);
+    setFormNextOccurrence(new Date(rule.next_occurrence).toISOString().slice(0, 16));
+    setFormEndDate(rule.end_date
+      ? new Date(rule.end_date).toISOString().slice(0, 16)
+      : "");
+    setFormMaxOccurrences(rule.max_occurrences?.toString() ?? "");
+    setShowCategoryInput(false);
+    setNewCategoryName("");
     setFormError(null);
     setOpen(true);
   }, []);
 
-  const openEdit = useCallback((rule: Rule) => {
-    setEditingRule(rule);
-    setForm({
-      name: rule.name,
-      type: "payment",
-      amount: "",
-      sourceAccountId: "",
-      targetAccountId: "",
-      targetUserId: "",
-      categoryId: "",
-      notes: "",
-      counterparty: "",
-      frequency: rule.frequency,
-      nextOccurrence: new Date(rule.next_occurrence).toISOString().slice(0, 16),
-      endDate: rule.end_date
-        ? new Date(rule.end_date).toISOString().slice(0, 16)
-        : "",
-      maxOccurrences: rule.max_occurrences?.toString() ?? "",
-    });
-    setFormError(null);
-    setOpen(true);
-  }, []);
+  const handleAddNewCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    try {
+      await addCategory("expense", name);
+      setFormCategory(name);
+      setShowCategoryInput(false);
+      setNewCategoryName("");
+    } catch {
+      setFormError("Failed to add category");
+    }
+  };
 
   const handleSave = async () => {
     setFormError(null);
 
-    if (!form.name.trim()) {
+    if (!formName.trim()) {
       setFormError("Name is required");
       return;
     }
-    if (!form.amount || parseFloat(form.amount) <= 0) {
+    if (!formAmount || parseFloat(formAmount) <= 0) {
       setFormError("Amount must be positive");
       return;
     }
-    if (!form.nextOccurrence) {
+    if (!formNextOccurrence) {
       setFormError("Next occurrence is required");
       return;
     }
-    if (!form.sourceAccountId.trim()) {
+    if (!formSourceAccountId) {
       setFormError("Source account is required");
       return;
     }
     if (
-      (form.type === "transfer" || form.type === "user_transfer") &&
-      !form.targetAccountId.trim()
+      (formType === "transfer" || formType === "user_transfer") &&
+      !formTargetAccountId
     ) {
       setFormError("Target account is required for transfers");
       return;
     }
-    if (form.type === "user_transfer" && !form.targetUserId.trim()) {
+    if (formType === "user_transfer" && !formTargetUserId.trim()) {
       setFormError("Target user is required for user transfers");
       return;
     }
@@ -136,18 +165,18 @@ export default function RulesPage() {
     setSaving(true);
     try {
       const payload = {
-        type: form.type,
-        amount: parseFloat(form.amount),
-        source_account_id: form.sourceAccountId,
+        type: formType,
+        amount: parseFloat(formAmount),
+        source_account_id: formSourceAccountId,
         target_account_id:
-          form.type === "transfer" || form.type === "user_transfer"
-            ? form.targetAccountId
+          formType === "transfer" || formType === "user_transfer"
+            ? formTargetAccountId
             : undefined,
         target_user_id:
-          form.type === "user_transfer" ? form.targetUserId : undefined,
-        category_id: form.categoryId || undefined,
-        notes: form.notes || undefined,
-        counterparty: form.counterparty || undefined,
+          formType === "user_transfer" ? formTargetUserId : undefined,
+        category_id: formCategory || undefined,
+        notes: formNotes || undefined,
+        counterparty: formCounterparty || undefined,
       };
 
       if (!serverPublicKey) {
@@ -161,32 +190,32 @@ export default function RulesPage() {
       }
       const encryptedPayload = await encryptForRecipient(payload, pubKey);
 
-      const nextOccurrence = new Date(form.nextOccurrence).toISOString();
+      const nextOccurrence = new Date(formNextOccurrence).toISOString();
 
       if (editingRule) {
         await updateRule(editingRule.id, {
-          name: form.name.trim(),
+          name: formName.trim(),
           encrypted_payload: encryptedPayload,
-          frequency: form.frequency,
+          frequency: formFrequency,
           next_occurrence: nextOccurrence,
-          end_date: form.endDate
-            ? new Date(form.endDate).toISOString()
+          end_date: formEndDate
+            ? new Date(formEndDate).toISOString()
             : null,
-          max_occurrences: form.maxOccurrences
-            ? parseInt(form.maxOccurrences, 10)
+          max_occurrences: formMaxOccurrences
+            ? parseInt(formMaxOccurrences, 10)
             : undefined,
         });
       } else {
         const req: CreateRuleRequest = {
-          name: form.name.trim(),
+          name: formName.trim(),
           encrypted_payload: encryptedPayload,
-          frequency: form.frequency,
+          frequency: formFrequency,
           next_occurrence: nextOccurrence,
-          end_date: form.endDate
-            ? new Date(form.endDate).toISOString()
+          end_date: formEndDate
+            ? new Date(formEndDate).toISOString()
             : undefined,
-          max_occurrences: form.maxOccurrences
-            ? parseInt(form.maxOccurrences, 10)
+          max_occurrences: formMaxOccurrences
+            ? parseInt(formMaxOccurrences, 10)
             : undefined,
         };
         await createRule(req);
@@ -221,7 +250,6 @@ export default function RulesPage() {
 
   const getFrequencyLabel = (freq: string): string => {
     switch (freq) {
-      case "once": return "Once";
       case "daily": return "Daily";
       case "weekly": return "Weekly";
       case "monthly": return "Monthly";
@@ -230,14 +258,10 @@ export default function RulesPage() {
     }
   };
 
-  const typeOptions: { value: RuleType; label: string }[] = [
-    { value: "payment", label: "Payment" },
-    { value: "transfer", label: "Transfer (your accounts)" },
-    { value: "user_transfer", label: "Transfer (to another user)" },
-  ];
+  const selectStyles =
+    "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
   const freqOptions = [
-    { value: "once", label: "Once" },
     { value: "daily", label: "Daily" },
     { value: "weekly", label: "Weekly" },
     { value: "monthly", label: "Monthly" },
@@ -365,35 +389,37 @@ export default function RulesPage() {
           )}
 
           <div className="space-y-3">
+            {/* Name */}
             <div className="space-y-1">
               <Label htmlFor="rule-name">Name</Label>
               <Input
                 id="rule-name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
                 placeholder="Rent, Netflix, Savings transfer..."
               />
             </div>
 
+            {/* Type */}
             <div className="space-y-1">
               <Label htmlFor="rule-type">Type</Label>
               <select
                 id="rule-type"
-                value={form.type}
+                value={formType}
                 disabled={!!editingRule}
-                onChange={(e) =>
-                  setForm({ ...form, type: e.target.value as RuleType })
-                }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                onChange={(e) => {
+                  setFormType(e.target.value as RuleType);
+                  setFormCategory("");
+                }}
+                className={selectStyles}
               >
-                {typeOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
+                <option value="payment">Payment</option>
+                <option value="transfer">Transfer (your accounts)</option>
+                <option value="user_transfer">Transfer (to another user)</option>
               </select>
             </div>
 
+            {/* Amount */}
             <div className="space-y-1">
               <Label htmlFor="rule-amount">Amount</Label>
               <Input
@@ -401,99 +427,156 @@ export default function RulesPage() {
                 type="number"
                 step="0.01"
                 min="0.01"
-                value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                value={formAmount}
+                onChange={(e) => setFormAmount(e.target.value)}
                 placeholder="100.00"
               />
             </div>
 
+            {/* Source Account */}
             <div className="space-y-1">
-              <Label htmlFor="rule-source">Source Account ID</Label>
-              <Input
+              <Label htmlFor="rule-source">Source Account</Label>
+              <select
                 id="rule-source"
-                value={form.sourceAccountId}
-                onChange={(e) =>
-                  setForm({ ...form, sourceAccountId: e.target.value })
-                }
-                placeholder="Account UUID"
-              />
+                value={formSourceAccountId}
+                onChange={(e) => setFormSourceAccountId(e.target.value)}
+                className={selectStyles}
+              >
+                <option value="">Select account...</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name || a.currency} ({a.type})
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {(form.type === "transfer" ||
-              form.type === "user_transfer") && (
+            {/* Target Account (for transfers) */}
+            {(formType === "transfer" || formType === "user_transfer") && (
               <div className="space-y-1">
-                <Label htmlFor="rule-target-account">Target Account ID</Label>
-                <Input
+                <Label htmlFor="rule-target-account">Target Account</Label>
+                <select
                   id="rule-target-account"
-                  value={form.targetAccountId}
-                  onChange={(e) =>
-                    setForm({ ...form, targetAccountId: e.target.value })
-                  }
-                  placeholder="Account UUID"
-                />
+                  value={formTargetAccountId}
+                  onChange={(e) => setFormTargetAccountId(e.target.value)}
+                  className={selectStyles}
+                >
+                  <option value="">Select account...</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name || a.currency} ({a.type})
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
-            {form.type === "user_transfer" && (
+            {/* Target User ID (for user_transfer) */}
+            {formType === "user_transfer" && (
               <div className="space-y-1">
                 <Label htmlFor="rule-target-user">Target User ID</Label>
                 <Input
                   id="rule-target-user"
-                  value={form.targetUserId}
-                  onChange={(e) =>
-                    setForm({ ...form, targetUserId: e.target.value })
-                  }
+                  value={formTargetUserId}
+                  onChange={(e) => setFormTargetUserId(e.target.value)}
                   placeholder="User UUID"
                 />
               </div>
             )}
 
-            {form.type === "payment" && (
-              <>
-                <div className="space-y-1">
-                  <Label htmlFor="rule-category">Category ID (optional)</Label>
-                  <Input
+            {/* Category (for payment) */}
+            {formType === "payment" && (
+              <div className="space-y-1">
+                <Label htmlFor="rule-category">Category (optional)</Label>
+                {!showCategoryInput ? (
+                  <select
                     id="rule-category"
-                    value={form.categoryId}
-                    onChange={(e) =>
-                      setForm({ ...form, categoryId: e.target.value })
-                    }
-                    placeholder="Category UUID"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="rule-counterparty">Counterparty (optional)</Label>
-                  <Input
-                    id="rule-counterparty"
-                    value={form.counterparty}
-                    onChange={(e) =>
-                      setForm({ ...form, counterparty: e.target.value })
-                    }
-                    placeholder="Landlord, Netflix, etc."
-                  />
-                </div>
-              </>
+                    value={formCategory}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") {
+                        setShowCategoryInput(true);
+                      } else {
+                        setFormCategory(e.target.value);
+                      }
+                    }}
+                    className={selectStyles}
+                  >
+                    <option value="">No category</option>
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                    <option value="__new__">+ Add new category...</option>
+                  </select>
+                ) : (
+                  <div className="flex gap-2">
+                    <Input
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="New category name"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddNewCategory();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAddNewCategory}
+                    >
+                      Add
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setShowCategoryInput(false);
+                        setNewCategoryName("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
 
+            {/* Counterparty (for payment) */}
+            {formType === "payment" && (
+              <div className="space-y-1">
+                <Label htmlFor="rule-counterparty">Counterparty (optional)</Label>
+                <Input
+                  id="rule-counterparty"
+                  value={formCounterparty}
+                  onChange={(e) => setFormCounterparty(e.target.value)}
+                  placeholder="Landlord, Netflix, etc."
+                />
+              </div>
+            )}
+
+            {/* Notes */}
             <div className="space-y-1">
               <Label htmlFor="rule-notes">Notes (optional)</Label>
               <Input
                 id="rule-notes"
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                value={formNotes}
+                onChange={(e) => setFormNotes(e.target.value)}
                 placeholder="Monthly rent payment"
               />
             </div>
 
+            {/* Frequency */}
             <div className="space-y-1">
               <Label htmlFor="rule-frequency">Frequency</Label>
               <select
                 id="rule-frequency"
-                value={form.frequency}
-                onChange={(e) =>
-                  setForm({ ...form, frequency: e.target.value })
-                }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={formFrequency}
+                onChange={(e) => setFormFrequency(e.target.value)}
+                className={selectStyles}
               >
                 {freqOptions.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -503,38 +586,37 @@ export default function RulesPage() {
               </select>
             </div>
 
+            {/* First Occurrence */}
             <div className="space-y-1">
               <Label htmlFor="rule-first-occurrence">First Occurrence</Label>
               <Input
                 id="rule-first-occurrence"
                 type="datetime-local"
-                value={form.nextOccurrence}
-                onChange={(e) =>
-                  setForm({ ...form, nextOccurrence: e.target.value })
-                }
+                value={formNextOccurrence}
+                onChange={(e) => setFormNextOccurrence(e.target.value)}
               />
             </div>
 
+            {/* End Date */}
             <div className="space-y-1">
               <Label htmlFor="rule-end-date">End Date (optional)</Label>
               <Input
                 id="rule-end-date"
                 type="datetime-local"
-                value={form.endDate}
-                onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                value={formEndDate}
+                onChange={(e) => setFormEndDate(e.target.value)}
               />
             </div>
 
+            {/* Max Occurrences */}
             <div className="space-y-1">
               <Label htmlFor="rule-max-occurrences">Max Occurrences (optional)</Label>
               <Input
                 id="rule-max-occurrences"
                 type="number"
                 min="1"
-                value={form.maxOccurrences}
-                onChange={(e) =>
-                  setForm({ ...form, maxOccurrences: e.target.value })
-                }
+                value={formMaxOccurrences}
+                onChange={(e) => setFormMaxOccurrences(e.target.value)}
                 placeholder="Leave empty for unlimited"
               />
             </div>

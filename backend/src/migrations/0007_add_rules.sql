@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS rules (
     created_by           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name                 VARCHAR(255) NOT NULL,                -- plaintext display label
     encrypted_payload    TEXT NOT NULL,                         -- ECIES with server's public key
-    frequency            VARCHAR(20) NOT NULL CHECK (frequency IN ('once', 'daily', 'weekly', 'monthly', 'yearly')),
+    frequency            VARCHAR(20) NOT NULL CHECK (frequency IN ('daily', 'weekly', 'monthly', 'yearly')),
     next_occurrence      TIMESTAMPTZ NOT NULL,
     end_date             TIMESTAMPTZ,                           -- optional end date
     max_occurrences      INT,                                   -- optional max executions

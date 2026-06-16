@@ -645,9 +645,6 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 // computeNextOccurrence calculates the next occurrence based on frequency.
 func computeNextOccurrence(frequency string, from time.Time) time.Time {
 	switch frequency {
-	case "once":
-		// Never fire again
-		return from.Add(100 * 365 * 24 * time.Hour) // far future, effectively disables
 	case "daily":
 		return from.AddDate(0, 0, 1)
 	case "weekly":

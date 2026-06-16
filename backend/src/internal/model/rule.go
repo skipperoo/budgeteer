@@ -8,7 +8,7 @@ type Rule struct {
 	CreatedBy        string     `json:"created_by"`
 	Name             string     `json:"name"`
 	EncryptedPayload string     `json:"encrypted_payload"`
-	Frequency        string     `json:"frequency"` // once, daily, weekly, monthly, yearly
+	Frequency        string     `json:"frequency"` // daily, weekly, monthly, yearly
 	NextOccurrence   time.Time  `json:"next_occurrence"`
 	EndDate          *time.Time `json:"end_date,omitempty"`
 	MaxOccurrences   *int       `json:"max_occurrences,omitempty"`
