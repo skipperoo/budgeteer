@@ -11,6 +11,7 @@ import DashboardPage from "@/pages/dashboard/DashboardPage";
 import AccountListPage from "@/pages/accounts/AccountListPage";
 import AccountDetailPage from "@/pages/accounts/AccountDetailPage";
 import SettingsPage from "@/pages/settings/SettingsPage";
+import RulesPage from "@/pages/rules/RulesPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="accounts" element={<AccountListPage />} />
         <Route path="accounts/:id" element={<AccountDetailPage />} />
+        <Route path="rules" element={<RulesPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>

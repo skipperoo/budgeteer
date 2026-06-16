@@ -7,4 +7,5 @@ func InitServices() {
 	InitTransactionService()
 	InitTransactionDocumentService()
 	InitSyncService()
+	InitRuleService()
 }

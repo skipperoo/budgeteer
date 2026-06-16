@@ -18,9 +18,17 @@ This is the backlog of Budgeteer
     - [x] (mobile) editing and opening a transaction should open a drawer instead of a dialog as on the desktop.
     - [x] (mobile) enlarge the bottom navigation menu and add a bottom padding to it to dodge the iOS/Android bottom gesture area (1 or 2 em should be plenty)
 
-- [ ] Implement rules:
-  - [ ] Recurring payments
-  - [ ] Recurring transfers between two accounts or between two
+- [x] Implement rules:
+  - [x] Recurring payments
+  - [x] Recurring transfers between two accounts or between two
+  - [x] Server X25519 keypair (docker secret) + public-key endpoint
+  - [x] Rule payloads encrypted with server's public key via ECIES
+  - [x] Generated transactions encrypted with user's X25519 public key (ECIES `1|` prefix)
+  - [x] Rule scheduler worker (configurable interval)
+  - [x] Balance tracking on accounts for precondition checks
+  - [x] Atomic multi-transaction execution (pgx.WithTx + SELECT FOR UPDATE)
+  - [x] Frontend rules management page (create/list/edit/delete)
+  - [x] Rules nav link in sidebar and bottom nav
 - [ ] Implement mortgages and split payments
   - [ ] Select the amount, the duration period and the interest rate
   - [ ] Automatically create a transaction each month (the day of payment has to be settable) of the correct amount

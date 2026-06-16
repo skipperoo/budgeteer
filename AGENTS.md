@@ -1,6 +1,6 @@
 # Budgeteer - Technical Specifications
 
-> **Revision 2** — Reviewed and extended. Key changes: added missing OTP/categories/recurring/savings-plan tables, added database indexes, added soft-deletes, expanded API surface (logout, key retrieval, user lookup, password change), fixed sync_queue and email_outbox schema, strengthened crypto recommendations, added conflict resolution strategy, added routy router example, added development workflow & testing requirements, updated Docker Compose (frontend service, Redis, healthchecks).
+> **Revision 3** — Added rules engine for automated payments and transfers. Key changes: server X25519 keypair for ECIES encryption, rules table, rule scheduler worker, balance tracking on accounts, ECIES transaction payload format, frontend rules management page. See Section 2 (Key Management) for server keypair, Section 4 (Background Workers / API) for rules endpoints and scheduler, Section 5 for the `rules` table, Section 6 for the `server_encryption_key` Docker secret.
 
 ---
 
@@ -29,6 +29,7 @@ To balance E2E encryption with the requirements of TimescaleDB and joint account
 - **Key Management:** Users generate an **X25519** keypair upon registration (preferred over RSA for smaller key size, faster operations, and better modern security posture). Ed25519 is used for any signatures required in future.
   - The **Private Key** is symmetrically encrypted using the user's password via `Argon2id` (recommended parameters: `m=65536`, `t=3`, `p=4`) + `AES-256-GCM`, and stored server-side. It is only decrypted client-side during active sessions and **held in memory only** — never written to IndexedDB, localStorage, or any persistent client storage.
   - The **Public Key** is stored in plain text to facilitate secure account sharing.
+- **Server Keypair:** The server generates an X25519 keypair on first startup. The **private key** is stored as a Docker secret (`server_encryption_key`) and is never exposed. The **public key** is served at `GET /api/v1/rules/public-key` (unauthenticated). Clients use this public key to encrypt rule payloads via ECIES, ensuring only the server can read rule details. Rule-generated transactions are similarly encrypted with the recipient user's X25519 public key (using the same ECIES format with a `1|` prefix to distinguish from account-key AES-GCM).
 - **Trust Boundary Note:** Because the encrypted private key is stored on the server, a compromised server can attempt an offline dictionary attack against weak user passwords. Argon2id parameters above are chosen to make this computationally expensive. Users should be encouraged to use strong passwords.
 - **Joint Accounts:** An AES-256 "Account Key" is generated for each account. To invite a user, the inviter fetches the invitee's Public Key, encrypts the Account Key with it via ECIES (X25519 + AES-GCM), and stores the result in the `account_users` table.
 - **Known Limitation — Member Removal:** When a user is removed from a joint account, they retain their copy of the Account Key. Full forward secrecy would require re-keying the account (generating a new Account Key and re-encrypting all future transactions). This is deferred to a post-v1 milestone; removal should be documented as revoking write access only.
@@ -59,6 +60,12 @@ Upon login, the user's `encrypted_private_key` is fetched from the server and de
   - Setup recurring transactions.
   - **Savings Accounts:** Define savings plans that deduct from a selected account and track counter-value monthly.
   - **Joint Accounts:** Invite users via email/ID to share accounts seamlessly.
+- **Rules Management:**
+  - Create/list/edit/delete automated rules for recurring payments and transfers.
+  - Rule types: `payment` (recurring expense), `transfer` (between own accounts), `user_transfer` (cross-user).
+  - Rule data is encrypted client-side with the server's X25519 public key before being sent to the API.
+  - Scheduling fields (frequency, next_occurrence) are plaintext for server-side querying.
+  - Generated transactions are encrypted with the target user's X25519 public key and stored with an ECIES `1|` prefix.
 - **Settings:**
   - Account management (password changes trigger re-encryption of the private key with the new password-derived key; see Section 4 API).
   - Key rotation (generates a new keypair and re-encrypts all Account Keys for the user's accounts).
@@ -87,6 +94,7 @@ Categories are stored on the **backend** under the user's profile (the `user_cat
   - **Email Dispatcher:** Polls the `email_outbox` table (status = `pending`, respecting `scheduled_for`) to send OTPs, registration validations, and notification emails via SMTP. Increments `retry_count` on failure; stops retrying after 5 attempts (`status = 'failed'`).
   - **Savings Plan Cron:** Daily job checking for savings plans where `tracking_end` has passed or where `last_logged_at` is older than 30 days. If no recent activity is detected from plain-text metadata, it queues a reminder email.
   - **Sync Queue Cleanup:** Daily job deleting `sync_queue` rows where `consumed_at IS NOT NULL AND consumed_at < NOW() - INTERVAL '30 days'`. Prevents unbounded table growth.
+  - **Rule Scheduler:** Polls the `rules` table for active rules where `next_occurrence <= NOW()`, decrypts the rule payload with the server's X25519 private key, checks preconditions (sufficient balance, matching currencies), and atomically creates transactions (encrypted with the user's X25519 public key via ECIES) and updates account balances. Configurable interval via `RULES_CHECK_INTERVAL` env var (default: 300 seconds).
 
 ### API Design
 
@@ -115,6 +123,11 @@ _Note: All Sync, Accounts, and Users endpoints require Auth middleware (JWT vali
 | **GET**    | `/api/v1/transactions/{id}/documents`             | Documents | Lists document metadata for a transaction (no encrypted data).                                                                                                   |
 | **GET**    | `/api/v1/transactions/{id}/documents/{docId}/data` | Documents | Returns a document's encrypted data (to be decrypted client-side with the account key).                                                                          |
 | **DELETE** | `/api/v1/transactions/{id}/documents/{docId}`      | Documents | Deletes a document from a transaction.                                                                                                                           |
+| **GET**    | `/api/v1/rules/public-key`                         | Rules     | Returns the server's X25519 public key (unauthenticated). Used by the frontend to encrypt rule payloads.                                                         |
+| **GET**    | `/api/v1/rules`                                    | Rules     | Lists all rules for the authenticated user.                                                                                                                      |
+| **POST**   | `/api/v1/rules`                                    | Rules     | Creates a new rule. Body: `{ name, encrypted_payload, frequency, next_occurrence, end_date?, max_occurrences? }`.                                                |
+| **PUT**    | `/api/v1/rules/{id}`                               | Rules     | Updates a rule. Only the owner can update.                                                                                                                       |
+| **DELETE** | `/api/v1/rules/{id}`                               | Rules     | Deletes a rule. Only the owner can delete.                                                                                                                       |
 
 ### Router Setup (`routy`)
 
@@ -151,7 +164,8 @@ func main() {
         AddMiddleware(loggingMw.GetMiddleware()).
         AddHandler("POST /api/v1/auth/register",   handler.Register).
         AddHandler("POST /api/v1/auth/verify-otp", handler.VerifyOTP).
-        AddHandler("POST /api/v1/auth/login",       handler.Login)
+        AddHandler("POST /api/v1/auth/login",       handler.Login).
+        AddHandler("GET  /api/v1/rules/public-key", handler.RulePublicKey)
 
     // --- Protected routes (JWT + Redis blocklist check) ---
     protected := routy.NewRouter()
@@ -167,7 +181,11 @@ func main() {
         AddHandler("DELETE /api/v1/accounts/{id}",               handler.DeleteAccount).
         AddHandler("POST   /api/v1/accounts/{id}/invite",        handler.InviteToAccount).
         AddHandler("GET    /api/v1/accounts/{id}/users",         handler.ListAccountUsers).
-        AddHandler("DELETE /api/v1/accounts/{id}/users/{uid}",   handler.RemoveAccountUser)
+        AddHandler("DELETE /api/v1/accounts/{id}/users/{uid}",   handler.RemoveAccountUser).
+        AddHandler("GET    /api/v1/rules",          handler.ListRules).
+        AddHandler("POST   /api/v1/rules",          handler.CreateRule).
+        AddHandler("PUT    /api/v1/rules/{id}",     handler.UpdateRule).
+        AddHandler("DELETE /api/v1/rules/{id}",     handler.DeleteRule)
     protected.Finalize()
 
     router.AddSubroute("/api/", protected)
@@ -382,6 +400,28 @@ CREATE TABLE savings_plans (
 );
 
 -- ============================================================
+-- RULES (Automated payments and transfers)
+-- Encrypted payload is ECIES with the server's X25519 public key.
+-- Scheduling metadata (frequency, next_occurrence) is plaintext
+-- for the Rule Scheduler worker to query without decryption.
+-- ============================================================
+CREATE TABLE rules (
+    id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_by           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name                 VARCHAR(255) NOT NULL,                -- plaintext display label
+    encrypted_payload    TEXT NOT NULL,                         -- ECIES with server's public key
+    frequency            VARCHAR(20) NOT NULL CHECK (frequency IN ('once', 'daily', 'weekly', 'monthly', 'yearly')),
+    next_occurrence      TIMESTAMPTZ NOT NULL,
+    end_date             TIMESTAMPTZ,                           -- optional end date
+    max_occurrences      INT,                                   -- optional max executions
+    occurrences_so_far   INT NOT NULL DEFAULT 0,
+    last_triggered_at    TIMESTAMPTZ,                           -- when it last fired
+    is_active            BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
 -- SYNC QUEUE
 -- Delivers operations to joint account members who were offline.
 -- consumed_at is set by the pull endpoint; cleaned up after 30 days.
@@ -447,6 +487,9 @@ CREATE INDEX ON transaction_documents (transaction_id);
 
 -- User categories
 CREATE INDEX ON user_categories (user_id);
+
+-- Rules scheduling
+CREATE INDEX ON rules (next_occurrence) WHERE is_active = TRUE;
 ```
 
 ### Migration Workflow
@@ -491,11 +534,13 @@ services:
       - db_password
       - smtp_password
       - redis_password
+      - server_encryption_key
     environment:
       - DB_HOST=postgres
       - DB_USER=budgeteer
       - DB_NAME=budgeteer
       - REDIS_HOST=redis
+      - RULES_CHECK_INTERVAL=300
       # Secrets are read directly from /run/secrets/ at runtime
     ports:
       - "8080:8080"
@@ -543,6 +588,8 @@ secrets:
     file: ./secrets/smtp_password.txt
   redis_password:
     file: ./secrets/redis_password.txt
+  server_encryption_key:
+    file: ./secrets/server_encryption_key.txt
 ```
 
 > **Note:** Redis is used for JWT blocklisting (logout, key rotation) and rate limiting. A blocked JWT is stored with a TTL equal to its remaining lifetime, ensuring the blocklist stays self-pruning. Redis data does not need to be durable — the volume mount above is optional; remove it if you prefer a fully ephemeral cache.

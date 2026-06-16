@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Wallet,
+  ScrollText,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -13,6 +14,7 @@ import { ENDPOINTS } from "@/lib/constants";
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/accounts", icon: Wallet, label: "Accounts" },
+  { to: "/rules", icon: ScrollText, label: "Rules" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
