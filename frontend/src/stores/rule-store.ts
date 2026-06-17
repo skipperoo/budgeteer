@@ -66,7 +66,7 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
   fetchServerPublicKey: async () => {
     try {
       const data = await apiFetch<{ public_key: string }>(
-        "/api/v1/rules/public-key",
+        ENDPOINTS.rulePublicKey,
       );
       set({ serverPublicKey: data.public_key });
       return data.public_key;
@@ -80,7 +80,7 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
   fetchRules: async () => {
     set({ loading: true, error: null });
     try {
-      const rules = await apiFetch<Rule[]>("/api/v1/rules");
+      const rules = await apiFetch<Rule[]>(ENDPOINTS.rules);
       set({ rules, loading: false });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to fetch rules";
@@ -91,7 +91,7 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
   createRule: async (req) => {
     set({ loading: true, error: null });
     try {
-      const rule = await apiFetch<Rule>("/api/v1/rules", {
+      const rule = await apiFetch<Rule>(ENDPOINTS.rules, {
         method: "POST",
         body: JSON.stringify(req),
       });
@@ -107,7 +107,7 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
   updateRule: async (id, req) => {
     set({ loading: true, error: null });
     try {
-      const rule = await apiFetch<Rule>(`/api/v1/rules/${id}`, {
+      const rule = await apiFetch<Rule>(ENDPOINTS.rule(id), {
         method: "PUT",
         body: JSON.stringify(req),
       });
@@ -126,7 +126,7 @@ export const useRuleStore = create<RuleStore>((set, get) => ({
   deleteRule: async (id) => {
     set({ loading: true, error: null });
     try {
-      await apiFetch<void>(`/api/v1/rules/${id}`, { method: "DELETE" });
+      await apiFetch<void>(ENDPOINTS.rule(id), { method: "DELETE" });
       set((s) => ({
         rules: s.rules.filter((r) => r.id !== id),
         loading: false,

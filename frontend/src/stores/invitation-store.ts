@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { apiFetch } from "@/lib/api";
+import { ENDPOINTS } from "@/lib/constants";
 
 export interface Invitation {
   id: string;
@@ -32,7 +33,7 @@ export const useInvitationStore = create<InvitationStore>((set) => ({
   fetchInvitations: async () => {
     set({ loading: true, error: null });
     try {
-      const data = await apiFetch<Invitation[]>("/api/v1/invitations");
+      const data = await apiFetch<Invitation[]>(ENDPOINTS.invitations);
       set({ invitations: data, loading: false });
     } catch (err) {
       const msg =
@@ -48,7 +49,7 @@ export const useInvitationStore = create<InvitationStore>((set) => ({
       if (encryptedAccount) {
         body.encrypted_account = encryptedAccount;
       }
-      await apiFetch<void>(`/api/v1/invitations/${id}/accept`, {
+      await apiFetch<void>(ENDPOINTS.invitationAccept(id), {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -67,7 +68,7 @@ export const useInvitationStore = create<InvitationStore>((set) => ({
   declineInvitation: async (id) => {
     set({ loading: true, error: null });
     try {
-      await apiFetch<void>(`/api/v1/invitations/${id}/decline`, {
+      await apiFetch<void>(ENDPOINTS.invitationDecline(id), {
         method: "POST",
       });
       set((s) => ({

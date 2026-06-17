@@ -1,4 +1,7 @@
-export const API_BASE = "/api/v1";
+// Allow overriding the API base URL via VITE_API_BASE env variable.
+// In production / same-origin setups, it defaults to "/api/v1".
+// In development, set VITE_API_BASE=http://localhost:8080/api/v1 in .env
+export const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
 
 export const ENDPOINTS = {
   register: `${API_BASE}/auth/register`,
@@ -29,4 +32,14 @@ export const ENDPOINTS = {
     `${API_BASE}/transactions/${id}/documents/${docId}/data`,
   transactionDocument: (id: string, docId: string) =>
     `${API_BASE}/transactions/${id}/documents/${docId}`,
+  rulePublicKey: `${API_BASE}/rules/public-key`,
+  rules: `${API_BASE}/rules`,
+  rule: (id: string) => `${API_BASE}/rules/${id}`,
+  notifications: `${API_BASE}/notifications`,
+  notificationCount: `${API_BASE}/notifications/count`,
+  notification: (id: string) => `${API_BASE}/notifications/${id}`,
+  notificationRead: (id: string) => `${API_BASE}/notifications/${id}/read`,
+  invitations: `${API_BASE}/invitations`,
+  invitationAccept: (id: string) => `${API_BASE}/invitations/${id}/accept`,
+  invitationDecline: (id: string) => `${API_BASE}/invitations/${id}/decline`,
 } as const;

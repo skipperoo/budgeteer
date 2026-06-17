@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { apiFetch } from "@/lib/api";
+import { ENDPOINTS } from "@/lib/constants";
 
 export interface Notification {
   id: string;
@@ -39,7 +40,7 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
   fetchNotifications: async () => {
     set({ loading: true, error: null });
     try {
-      const data = await apiFetch<Notification[]>("/api/v1/notifications");
+      const data = await apiFetch<Notification[]>(ENDPOINTS.notifications);
       set({ notifications: data, loading: false });
     } catch (err) {
       const msg =
@@ -51,7 +52,7 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
   fetchUnreadCount: async () => {
     try {
       const data = await apiFetch<{ count: number }>(
-        "/api/v1/notifications/count",
+        ENDPOINTS.notificationCount,
       );
       set({ unreadCount: data.count });
     } catch {
@@ -61,7 +62,7 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
 
   markRead: async (id) => {
     try {
-      await apiFetch<void>(`/api/v1/notifications/${id}/read`, {
+      await apiFetch<void>(ENDPOINTS.notificationRead(id), {
         method: "PUT",
       });
       set((s) => ({
