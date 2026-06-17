@@ -184,8 +184,6 @@ export function BudgetProgressSection({
     return items;
   }, [relevantBudgets, decryptedPayloads, transactions, accounts]);
 
-  if (relevantBudgets.length === 0) return null;
-
   // Check thresholds and notify (only on the dashboard, when data is fresh)
   useEffect(() => {
     const checkThresholds = async () => {
@@ -215,6 +213,8 @@ export function BudgetProgressSection({
       checkThresholds();
     }
   }, [progressItems, notifyThreshold]);
+
+  if (relevantBudgets.length === 0) return null;
 
   return (
     <Card>
