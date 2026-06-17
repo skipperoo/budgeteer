@@ -12,9 +12,12 @@ import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64 } from "@/lib/crypto";
 import { encryptTransactionPayload, effectiveAmount } from "@/lib/crypto-transaction";
+import { encryptFile } from "@/lib/crypto-file";
 import { fetchAndDecryptTransactions, getAccountKey } from "@/lib/decrypt-transactions";
 import { TransactionCard } from "@/components/transactions/TransactionCard";
-import type { CreateTransactionRequest } from "@/types";
+import { TransactionDetailOverlay } from "@/components/transactions/TransactionDetailOverlay";
+import { TransactionForm, type TransactionFormData } from "@/components/transactions/TransactionForm";
+import type { CreateTransactionRequest, Transaction } from "@/types";
 import type { DecryptedTransaction } from "@/lib/decrypt-transactions";
 import { BalanceChart } from "@/components/shared/BalanceChart";
 import { getCurrencySymbol, formatCurrency } from "@/lib/format";
@@ -51,25 +54,15 @@ export default function DashboardPage() {
 
   // Create transaction dialog state
   const [createOpen, setCreateOpen] = useState(false);
-  const [txType, setTxType] = useState<"income" | "expense">("expense");
-  const [txAmount, setTxAmount] = useState("");
-  const [txCommission, setTxCommission] = useState(() => {
-    const fromPrefs = user?.preferences?.default_commission;
-    if (fromPrefs != null && fromPrefs > 0) return String(fromPrefs);
-    try { return localStorage.getItem("budgeteer_default_commission") ?? ""; } catch { return ""; }
-  });
-  const [txCategory, setTxCategory] = useState("");
-  const [txNotes, setTxNotes] = useState("");
-  const [txCounterparty, setTxCounterparty] = useState("");
-  const [txDate, setTxDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [txAccountId, setTxAccountId] = useState("");
   const [txCreating, setTxCreating] = useState(false);
   const [txCreateError, setTxCreateError] = useState("");
 
-  // Category combobox state
-  const { getCategories, addCategory, version: _catVersion } = useCategoryStore();
-  const [showCategoryInput, setShowCategoryInput] = useState(false);
-  const [newCategory, setNewCategory] = useState("");
+  // Transaction detail overlay state
+  const [detailTx, setDetailTx] = useState<DecryptedTransaction | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailAccountKey, setDetailAccountKey] = useState<string | null>(null);
+
+  const { getCategories, addCategory } = useCategoryStore();
 
   const privKeyBase64 = plaintextPrivateKey
     ? bytesToBase64(new Uint8Array(plaintextPrivateKey))
@@ -259,73 +252,80 @@ export default function DashboardPage() {
   const expenseTotal = expenseChartData.reduce((sum, d) => sum + d.value, 0);
   const incomeTotal = incomeChartData.reduce((sum, d) => sum + d.value, 0);
 
-  // Handle category selection
-  const handleSelectCategory = (cat: string) => {
-    setTxCategory(cat);
-    setShowCategoryInput(false);
-    setNewCategory("");
-  };
-
-  const handleAddNewCategory = () => {
-    const cat = newCategory.trim();
-    if (!cat) return;
-    addCategory(txType as CategoryType, cat);
-    setTxCategory(cat);
-    setShowCategoryInput(false);
-    setNewCategory("");
-  };
-
-  // Create transaction
-  const handleCreateTransaction = async () => {
-    if (!txAccountId) {
-      setTxCreateError("Please select an account");
-      return;
+  // Open transaction detail overlay, fetching the account key on demand
+  const handleOpenDetail = useCallback(async (tx: DecryptedTransaction) => {
+    setDetailTx(tx);
+    setDetailOpen(true);
+    try {
+      const key = await getAccountKey(tx.account_id, privKeyBase64 ?? undefined, user?.public_key);
+      setDetailAccountKey(key);
+    } catch {
+      setDetailAccountKey(null);
     }
+  }, [privKeyBase64, user]);
+
+  // Edit a transaction from the detail overlay: navigate to the account detail page
+  const handleEditFromOverlay = useCallback((txId: string) => {
+    if (!detailTx) return;
+    navigate(`/accounts/${detailTx.account_id}`);
+  }, [detailTx, navigate]);
+
+  // Delete a transaction from the detail overlay
+  const handleDeleteFromOverlay = useCallback(async (txId: string) => {
+    if (!detailTx) return;
+    try {
+      await apiFetch(ENDPOINTS.transaction(txId), { method: "DELETE" });
+      setDetailOpen(false);
+      setDetailTx(null);
+      setDetailAccountKey(null);
+      refreshTransactions();
+    } catch {
+      // Error handled silently — the overlay will still close
+    }
+  }, [detailTx, refreshTransactions]);
+
+  // Create transaction (called by TransactionForm on submit)
+  const handleCreateTransaction = async (data: TransactionFormData) => {
     setTxCreateError("");
     setTxCreating(true);
 
     try {
-      const rawAmount = parseFloat(txAmount);
-      if (isNaN(rawAmount)) {
-        throw new Error("Invalid amount");
-      }
-      // Apply sign based on income/expense toggle
-      const amount = txType === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
-      const commission = txCommission ? parseFloat(txCommission) : 0;
+      const rawAmount = parseFloat(data.amount);
+      if (isNaN(rawAmount)) throw new Error("Invalid amount");
+      const amount = data.type === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+      const commission = data.commission ? parseFloat(data.commission) : 0;
 
-      // Fetch (or retrieve from cache) the account key for the selected account.
-      // getAccountKey now checks sessionStorage first, so it can work even
-      // after a page refresh (when the in-memory private key is gone).
       const accountKeyBase64 = await getAccountKey(
-        txAccountId,
+        data.accountId,
         privKeyBase64 ?? undefined,
         user?.public_key
       );
 
-      const category = txCategory || "general";
-      addCategory(txType as CategoryType, category);
+      const category = data.category || "general";
+      addCategory(data.type as CategoryType, category);
 
       const encryptedPayload = await encryptTransactionPayload(
-        { amount, category, notes: txNotes, counterparty: txCounterparty, commission: commission > 0 ? commission : undefined },
+        { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined },
         accountKeyBase64
       );
 
-      const time = new Date(txDate + "T12:00:00Z").toISOString();
+      const time = new Date(data.date + "T12:00:00Z").toISOString();
 
-      await apiFetch(ENDPOINTS.transactions(txAccountId), {
+      const createdTx = await apiFetch<Transaction>(ENDPOINTS.transactions(data.accountId), {
         method: "POST",
         body: JSON.stringify({ time, encrypted_payload: encryptedPayload } as CreateTransactionRequest),
       });
 
+      // Upload document if provided
+      if (data.file && createdTx?.id) {
+        const fileData = await encryptFile(data.file, accountKeyBase64);
+        await apiFetch(ENDPOINTS.transactionDocuments(createdTx.id), {
+          method: "POST",
+          body: JSON.stringify(fileData),
+        });
+      }
+
       setCreateOpen(false);
-      setTxType("expense");
-      setTxAmount("");
-      setTxCommission("");
-      setTxCategory("");
-      setTxNotes("");
-      setTxCounterparty("");
-      setTxDate(new Date().toISOString().slice(0, 10));
-      setShowCategoryInput(false);
       refreshTransactions();
     } catch (err: any) {
       setTxCreateError(err.message);
@@ -350,161 +350,14 @@ export default function DashboardPage() {
         <h1 className="text-3xl font-bold">Dashboard</h1>
         {accounts.length > 0 ? (
           <ResponsiveDialog open={createOpen} onOpenChange={setCreateOpen} title="New Transaction" trigger={<Button size="lg">+ New Transaction</Button>}>
-          <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Account</label>
-                <select
-                  value={txAccountId}
-                  onChange={(e) => {
-                    setTxAccountId(e.target.value);
-                    setShowCategoryInput(false);
-                  }}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  required
-                >
-                  <option value="">Select account...</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name || a.currency} ({a.type})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Amount</label>
-                <div className="flex gap-2">
-                  <div className="flex rounded-md border border-input overflow-hidden shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => { setTxType("expense"); setTxCategory(""); }}
-                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                        txType === "expense"
-                          ? "bg-expense text-expense-foreground"
-                          : "bg-transparent text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Expense
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setTxType("income"); setTxCategory(""); }}
-                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                        txType === "income"
-                          ? "bg-income text-income-foreground"
-                          : "bg-transparent text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Income
-                    </button>
-                  </div>
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
-                      {txType === "expense" ? "-" : "+"}
-                    </span>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={txAmount}
-                      onChange={(e) => setTxAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="pl-7"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Commission / Fee (optional)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={txCommission}
-                  onChange={(e) => setTxCommission(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Date</label>
-                <Input
-                  type="date"
-                  value={txDate}
-                  onChange={(e) => setTxDate(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Category</label>
-                {!showCategoryInput ? (
-                  <div className="flex gap-2">
-                    <select
-                      value={txCategory}
-                      onChange={(e) => {
-                        if (e.target.value === "__new__") {
-                          setShowCategoryInput(true);
-                        } else {
-                          setTxCategory(e.target.value);
-                        }
-                      }}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                    >
-                      <option value="">Select category...</option>
-                      {getCategories(txType as CategoryType).map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                          </option>
-                        ))}
-                      <option value="__new__">+ Add new category...</option>
-                    </select>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <Input
-                      value={newCategory}
-                      onChange={(e) => setNewCategory(e.target.value)}
-                      placeholder="New category name"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleAddNewCategory();
-                        }
-                      }}
-                    />
-                    <Button type="button" size="sm" onClick={handleAddNewCategory}>
-                      Add
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setShowCategoryInput(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Counterparty</label>
-                <Input
-                  value={txCounterparty}
-                  onChange={(e) => setTxCounterparty(e.target.value)}
-                  placeholder="e.g. Store name, employer"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Notes</label>
-                <Input
-                  value={txNotes}
-                  onChange={(e) => setTxNotes(e.target.value)}
-                  placeholder="Optional notes"
-                />
-              </div>
-              {txCreateError && <p className="text-sm text-destructive">{txCreateError}</p>}
-              <Button onClick={handleCreateTransaction} className="w-full" disabled={txCreating}>
-                {txCreating ? "Creating..." : "Create"}
-              </Button>
-            </div>
+            <TransactionForm
+              accounts={accounts.map((a) => ({ id: a.id, label: `${a.name || a.currency} (${a.type})` }))}
+              getCategories={getCategories}
+              addCategory={addCategory}
+              onSave={handleCreateTransaction}
+              saving={txCreating}
+              error={txCreateError}
+            />
         </ResponsiveDialog>
         ) : (
           <>
@@ -645,7 +498,6 @@ export default function DashboardPage() {
                       if (accounts.length === 0) {
                         setNoAccountsDialogOpen(true);
                       } else {
-                        setTxAccountId(accounts[0].id);
                         setCreateOpen(true);
                       }
                     }}
@@ -664,7 +516,7 @@ export default function DashboardPage() {
                         payload: tx.payload,
                       }}
                       currency={currencyMap[tx.account_id]}
-                      onClick={() => navigate(`/accounts/${tx.account_id}`)}
+                      onClick={() => handleOpenDetail(tx)}
                       compact
                     />
                   ))}
@@ -674,6 +526,31 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      {/* Transaction detail overlay */}
+      {detailTx?.payload && (
+        <TransactionDetailOverlay
+          transaction={{ id: detailTx.id, time: detailTx.time, payload: detailTx.payload }}
+          currency={currencyMap[detailTx.account_id] || defaultCurrency}
+          accountKeyBase64={detailAccountKey}
+          open={detailOpen}
+          onOpenChange={(open) => {
+            setDetailOpen(open);
+            if (!open) {
+              setDetailTx(null);
+              setDetailAccountKey(null);
+            }
+          }}
+          onEdit={(txId) => {
+            setDetailOpen(false);
+            handleEditFromOverlay(txId);
+          }}
+          onDelete={(txId) => {
+            setDetailOpen(false);
+            handleDeleteFromOverlay(txId);
+          }}
+        />
+      )}
 
       {/* Pie charts: side by side below the main grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
