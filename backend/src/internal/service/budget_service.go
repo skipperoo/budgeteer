@@ -163,8 +163,12 @@ func (s *BudgetService) NotifyBudgetThreshold(ctx context.Context, budgetID, use
 
 	// Create an in-app notification
 	if Notifications != nil {
+		displayName := budget.Name
+		if displayName == "" {
+			displayName = budget.ID[:8]
+		}
 		title := fmt.Sprintf("Budget %d%% Reached", threshold)
-		body := fmt.Sprintf("Your budget '%s' has reached %d%% of the limit.", budget.ID[:8], threshold)
+		body := fmt.Sprintf("Your budget %s has reached %d%% of the limit.", displayName, threshold)
 		if err := Notifications.CreateNotification(ctx, userID, "budget_threshold", title, body, map[string]interface{}{
 			"budget_id": budgetID,
 			"threshold": threshold,
