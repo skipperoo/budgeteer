@@ -26,6 +26,7 @@ type Config struct {
 	JWTSecretPath        string
 	ServerEncryptionKey  string // X25519 private key (base64), from docker secret
 	RulesCheckInterval   int    // seconds, default 300 (5 min)
+	BaseURL              string // frontend URL for links in emails, e.g. "https://app.budgeteer.com"
 }
 
 var Cfg *Config
@@ -51,6 +52,7 @@ func LoadConfig() {
 		JWTSecretPath:       "/run/secrets/jwt_secret",
 		ServerEncryptionKey: readSecret("server_encryption_key"),
 		RulesCheckInterval:  getenvOrDefaultInt("RULES_CHECK_INTERVAL", 300),
+		BaseURL:             getenvOrDefault("BASE_URL", "http://localhost:8080"),
 	}
 }
 

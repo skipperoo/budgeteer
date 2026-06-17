@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"budgeteer-backend/internal/config"
 	"budgeteer-backend/internal/crypto"
 	"budgeteer-backend/internal/logger"
 	"budgeteer-backend/internal/model"
@@ -25,6 +26,7 @@ type InvitationService struct {
 	NotificationRepo  *repository.NotificationRepository
 	serverPrivateKey  []byte
 	serverPublicKey   []byte
+	BaseURL           string
 }
 
 var Invitations *InvitationService
@@ -41,7 +43,15 @@ func InitInvitationService() {
 		UserRepo:         &repository.UserRepository{},
 		EmailRepo:        &repository.EmailRepository{},
 		NotificationRepo: &repository.NotificationRepository{},
+		BaseURL:          getBaseURL(),
 	}
+}
+
+func getBaseURL() string {
+	if config.Cfg != nil && config.Cfg.BaseURL != "" {
+		return config.Cfg.BaseURL
+	}
+	return "http://localhost:8080"
 }
 
 // InitInvitationServiceWithKeys is called after rule service is initialized
@@ -410,7 +420,7 @@ func (s *InvitationService) notifyInviter(ctx context.Context, inviterID, notifT
 func (s *InvitationService) sendInvitationEmail(ctx context.Context, toEmail, entityType, entityID string, isVerified bool) {
 	subject := fmt.Sprintf("Budgeteer: You have a pending %s invitation", entityType)
 	body := fmt.Sprintf("You have been invited to a %s on Budgeteer.\n\n", entityType)
-	body += "Log in to view and accept your invitation: https://app.budgeteer.com/notifications\n"
+	body += fmt.Sprintf("Log in to view and accept your invitation: %s/notifications\n", s.BaseURL)
 
 	email := &model.EmailOutbox{
 		ID:           uuid.New().String(),
@@ -430,7 +440,7 @@ func (s *InvitationService) sendInvitationEmail(ctx context.Context, toEmail, en
 func (s *InvitationService) sendSubscriptionEmail(ctx context.Context, toEmail, entityType, entityID string) {
 	subject := fmt.Sprintf("Budgeteer: You've been invited to join")
 	body := fmt.Sprintf("Someone invited you to a %s on Budgeteer.\n\n", entityType)
-	body += "Create an account to accept: https://app.budgeteer.com/register\n"
+	body += fmt.Sprintf("Create an account to accept: %s/register\n", s.BaseURL)
 
 	email := &model.EmailOutbox{
 		ID:           uuid.New().String(),
