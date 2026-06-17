@@ -1,6 +1,6 @@
 # Budgeteer - Technical Specifications
 
-> **Revision 4** — Added invitation system for user_transfer rules and joint accounts. Key changes: generic `invitations` table, `notifications` table (in-app panel), `target_email` + `status` on rules, `status` on account_users, invitation expiry worker, email-based account invites (encrypt with server's public key, re-encrypt on accept), notification badge in nav bar. See Section 4 (Background Workers / API) for invitation/notification endpoints, Section 5 for the `invitations` and `notifications` tables.
+> **Revision 5** — Added commission tracking, income rule type, and rule alert notifications. Key changes: `commission` field in transaction and rule payloads; `income` rule type (positive auto-generated transactions); `alert_offset INTERVAL` column on the `rules` table for pre-fire notifications; `RuleNotifier` background worker; frontend ECIES-prefix detection for rule-generated transactions (`"1|"` → decrypt with X25519 private key, fallback to AES-GCM with account key). See Section 2 (ECIES prefix routing), Section 3 (commission display, income type), Section 4 (RuleNotifier worker, alert_offset API), Section 5 (`alert_offset` + `last_alerted_at` columns).
 
 ---
 
@@ -24,7 +24,7 @@ The frontend acts as the primary source of truth during active usage. Operations
 
 To balance E2E encryption with the requirements of TimescaleDB and joint account sharing, the following cryptographic model is enforced:
 
-- **Data Splitting:** Metadata required for database routing and time-series indexing (`transaction_id`, `account_id`, `timestamp`) remains in plain text. Sensitive payload data (`amount`, `category`, `notes`, `counterparty`) is encrypted. This means all financial aggregations (balances, charts) are computed client-side after decryption.
+- **Data Splitting:** Metadata required for database routing and time-series indexing (`transaction_id`, `account_id`, `timestamp`) remains in plain text. Sensitive payload data (`amount`, `category`, `notes`, `counterparty`, `commission`) is encrypted. This means all financial aggregations (balances, charts) are computed client-side after decryption.
 - **Encryption Pipeline:** `JSON Payload` → `Compress (LZ4)` → `Encrypt (AES-256-GCM)` → `Base64 Encode` (for JSON transport).
 - **Key Management:** Users generate an **X25519** keypair upon registration (preferred over RSA for smaller key size, faster operations, and better modern security posture). Ed25519 is used for any signatures required in future.
   - The **Private Key** is symmetrically encrypted using the user's password via `Argon2id` (recommended parameters: `m=65536`, `t=3`, `p=4`) + `AES-256-GCM`, and stored server-side. It is only decrypted client-side during active sessions and **held in memory only** — never written to IndexedDB, localStorage, or any persistent client storage.
@@ -35,6 +35,7 @@ To balance E2E encryption with the requirements of TimescaleDB and joint account
 - **Invitation Flow (Accounts + Rules):** Instead of requiring the inviter to fetch the invitee's public key upfront, the inviter can encrypt the account key (or rule payload) with the **server's X25519 public key** and submit it. The server stores this in the `invitations` table. When the invitee accepts, the server decrypts with its private key and re-encrypts with the invitee's public key. This allows inviting unregistered users (who don't have a keypair yet).
   - For account invitations: the inviter encrypts `{"account_key": "base64..."}` with the server's public key.
   - For user_transfer rule invitations: the sender creates the rule with `target_email`, the rule starts as `pending_accepted`. When the receiver accepts, they select an account. The chosen account ID is encrypted with the server's public key and stored on the rule as `target_account_encrypted`.
+- **ECIES Prefix Routing (Frontend):** When decrypting a transaction payload, the frontend checks the first two characters of `encrypted_payload`. If it starts with `"1|"`, the payload was encrypted via ECIES (X25519 + AES-GCM) using the user's X25519 public key (rule-generated transactions). The frontend decrypts it using the in-memory X25519 private key via `decryptECIESPayload`. Otherwise, the payload is an AES-GCM ciphertext encrypted with the account key, and the frontend decrypts it via `decryptTransactionPayload`. This distinction is invisible to the user.
 - **In-App Notifications:** The `notifications` table stores in-app messages. A notification badge in the sidebar/bottom nav shows the unread count, polled every 30 seconds.
 - **30-Day Expiry:** Pending invitations that are not accepted within 30 days are automatically expired. For rules, the rule is deleted. For accounts, just the invitation record is expired. The inviter receives both an in-app notification and an email.
 - **Known Limitation — Member Removal:** When a user is removed from a joint account, they retain their copy of the Account Key. Full forward secrecy would require re-keying the account (generating a new Account Key and re-encrypting all future transactions). This is deferred to a post-v1 milestone; removal should be documented as revoking write access only.
@@ -67,10 +68,12 @@ Upon login, the user's `encrypted_private_key` is fetched from the server and de
   - **Joint Accounts:** Invite users via email/ID to share accounts seamlessly.
 - **Rules Management:**
   - Create/list/edit/delete automated rules for recurring payments and transfers.
-  - Rule types: `payment` (recurring expense), `transfer` (between own accounts), `user_transfer` (cross-user).
+  - Rule types: `payment` (recurring expense), `transfer` (between own accounts), `user_transfer` (cross-user), `income` (positive auto-generated income).
   - Rule data is encrypted client-side with the server's X25519 public key before being sent to the API.
-  - Scheduling fields (frequency, next_occurrence) are plaintext for server-side querying.
+  - Scheduling fields (frequency, next_occurrence, alert_offset) are plaintext for server-side querying.
   - Generated transactions are encrypted with the target user's X25519 public key and stored with an ECIES `1|` prefix.
+  - Commission field optional on all rule types (shown separately from the amount in transaction cards and detail overlays).
+  - Alert offset dropdown (1 hour, 2 hours, 12 hours, 1 day, 2 days, 1 week, 2 weeks) creates a pre-fire notification + email via the RuleNotifier worker.
 - **Settings:**
   - Account management (password changes trigger re-encryption of the private key with the new password-derived key; see Section 4 API).
   - Key rotation (generates a new keypair and re-encrypts all Account Keys for the user's accounts).
@@ -100,6 +103,7 @@ Categories are stored on the **backend** under the user's profile (the `user_cat
   - **Savings Plan Cron:** Daily job checking for savings plans where `tracking_end` has passed or where `last_logged_at` is older than 30 days. If no recent activity is detected from plain-text metadata, it queues a reminder email.
   - **Sync Queue Cleanup:** Daily job deleting `sync_queue` rows where `consumed_at IS NOT NULL AND consumed_at < NOW() - INTERVAL '30 days'`. Prevents unbounded table growth.
   - **Rule Scheduler:** Polls the `rules` table for active rules where `next_occurrence <= NOW()`, decrypts the rule payload with the server's X25519 private key, checks preconditions (sufficient balance, matching currencies), and atomically creates transactions (encrypted with the user's X25519 public key via ECIES) and updates account balances. For `user_transfer` rules created via invitation, the target account is decrypted from `target_account_encrypted` and the target user is looked up from the invitation. Configurable interval via `RULES_CHECK_INTERVAL` env var (default: 300 seconds).
+  - **Rule Notifier:** Polls the `rules` table for active rules where `alert_offset IS NOT NULL` and `(next_occurrence - alert_offset) <= NOW()`. Sends an in-app notification and queues an email for each rule, then sets `last_alerted_at` to avoid duplicate alerts. Configurable interval via `RULES_CHECK_INTERVAL` env var (default: 300 seconds).
   - **Invitation Expiry:** Runs every 6 hours, checks the `invitations` table for pending invitations where `expires_at < NOW()`. For expired rule invitations, the rule is deleted. The invitation is marked `expired`, the inviter receives an in-app notification and an email via the email_outbox.
 
 ### API Design
@@ -131,7 +135,7 @@ _Note: All Sync, Accounts, and Users endpoints require Auth middleware (JWT vali
 | **DELETE** | `/api/v1/transactions/{id}/documents/{docId}`      | Documents | Deletes a document from a transaction.                                                                                                                           |
 | **GET**    | `/api/v1/rules/public-key`                         | Rules     | Returns the server's X25519 public key (unauthenticated). Used by the frontend to encrypt rule payloads.                                                         |
 | **GET**    | `/api/v1/rules`                                    | Rules     | Lists all rules for the authenticated user.                                                                                                                      |
-| **POST**   | `/api/v1/rules`                                    | Rules     | Creates a new rule. Body: `{ name, encrypted_payload, frequency, next_occurrence, end_date?, max_occurrences?, target_email? }`. `target_email` triggers pending_accepted flow for user_transfer rules. |
+| **POST**   | `/api/v1/rules`                                    | Rules     | Creates a new rule. Body: `{ name, encrypted_payload, frequency, next_occurrence, end_date?, max_occurrences?, target_email?, alert_offset? }`. `target_email` triggers pending_accepted flow for user_transfer rules. `alert_offset` is an INTERVAL string (e.g. `"1 hour"`, `"2 days"`) for pre-fire alert scheduling. |
 | **PUT**    | `/api/v1/rules/{id}`                               | Rules     | Updates a rule. Only the owner can update.                                                                                                                       |
 | **DELETE** | `/api/v1/rules/{id}`                               | Rules     | Deletes a rule. Only the owner can delete.                                                                                                                       |
 | **GET**    | `/api/v1/notifications`                            | Notifications | Lists in-app notifications for the authenticated user.                                                                                                        |
@@ -166,6 +170,14 @@ import (
 )
 
 func main() {
+    logger.InitLogger()
+    defer logger.CloseLogger()
+
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+
+    // ... database + redis connections ...
+
     recoverMw := routy.NewRecoverMiddleware(nil)
     loggingMw := routy.NewLoggingMiddleware(middleware.StructuredLogger)
 
@@ -174,45 +186,78 @@ func main() {
     router.
         AddMiddleware(recoverMw.GetMiddleware()).
         AddMiddleware(loggingMw.GetMiddleware()).
-        AddHandler("POST /api/v1/auth/register",   handler.Register).
-        AddHandler("POST /api/v1/auth/verify-otp", handler.VerifyOTP).
-        AddHandler("POST /api/v1/auth/login",       handler.Login).
-        AddHandler("GET  /api/v1/rules/public-key", handler.RulePublicKey)
+        AddHandler("POST /api/v1/auth/register",        handler.Register).
+        AddHandler("POST /api/v1/auth/verify-otp",      handler.VerifyOTP).
+        AddHandler("POST /api/v1/auth/login",            handler.Login).
+        AddHandler("POST /api/v1/auth/login-verify-otp", handler.LoginVerifyOTP).
+        AddHandler("GET  /api/v1/health",                handler.HealthCheck).
+        AddHandler("GET  /api/v1/rules/public-key",      handler.RulePublicKey)
 
-    // --- Protected routes (JWT + Redis blocklist check) ---
+    // --- Protected routes (JWT + Redis blocklist) ---
     protected := routy.NewRouter()
     protected.
         AddMiddleware(middleware.JWTAuth).
-        AddHandler("POST   /api/v1/auth/logout",   handler.Logout).
-        AddHandler("GET    /api/v1/auth/keys",     handler.GetKeys).
-        AddHandler("PUT    /api/v1/auth/password", handler.ChangePassword).
-        AddHandler("GET    /api/v1/users/lookup",  handler.LookupUser).
-        AddHandler("GET    /api/v1/sync/pull",     handler.SyncPull).
-        AddHandler("POST   /api/v1/sync/push",     handler.SyncPush).
-        AddHandler("POST   /api/v1/accounts/",                   handler.CreateAccount).
-        AddHandler("DELETE /api/v1/accounts/{id}",               handler.DeleteAccount).
-        AddHandler("POST   /api/v1/accounts/{id}/invite",        handler.InviteToAccount).
-        AddHandler("GET    /api/v1/accounts/{id}/users",         handler.ListAccountUsers).
-        AddHandler("DELETE /api/v1/accounts/{id}/users/{uid}",   handler.RemoveAccountUser).
-        AddHandler("GET    /api/v1/rules",          handler.ListRules).
-        AddHandler("POST   /api/v1/rules",          handler.CreateRule).
-        AddHandler("PUT    /api/v1/rules/{id}",     handler.UpdateRule).
-        AddHandler("DELETE /api/v1/rules/{id}",     handler.DeleteRule).
+        AddHandler("POST   /v1/auth/logout",               handler.Logout).
+        AddHandler("GET    /v1/auth/keys",                 handler.GetKeys).
+        AddHandler("GET    /v1/auth/me",                   handler.Me).
+        AddHandler("PUT    /v1/auth/password",             handler.ChangePassword).
+        AddHandler("GET    /v1/auth/preferences",           handler.GetPreferences).
+        AddHandler("PUT    /v1/auth/preferences",           handler.UpdatePreferences).
+        AddHandler("GET    /v1/users/lookup",              handler.LookupUser).
+        AddHandler("GET    /v1/sync/pull",                 handler.SyncPull).
+        AddHandler("POST   /v1/sync/push",                 handler.SyncPush).
+        AddHandler("GET    /v1/accounts",                  handler.ListAccounts).
+        AddHandler("POST   /v1/accounts",                  handler.CreateAccount).
+        AddHandler("PUT    /v1/accounts/{id}",             handler.UpdateAccount).
+        AddHandler("DELETE /v1/accounts/{id}",             handler.DeleteAccount).
+        AddHandler("POST   /v1/accounts/{id}/invite",        handler.InviteToAccount).
+        AddHandler("PUT    /v1/accounts/{id}/key",           handler.UpdateMyAccountKey).
+        AddHandler("GET    /v1/accounts/{id}/users",         handler.ListAccountUsers).
+        AddHandler("DELETE /v1/accounts/{id}/users/{uid}",   handler.RemoveAccountUser).
+        AddHandler("GET    /v1/accounts/{id}/transactions",  handler.ListTransactions).
+        AddHandler("POST   /v1/accounts/{id}/transactions",  handler.CreateTransaction).
+        AddHandler("PUT    /v1/transactions/{id}",           handler.UpdateTransaction).
+        AddHandler("DELETE /v1/transactions/{id}",           handler.DeleteTransaction).
+        AddHandler("GET    /v1/categories",                  handler.ListCategories).
+        AddHandler("POST   /v1/categories",                  handler.CreateCategory).
+        AddHandler("DELETE /v1/categories/{id}",             handler.DeleteCategory).
+        // Transaction documents
+        AddHandler("POST   /v1/transactions/{id}/documents",                handler.UploadDocument).
+        AddHandler("GET    /v1/transactions/{id}/documents",                handler.ListDocuments).
+        AddHandler("GET    /v1/transactions/{id}/documents/{docId}/data",   handler.GetDocumentData).
+        AddHandler("DELETE /v1/transactions/{id}/documents/{docId}",        handler.DeleteDocument).
+        // Rules
+        AddHandler("GET    /v1/rules",          handler.ListRules).
+        AddHandler("POST   /v1/rules",          handler.CreateRule).
+        AddHandler("PUT    /v1/rules/{id}",     handler.UpdateRule).
+        AddHandler("DELETE /v1/rules/{id}",     handler.DeleteRule).
         // Notifications
-        AddHandler("GET    /api/v1/notifications",                handler.ListNotifications).
-        AddHandler("GET    /api/v1/notifications/count",          handler.CountUnreadNotifications).
-        AddHandler("PUT    /api/v1/notifications/{id}/read",      handler.MarkNotificationRead).
+        AddHandler("GET    /v1/notifications",          handler.ListNotifications).
+        AddHandler("GET    /v1/notifications/count",    handler.CountUnreadNotifications).
+        AddHandler("PUT    /v1/notifications/{id}/read", handler.MarkNotificationRead).
         // Invitations
-        AddHandler("GET    /api/v1/invitations",                  handler.ListPendingInvitations).
-        AddHandler("POST   /api/v1/invitations/{id}/accept",      handler.AcceptInvitation).
-        AddHandler("POST   /api/v1/invitations/{id}/decline",     handler.DeclineInvitation)
-    protected.Finalize()
+        AddHandler("GET    /v1/invitations",              handler.ListPendingInvitations).
+        AddHandler("POST   /v1/invitations/{id}/accept",  handler.AcceptInvitation).
+        AddHandler("POST   /v1/invitations/{id}/decline", handler.DeclineInvitation)
 
-    router.AddSubroute("/api/", protected)
-    router.Finalize()
+    router.AddSubroute("/api/", protected.Finalize())
+    final := router.Finalize()
 
-    log.Println("Budgeteer listening on :8080")
-    http.ListenAndServe(":8080", router)
+    // --- Background workers ---
+    go worker.NewEmailDispatcher().Run(ctx)
+    go worker.NewSavingsCron().Run(ctx)
+    go worker.NewSyncCleanup().Run(ctx)
+    go worker.NewRuleScheduler().Run(ctx)
+    go worker.NewInvitationExpiryWorker().Run(ctx)
+    go worker.NewRuleNotifier().Run(ctx)
+
+    server := &http.Server{
+        Addr:    ":8080",
+        Handler: final,
+        // ... timeouts ...
+    }
+    // ... graceful shutdown ...
+    http.ListenAndServe(":8080", server)
 }
 ```
 
@@ -347,7 +392,7 @@ CREATE TABLE user_categories (
 
 -- ============================================================
 -- TRANSACTIONS (TimescaleDB Hypertable)
--- Encrypted payload contains: amount, category, notes, counterparty.
+-- Encrypted payload contains: amount, category, notes, counterparty, commission.
 -- Routing metadata (account_id, time) is intentionally plain text.
 -- ============================================================
 CREATE TABLE transactions (
@@ -437,6 +482,8 @@ CREATE TABLE rules (
     occurrences_so_far   INT NOT NULL DEFAULT 0,
     last_triggered_at    TIMESTAMPTZ,                           -- when it last fired
     is_active            BOOLEAN NOT NULL DEFAULT TRUE,
+    alert_offset         INTERVAL,                              -- added in 0009; pre-fire alert window (e.g. '1 hour', '2 days')
+    last_alerted_at      TIMESTAMPTZ,                           -- added in 0009; prevents duplicate alerts
     created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

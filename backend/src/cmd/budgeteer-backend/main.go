@@ -133,6 +133,9 @@ func main() {
 	invitationExpiry := worker.NewInvitationExpiryWorker()
 	go invitationExpiry.Run(ctx)
 
+	ruleNotifier := worker.NewRuleNotifier()
+	go ruleNotifier.Run(ctx)
+
 	server := &http.Server{
 		Addr:         ":8080",
 		Handler:      final,

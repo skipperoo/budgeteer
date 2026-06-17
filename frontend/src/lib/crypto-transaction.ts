@@ -14,6 +14,7 @@ export interface TransactionPayload {
   category: string;
   notes: string;
   counterparty: string;
+  commission?: number; // fee added to amount; default 0
 }
 
 /**
@@ -27,6 +28,18 @@ export async function encryptTransactionPayload(
   const json = JSON.stringify(payload);
   const compressed = compress(json);
   return encryptData(compressed, accountKeyBase64);
+}
+
+/**
+ * Compute the effective amount of a transaction including commission.
+ *
+ * For expenses (amount < 0): total = amount - commission (more negative).
+ * For income   (amount > 0): total = amount - commission (less positive).
+ *
+ * This is the actual amount that hits the account balance.
+ */
+export function effectiveAmount(payload: TransactionPayload): number {
+  return payload.amount - (payload.commission ?? 0);
 }
 
 /**

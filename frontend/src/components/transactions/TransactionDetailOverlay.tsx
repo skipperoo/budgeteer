@@ -56,6 +56,7 @@ export function TransactionDetailOverlay({
 }: TransactionDetailOverlayProps) {
   const { id, time, payload } = transaction;
   const isIncome = payload.amount >= 0;
+  const totalAmount = payload.amount - (payload.commission || 0);
 
   // Document state
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
@@ -206,7 +207,7 @@ export function TransactionDetailOverlay({
                   isIncome ? "text-income" : "text-foreground"
                 }`}
               >
-                {formatCurrency(payload.amount, currency, true)}
+                {formatCurrency(totalAmount, currency, true)}
               </span>
               <span className="block text-xs text-muted-foreground mt-0.5">
                 {isIncome ? "Income" : "Expense"}
@@ -241,6 +242,26 @@ export function TransactionDetailOverlay({
                 <span className="text-muted-foreground italic">None</span>
               )}
             </div>
+            {payload.commission && payload.commission > 0 && (
+              <>
+                <div>
+                  <span className="block text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
+                    Amount
+                  </span>
+                  <span className="font-medium">
+                    {formatCurrency(Math.abs(payload.amount), currency)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
+                    Commission / Fee
+                  </span>
+                  <span className="font-medium text-destructive">
+                    {formatCurrency(payload.commission, currency)}
+                  </span>
+                </div>
+              </>
+            )}
             <div className="col-span-2">
               <span className="block text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
                 Counterparty

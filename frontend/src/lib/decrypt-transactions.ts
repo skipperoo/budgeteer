@@ -10,6 +10,7 @@ import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { decryptAccountKeyForRecipient, encryptAccountKeyForRecipient, generateAccountKey } from "@/lib/crypto";
 import { decryptTransactionPayload } from "@/lib/crypto-transaction";
+import { decryptECIESPayload } from "@/lib/crypto-rules";
 import type { AccountUser, Transaction } from "@/types";
 import type { TransactionPayload } from "@/lib/crypto-transaction";
 
@@ -32,19 +33,47 @@ export interface DecryptResult {
 }
 
 /**
- * Decrypt a single transaction's payload using the account key.
+ * Decrypt a single transaction's payload.
+ *
+ * - Rule-generated transactions use ECIES (encrypted with the user's X25519
+ *   public key) and have a "1|" prefix. These require the user's private key.
+ * - User-created transactions use AES-256-GCM with the account key.
+ *
  * Returns null for the payload if decryption fails (instead of throwing),
  * so a single bad transaction doesn't break a whole batch.
  */
 export async function decryptTx(
   tx: Transaction,
-  accountKeyBase64: string
+  accountKeyBase64: string,
+  userPrivateKeyBase64?: string,
 ): Promise<DecryptResult> {
   try {
-    const payload = await decryptTransactionPayload(
-      tx.encrypted_payload,
-      accountKeyBase64
-    );
+    let payload: TransactionPayload;
+
+    if (tx.encrypted_payload.startsWith("1|")) {
+      // ECIES-encrypted (rule-generated) — requires user's X25519 private key
+      if (!userPrivateKeyBase64) {
+        return {
+          id: tx.id,
+          time: tx.time,
+          account_id: tx.account_id,
+          created_by: tx.created_by,
+          payload: null,
+          decryptError: "Key unavailable",
+        };
+      }
+      payload = await decryptECIESPayload<TransactionPayload>(
+        tx.encrypted_payload,
+        userPrivateKeyBase64,
+      );
+    } else {
+      // Account-key-encrypted (user-created)
+      payload = await decryptTransactionPayload(
+        tx.encrypted_payload,
+        accountKeyBase64,
+      );
+    }
+
     return {
       id: tx.id,
       time: tx.time,
@@ -200,7 +229,7 @@ export async function fetchAndDecryptTransactions(
   if (!txs || txs.length === 0) return [];
 
   const results = await Promise.all(
-    txs.map((tx) => decryptTx(tx, accountKey))
+    txs.map((tx) => decryptTx(tx, accountKey, userPrivateKeyBase64))
   );
   return filterDecrypted(results).sort(
     (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()
@@ -221,7 +250,7 @@ export async function fetchAndDecryptTransactionsWithErrors(
   if (!txs || txs.length === 0) return [];
 
   const results = await Promise.all(
-    txs.map((tx) => decryptTx(tx, accountKey))
+    txs.map((tx) => decryptTx(tx, accountKey, userPrivateKeyBase64))
   );
   return results.sort(
     (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()

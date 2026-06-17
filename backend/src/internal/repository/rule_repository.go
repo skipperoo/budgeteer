@@ -15,23 +15,24 @@ type RuleRepository struct{}
 
 func (r *RuleRepository) Create(ctx context.Context, rule *model.Rule) error {
 	q := database.GetQuerier(ctx)
-	query := `INSERT INTO rules (id, created_by, name, encrypted_payload, frequency, next_occurrence, end_date, max_occurrences, occurrences_so_far, is_active, status, target_email, target_account_encrypted, created_at, updated_at)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
+	query := `INSERT INTO rules (id, created_by, name, encrypted_payload, frequency, next_occurrence, end_date, max_occurrences, occurrences_so_far, is_active, status, target_email, target_account_encrypted, alert_offset, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`
 	_, err := q.Exec(ctx, query,
 		rule.ID, rule.CreatedBy, rule.Name, rule.EncryptedPayload,
 		rule.Frequency, rule.NextOccurrence, rule.EndDate, rule.MaxOccurrences,
 		rule.OccurrencesSoFar, rule.IsActive, rule.Status, rule.TargetEmail,
-		rule.TargetAccountEncrypted, rule.CreatedAt, rule.UpdatedAt)
+		rule.TargetAccountEncrypted, rule.AlertOffset, rule.CreatedAt, rule.UpdatedAt)
 	return err
 }
 
 func scanRule(row pgx.Row) (*model.Rule, error) {
 	rl := &model.Rule{}
-	var targetEmail, targetAccountEncrypted pgtype.Text
+	var targetEmail, targetAccountEncrypted, alertOffset pgtype.Text
 	err := row.Scan(&rl.ID, &rl.CreatedBy, &rl.Name, &rl.EncryptedPayload,
 		&rl.Frequency, &rl.NextOccurrence, &rl.EndDate, &rl.MaxOccurrences,
 		&rl.OccurrencesSoFar, &rl.LastTriggeredAt, &rl.IsActive, &rl.Status,
-		&rl.CreatedAt, &rl.UpdatedAt, &targetEmail, &targetAccountEncrypted)
+		&rl.CreatedAt, &rl.UpdatedAt, &targetEmail, &targetAccountEncrypted,
+		&alertOffset, &rl.LastAlertedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -43,12 +44,16 @@ func scanRule(row pgx.Row) (*model.Rule, error) {
 		s := targetAccountEncrypted.String
 		rl.TargetAccountEncrypted = &s
 	}
+	if alertOffset.Valid {
+		s := alertOffset.String
+		rl.AlertOffset = &s
+	}
 	return rl, nil
 }
 
 func (r *RuleRepository) FindByID(ctx context.Context, id string) (*model.Rule, error) {
 	q := database.GetQuerier(ctx)
-	query := `SELECT id, created_by, name, encrypted_payload, frequency, next_occurrence, end_date, max_occurrences, occurrences_so_far, last_triggered_at, is_active, status, created_at, updated_at, target_email, target_account_encrypted
+	query := `SELECT id, created_by, name, encrypted_payload, frequency, next_occurrence, end_date, max_occurrences, occurrences_so_far, last_triggered_at, is_active, status, created_at, updated_at, target_email, target_account_encrypted, alert_offset
 	          FROM rules WHERE id = $1`
 	row := q.QueryRow(ctx, query, id)
 	rl, err := scanRule(row)
@@ -63,7 +68,7 @@ func (r *RuleRepository) FindByID(ctx context.Context, id string) (*model.Rule, 
 
 func (r *RuleRepository) ListByUserID(ctx context.Context, userID string) ([]*model.Rule, error) {
 	q := database.GetQuerier(ctx)
-	query := `SELECT id, created_by, name, encrypted_payload, frequency, next_occurrence, end_date, max_occurrences, occurrences_so_far, last_triggered_at, is_active, status, created_at, updated_at, target_email, target_account_encrypted
+	query := `SELECT id, created_by, name, encrypted_payload, frequency, next_occurrence, end_date, max_occurrences, occurrences_so_far, last_triggered_at, is_active, status, created_at, updated_at, target_email, target_account_encrypted, alert_offset
 	          FROM rules WHERE created_by = $1 ORDER BY created_at DESC`
 	return scanRules(q.Query(ctx, query, userID))
 }
@@ -71,7 +76,7 @@ func (r *RuleRepository) ListByUserID(ctx context.Context, userID string) ([]*mo
 // FindDueRules returns active rules where next_occurrence <= now.
 func (r *RuleRepository) FindDueRules(ctx context.Context, now time.Time) ([]*model.Rule, error) {
 	q := database.GetQuerier(ctx)
-	query := `SELECT id, created_by, name, encrypted_payload, frequency, next_occurrence, end_date, max_occurrences, occurrences_so_far, last_triggered_at, is_active, status, created_at, updated_at, target_email, target_account_encrypted
+	query := `SELECT id, created_by, name, encrypted_payload, frequency, next_occurrence, end_date, max_occurrences, occurrences_so_far, last_triggered_at, is_active, status, created_at, updated_at, target_email, target_account_encrypted, alert_offset
 	          FROM rules WHERE is_active = TRUE AND status = 'active' AND next_occurrence <= $1
 	          ORDER BY next_occurrence ASC`
 	return scanRules(q.Query(ctx, query, now))
@@ -99,12 +104,13 @@ func (r *RuleRepository) Update(ctx context.Context, rule *model.Rule) error {
 	q := database.GetQuerier(ctx)
 	query := `UPDATE rules SET name = $1, encrypted_payload = $2, frequency = $3, next_occurrence = $4,
 	          end_date = $5, max_occurrences = $6, occurrences_so_far = $7, last_triggered_at = $8,
-	          is_active = $9, status = $10, target_email = $11, target_account_encrypted = $12, updated_at = $13 WHERE id = $14`
+	          is_active = $9, status = $10, target_email = $11, target_account_encrypted = $12,
+	          alert_offset = $13, updated_at = $14 WHERE id = $15`
 	_, err := q.Exec(ctx, query,
 		rule.Name, rule.EncryptedPayload, rule.Frequency, rule.NextOccurrence,
 		rule.EndDate, rule.MaxOccurrences, rule.OccurrencesSoFar, rule.LastTriggeredAt,
 		rule.IsActive, rule.Status, rule.TargetEmail, rule.TargetAccountEncrypted,
-		time.Now().UTC(), rule.ID)
+		rule.AlertOffset, time.Now().UTC(), rule.ID)
 	return err
 }
 
@@ -199,6 +205,29 @@ type BalanceUpdate struct {
 	Change    int64 // in minor currency units (cents)
 }
 
+// FindRulesNeedingAlerts returns active rules with an alert_offset set where
+// the alert window has opened (next_occurrence - alert_offset <= NOW()) and we
+// haven't already sent an alert (last_alerted_at IS NULL or outdated).
+func (r *RuleRepository) FindRulesNeedingAlerts(ctx context.Context, now time.Time) ([]*model.Rule, error) {
+	q := database.GetQuerier(ctx)
+	query := `SELECT id, created_by, name, encrypted_payload, frequency, next_occurrence, end_date, max_occurrences, occurrences_so_far, last_triggered_at, is_active, status, created_at, updated_at, target_email, target_account_encrypted, alert_offset, last_alerted_at
+	          FROM rules
+	          WHERE is_active = TRUE AND status = 'active'
+	            AND alert_offset IS NOT NULL
+	            AND (last_alerted_at IS NULL OR last_alerted_at < (next_occurrence - alert_offset))
+	            AND (next_occurrence - alert_offset) <= $1
+	          ORDER BY next_occurrence ASC`
+	return scanRules(q.Query(ctx, query, now))
+}
+
+// MarkRuleAlerted sets last_alerted_at to now to avoid duplicate alerts.
+func (r *RuleRepository) MarkRuleAlerted(ctx context.Context, id string, now time.Time) error {
+	q := database.GetQuerier(ctx)
+	_, err := q.Exec(ctx,
+		`UPDATE rules SET last_alerted_at = $1, updated_at = $1 WHERE id = $2`, now, id)
+	return err
+}
+
 // GetUserPublicKey returns a user's X25519 public key.
 func (r *RuleRepository) GetUserPublicKey(ctx context.Context, userID string) (string, error) {
 	q := database.GetQuerier(ctx)
@@ -212,6 +241,21 @@ func (r *RuleRepository) GetUserPublicKey(ctx context.Context, userID string) (s
 		return "", err
 	}
 	return pubKey, nil
+}
+
+// GetUserEmail returns the email for a user ID.
+func (r *RuleRepository) GetUserEmail(ctx context.Context, userID string) (string, error) {
+	q := database.GetQuerier(ctx)
+	var email string
+	err := q.QueryRow(ctx,
+		`SELECT email FROM users WHERE id = $1`, userID).Scan(&email)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", nil
+		}
+		return "", err
+	}
+	return email, nil
 }
 
 // GetAccountCurrency returns the currency of an account.

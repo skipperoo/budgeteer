@@ -17,6 +17,7 @@ export interface Rule {
   status: "pending_accepted" | "active";
   target_email?: string;
   target_account_encrypted?: string;
+  alert_offset?: string; // e.g. "1 hour", "2 days"
   created_at: string;
   updated_at: string;
 }
@@ -29,6 +30,7 @@ export interface CreateRuleRequest {
   end_date?: string;
   max_occurrences?: number;
   target_email?: string;
+  alert_offset?: string;
 }
 
 export interface UpdateRuleRequest {
@@ -39,6 +41,7 @@ export interface UpdateRuleRequest {
   end_date?: string | null;
   max_occurrences?: number;
   is_active?: boolean;
+  alert_offset?: string | null; // null = clear the offset
 }
 
 interface RuleStore {

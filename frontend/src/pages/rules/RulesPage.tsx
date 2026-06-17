@@ -11,7 +11,7 @@ import { encryptForRecipient } from "@/lib/crypto-rules";
 import { formatDate, formatDateTimeWithOffset, utcToLocalDatetime, getGMTOffset } from "@/lib/format";
 import { Trash2, Plus, Pencil, Loader2, AlertCircle } from "lucide-react";
 
-type RuleType = "payment" | "transfer" | "user_transfer";
+type RuleType = "payment" | "income" | "transfer" | "user_transfer";
 
 export default function RulesPage() {
   const {
@@ -41,6 +41,8 @@ export default function RulesPage() {
   const [formTargetUserId, setFormTargetUserId] = useState("");
   const [formTargetEmail, setFormTargetEmail] = useState("");
   const [formCategory, setFormCategory] = useState("");
+  const [formCommission, setFormCommission] = useState("");
+  const [formAlertOffset, setFormAlertOffset] = useState("");
   const [formNotes, setFormNotes] = useState("");
   const [formCounterparty, setFormCounterparty] = useState("");
   const [formFrequency, setFormFrequency] = useState("monthly");
@@ -63,12 +65,16 @@ export default function RulesPage() {
     fetchAccounts();
   }, []);
 
-  // Get categories for the selected type (payment rules use "expense" categories)
+  // Get categories for the selected type.
+  // Payment rules use expense categories; transfer/user_transfer rules can use either.
   const categories = useMemo(() => {
     if (formType === "payment") {
       return getCategories("expense");
     }
-    return [];
+    // For transfer and user_transfer, offer both income and expense categories
+    const incomeCats = getCategories("income");
+    const expenseCats = getCategories("expense");
+    return [...new Set([...incomeCats, ...expenseCats])];
   }, [formType, getCategories, useCategoryStore.getState().version]);
 
   const resetForm = useCallback(() => {
@@ -165,6 +171,7 @@ export default function RulesPage() {
 
     setSaving(true);
     try {
+      const commission = formCommission ? parseFloat(formCommission) : 0;
       const payload = {
         type: formType,
         amount: parseFloat(formAmount),
@@ -178,6 +185,7 @@ export default function RulesPage() {
         category_id: formCategory || undefined,
         notes: formNotes || undefined,
         counterparty: formCounterparty || undefined,
+        commission: commission > 0 ? commission : undefined,
       };
 
       if (!serverPublicKey) {
@@ -193,6 +201,8 @@ export default function RulesPage() {
 
       const nextOccurrence = new Date(formNextOccurrence).toISOString();
 
+      const alertOffset = formAlertOffset || undefined;
+
       if (editingRule) {
         await updateRule(editingRule.id, {
           name: formName.trim(),
@@ -205,6 +215,7 @@ export default function RulesPage() {
           max_occurrences: formMaxOccurrences
             ? parseInt(formMaxOccurrences, 10)
             : undefined,
+          alert_offset: alertOffset ?? null,
         });
       } else {
         const req: CreateRuleRequest = {
@@ -219,6 +230,7 @@ export default function RulesPage() {
             ? parseInt(formMaxOccurrences, 10)
             : undefined,
           target_email: formType === "user_transfer" ? formTargetEmail.trim() : undefined,
+          alert_offset: alertOffset,
         };
         await createRule(req);
       }
@@ -422,6 +434,7 @@ export default function RulesPage() {
                 className={selectStyles}
               >
                 <option value="payment">Payment</option>
+                <option value="income">Income</option>
                 <option value="transfer">Transfer (your accounts)</option>
                 <option value="user_transfer">Transfer (to another user)</option>
               </select>
@@ -497,10 +510,9 @@ export default function RulesPage() {
               </div>
             )}
 
-            {/* Category (for payment) */}
-            {formType === "payment" && (
-              <div className="space-y-1">
-                <Label htmlFor="rule-category">Category (optional)</Label>
+            {/* Category (optional for all rule types) */}
+            <div className="space-y-1">
+              <Label htmlFor="rule-category">Category (optional)</Label>
                 {!showCategoryInput ? (
                   <select
                     id="rule-category"
@@ -556,7 +568,6 @@ export default function RulesPage() {
                   </div>
                 )}
               </div>
-            )}
 
             {/* Counterparty (for payment) */}
             {formType === "payment" && (
@@ -580,6 +591,40 @@ export default function RulesPage() {
                 onChange={(e) => setFormNotes(e.target.value)}
                 placeholder="Monthly rent payment"
               />
+            </div>
+
+            {/* Commission (for all rule types) */}
+            <div className="space-y-1">
+              <Label htmlFor="rule-commission">Commission / Fee (optional)</Label>
+              <Input
+                id="rule-commission"
+                type="number"
+                step="0.01"
+                min="0"
+                value={formCommission}
+                onChange={(e) => setFormCommission(e.target.value)}
+                placeholder="0.00 — additional fee added to the amount"
+              />
+            </div>
+
+            {/* Alert offset — when to send a reminder before the rule fires */}
+            <div className="space-y-1">
+              <Label htmlFor="rule-alert">Notify me before</Label>
+              <select
+                id="rule-alert"
+                value={formAlertOffset}
+                onChange={(e) => setFormAlertOffset(e.target.value)}
+                className={selectStyles}
+              >
+                <option value="">Don't notify</option>
+                <option value="1 hour">1 hour before</option>
+                <option value="2 hours">2 hours before</option>
+                <option value="12 hours">12 hours before</option>
+                <option value="1 day">1 day before</option>
+                <option value="2 days">2 days before</option>
+                <option value="1 week">1 week before</option>
+                <option value="2 weeks">2 weeks before</option>
+              </select>
             </div>
 
             {/* Frequency */}

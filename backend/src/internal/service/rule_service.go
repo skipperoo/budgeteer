@@ -133,6 +133,7 @@ func (s *RuleService) CreateRule(ctx context.Context, userID string, req *model.
 		IsActive:         true,
 		Status:           status,
 		TargetEmail:      targetEmail,
+		AlertOffset:      req.AlertOffset,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -204,6 +205,13 @@ func (s *RuleService) UpdateRule(ctx context.Context, ruleID, userID string, req
 	if req.IsActive != nil {
 		rule.IsActive = *req.IsActive
 	}
+	if req.AlertOffset != nil {
+		if *req.AlertOffset == "" {
+			rule.AlertOffset = nil
+		} else {
+			rule.AlertOffset = req.AlertOffset
+		}
+	}
 	rule.UpdatedAt = time.Now().UTC()
 
 	if err := s.RuleRepo.Update(ctx, rule); err != nil {
@@ -270,6 +278,8 @@ func (s *RuleService) executeRule(ctx context.Context, rule *model.Rule, now tim
 	switch payload.Type {
 	case "payment":
 		return s.executePayment(ctx, rule, &payload, now)
+	case "income":
+		return s.executeIncome(ctx, rule, &payload, now)
 	case "transfer":
 		return s.executeTransfer(ctx, rule, &payload, now)
 	case "user_transfer":
@@ -288,19 +298,9 @@ func (s *RuleService) executePayment(ctx context.Context, rule *model.Rule, payl
 		return errors.New("source account not found")
 	}
 
-	// The accounts.balance column only reflects rule-created transactions.
-	// Manual/E2E-encrypted transactions are invisible to the server, so the
-	// stored balance may be zero even when the account has sufficient funds.
-	// We warn but proceed rather than blocking incorrectly.
-	balance, err := s.RuleRepo.GetAccountBalance(ctx, payload.SourceAccountID)
-	if err != nil {
-		return fmt.Errorf("get balance: %w", err)
-	}
 	amountCents := int64(math.Round(payload.Amount * 100))
-	if balance < amountCents {
-		logger.Warning("Rule %s: stored balance low for account %s (balance=%d, amount=%.2f) — proceeding anyway",
-			rule.ID, payload.SourceAccountID, balance, payload.Amount)
-	}
+	commissionCents := int64(math.Round(payload.Commission * 100))
+	totalCents := amountCents + commissionCents
 
 	// Get user's public key
 	userPubKey, err := s.RuleRepo.GetUserPublicKey(ctx, rule.CreatedBy)
@@ -319,6 +319,7 @@ func (s *RuleService) executePayment(ctx context.Context, rule *model.Rule, payl
 	txPayload := map[string]interface{}{
 		"amount":       -payload.Amount, // expense
 		"category":     payload.CategoryID,
+		"commission":   payload.Commission,
 		"notes":        payload.Notes,
 		"counterparty": payload.Counterparty,
 		"rule_id":      rule.ID,
@@ -353,9 +354,9 @@ func (s *RuleService) executePayment(ctx context.Context, rule *model.Rule, payl
 			return fmt.Errorf("insert transaction: %w", err)
 		}
 
-		// Update balance (negative for expense)
+		// Update balance (negative for expense, includes commission)
 		if err := s.RuleRepo.UpdateAccountBalances(txCtx, []repository.BalanceUpdate{
-			{AccountID: payload.SourceAccountID, Change: -amountCents},
+			{AccountID: payload.SourceAccountID, Change: -totalCents},
 		}); err != nil {
 			return fmt.Errorf("update balance: %w", err)
 		}
@@ -390,6 +391,106 @@ func (s *RuleService) executePayment(ctx context.Context, rule *model.Rule, payl
 	return nil
 }
 
+func (s *RuleService) executeIncome(ctx context.Context, rule *model.Rule, payload *model.RulePayload, now time.Time) error {
+	sourceCurrency, err := s.RuleRepo.GetAccountCurrency(ctx, payload.SourceAccountID)
+	if err != nil {
+		return fmt.Errorf("get source currency: %w", err)
+	}
+	if sourceCurrency == "" {
+		return errors.New("account not found")
+	}
+
+	amountCents := int64(math.Round(payload.Amount * 100))
+	commissionCents := int64(math.Round(payload.Commission * 100))
+	// For income, commission reduces the amount received
+	totalCents := amountCents - commissionCents
+	if totalCents < 0 {
+		totalCents = 0
+	}
+
+	// Get user's public key
+	userPubKey, err := s.RuleRepo.GetUserPublicKey(ctx, rule.CreatedBy)
+	if err != nil {
+		return fmt.Errorf("get user public key: %w", err)
+	}
+	if userPubKey == "" {
+		return errors.New("user not found")
+	}
+	userPubKeyBytes, err := base64.StdEncoding.DecodeString(userPubKey)
+	if err != nil {
+		return fmt.Errorf("decode user public key: %w", err)
+	}
+
+	// Build transaction payload
+	txPayload := map[string]interface{}{
+		"amount":       payload.Amount, // income (positive)
+		"category":     payload.CategoryID,
+		"commission":   payload.Commission,
+		"notes":        payload.Notes,
+		"counterparty": payload.Counterparty,
+		"rule_id":      rule.ID,
+	}
+	txPayloadJSON, _ := json.Marshal(txPayload)
+
+	// Encrypt with user's public key
+	encryptedPayload, err := crypto.EncryptWithPublicKey(txPayloadJSON, userPubKeyBytes)
+	if err != nil {
+		return fmt.Errorf("encrypt transaction payload: %w", err)
+	}
+
+	txTime := rule.NextOccurrence
+
+	tx := &model.Transaction{
+		ID:               uuid.New().String(),
+		Time:             txTime,
+		AccountID:        payload.SourceAccountID,
+		CreatedBy:        rule.CreatedBy,
+		EncryptedPayload: encryptedPayload,
+		Version:          1,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	txErr := database.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.RuleRepo.InsertRuleTransaction(txCtx, tx); err != nil {
+			return fmt.Errorf("insert transaction: %w", err)
+		}
+
+		// Update balance (positive for income, net of commission)
+		if err := s.RuleRepo.UpdateAccountBalances(txCtx, []repository.BalanceUpdate{
+			{AccountID: payload.SourceAccountID, Change: totalCents},
+		}); err != nil {
+			return fmt.Errorf("update balance: %w", err)
+		}
+
+		next := computeNextOccurrence(rule.Frequency, rule.NextOccurrence)
+		if _, err := s.RuleRepo.UpdateNextOccurrence(txCtx, rule.ID, next, now); err != nil {
+			return fmt.Errorf("update next occurrence: %w", err)
+		}
+
+		if rule.MaxOccurrences != nil && rule.OccurrencesSoFar+1 >= *rule.MaxOccurrences {
+			if err := s.RuleRepo.DeactivateRule(txCtx, rule.ID); err != nil {
+				return fmt.Errorf("deactivate rule: %w", err)
+			}
+		}
+		if rule.EndDate != nil && next.After(*rule.EndDate) {
+			if err := s.RuleRepo.DeactivateRule(txCtx, rule.ID); err != nil {
+				return fmt.Errorf("deactivate rule: %w", err)
+			}
+		}
+
+		return nil
+	})
+
+	if txErr != nil {
+		return txErr
+	}
+
+	logger.Info("Rule %s (%s) executed: income of %.2f to account %s",
+		rule.ID, rule.Name, payload.Amount, payload.SourceAccountID)
+	return nil
+}
+
 func (s *RuleService) executeTransfer(ctx context.Context, rule *model.Rule, payload *model.RulePayload, now time.Time) error {
 	if payload.TargetAccountID == "" {
 		return errors.New("transfer rule missing target_account_id")
@@ -411,16 +512,9 @@ func (s *RuleService) executeTransfer(ctx context.Context, rule *model.Rule, pay
 		return errors.New("currency mismatch between accounts")
 	}
 
-	// The accounts.balance column only reflects rule-created transactions.
-	balance, err := s.RuleRepo.GetAccountBalance(ctx, payload.SourceAccountID)
-	if err != nil {
-		return fmt.Errorf("get balance: %w", err)
-	}
 	amountCents := int64(math.Round(payload.Amount * 100))
-	if balance < amountCents {
-		logger.Warning("Rule %s: stored balance low for account %s (balance=%d, amount=%.2f) — proceeding anyway",
-			rule.ID, payload.SourceAccountID, balance, payload.Amount)
-	}
+	commissionCents := int64(math.Round(payload.Commission * 100))
+	totalCents := amountCents + commissionCents
 
 	// Get user's public key
 	userPubKey, err := s.RuleRepo.GetUserPublicKey(ctx, rule.CreatedBy)
@@ -435,17 +529,21 @@ func (s *RuleService) executeTransfer(ctx context.Context, rule *model.Rule, pay
 		return fmt.Errorf("decode user public key: %w", err)
 	}
 
-	// Build transaction payloads
+	// Build transaction payloads with human-readable counterparty (rule name)
 	expensePayload := map[string]interface{}{
 		"amount":       -payload.Amount,
+		"category":     payload.CategoryID,
+		"commission":   payload.Commission,
 		"notes":        payload.Notes,
-		"counterparty": payload.TargetAccountID,
+		"counterparty": rule.Name,
 		"rule_id":      rule.ID,
 	}
 	incomePayload := map[string]interface{}{
 		"amount":       payload.Amount,
+		"category":     payload.CategoryID,
+		"commission":   payload.Commission,
 		"notes":        payload.Notes,
-		"counterparty": payload.SourceAccountID,
+		"counterparty": rule.Name,
 		"rule_id":      rule.ID,
 	}
 
@@ -493,7 +591,7 @@ func (s *RuleService) executeTransfer(ctx context.Context, rule *model.Rule, pay
 		}
 
 		if err := s.RuleRepo.UpdateAccountBalances(txCtx, []repository.BalanceUpdate{
-			{AccountID: payload.SourceAccountID, Change: -amountCents},
+			{AccountID: payload.SourceAccountID, Change: -totalCents},
 			{AccountID: payload.TargetAccountID, Change: amountCents},
 		}); err != nil {
 			return fmt.Errorf("update balances: %w", err)
@@ -581,18 +679,11 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 		return errors.New("currency mismatch between accounts")
 	}
 
-	// The accounts.balance column only reflects rule-created transactions.
-	balance, err := s.RuleRepo.GetAccountBalance(ctx, payload.SourceAccountID)
-	if err != nil {
-		return fmt.Errorf("get balance: %w", err)
-	}
 	amountCents := int64(math.Round(payload.Amount * 100))
-	if balance < amountCents {
-		logger.Warning("Rule %s: stored balance low for account %s (balance=%d, amount=%.2f) — proceeding anyway",
-			rule.ID, payload.SourceAccountID, balance, payload.Amount)
-	}
+	commissionCents := int64(math.Round(payload.Commission * 100))
+	totalCents := amountCents + commissionCents
 
-	// Get both users' public keys
+	// Get both users' public keys and emails
 	senderPubKey, err := s.RuleRepo.GetUserPublicKey(ctx, rule.CreatedBy)
 	if err != nil {
 		return fmt.Errorf("get sender public key: %w", err)
@@ -605,6 +696,15 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 		return errors.New("user not found")
 	}
 
+	senderEmail, err := s.RuleRepo.GetUserEmail(ctx, rule.CreatedBy)
+	if err != nil {
+		return fmt.Errorf("get sender email: %w", err)
+	}
+	receiverEmail, err := s.RuleRepo.GetUserEmail(ctx, targetUserID)
+	if err != nil {
+		return fmt.Errorf("get receiver email: %w", err)
+	}
+
 	senderPubKeyBytes, err := base64.StdEncoding.DecodeString(senderPubKey)
 	if err != nil {
 		return fmt.Errorf("decode sender public key: %w", err)
@@ -614,17 +714,21 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 		return fmt.Errorf("decode receiver public key: %w", err)
 	}
 
-	// Build transaction payloads
+	// Build transaction payloads with human-readable counterparty (email).
+	// The expense side gets the rule creator's category and commission; the
+	// income side has no category so the receiving user can categorize it.
 	expensePayload := map[string]interface{}{
 		"amount":       -payload.Amount,
+		"category":     payload.CategoryID,
+		"commission":   payload.Commission,
 		"notes":        payload.Notes,
-		"counterparty": targetUserID,
+		"counterparty": receiverEmail,
 		"rule_id":      rule.ID,
 	}
 	incomePayload := map[string]interface{}{
 		"amount":       payload.Amount,
 		"notes":        payload.Notes,
-		"counterparty": rule.CreatedBy,
+		"counterparty": senderEmail,
 		"rule_id":      rule.ID,
 	}
 
@@ -655,7 +759,7 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 	incomeTx := &model.Transaction{
 		ID:               uuid.New().String(),
 		Time:             txTime,
-		AccountID:        payload.TargetAccountID,
+		AccountID:        targetAccountID,
 		CreatedBy:        rule.CreatedBy,
 		EncryptedPayload: encryptedIncome,
 		Version:          1,
@@ -672,8 +776,8 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 		}
 
 		if err := s.RuleRepo.UpdateAccountBalances(txCtx, []repository.BalanceUpdate{
-			{AccountID: payload.SourceAccountID, Change: -amountCents},
-			{AccountID: payload.TargetAccountID, Change: amountCents},
+			{AccountID: payload.SourceAccountID, Change: -totalCents},
+			{AccountID: targetAccountID, Change: amountCents},
 		}); err != nil {
 			return fmt.Errorf("update balances: %w", err)
 		}
@@ -704,7 +808,7 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 	logger.Info("Rule %s (%s) executed: user transfer of %.2f from %s (user %s) to %s (user %s)",
 		rule.ID, rule.Name, payload.Amount,
 		payload.SourceAccountID, rule.CreatedBy,
-		payload.TargetAccountID, payload.TargetUserID)
+		targetAccountID, targetUserID)
 	return nil
 }
 

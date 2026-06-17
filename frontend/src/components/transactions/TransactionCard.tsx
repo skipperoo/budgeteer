@@ -44,6 +44,7 @@ export function TransactionCard({
 }: TransactionCardProps) {
   const { payload, time } = transaction;
   const isIncome = payload ? payload.amount >= 0 : null;
+  const totalAmount = payload ? payload.amount - (payload.commission || 0) : null;
 
   return (
     <div
@@ -115,15 +116,22 @@ export function TransactionCard({
         {/* Amount and Date */}
         <div className="flex flex-col items-end shrink-0">
           {payload ? (
-            <span
-              className={`
-                ${compact ? "text-sm" : "text-base"} 
-                font-bold tabular-nums leading-none
-                ${isIncome ? "text-income" : "text-foreground"}
-              `}
-            >
-              {formatCurrency(payload.amount, currency, true)}
-            </span>
+            <>
+              <span
+                className={`
+                  ${compact ? "text-sm" : "text-base"} 
+                  font-bold tabular-nums leading-none
+                  ${isIncome ? "text-income" : "text-foreground"}
+                `}
+              >
+                {formatCurrency(totalAmount!, currency, true)}
+              </span>
+              {payload.commission && payload.commission > 0 && (
+                <span className="text-[10px] text-muted-foreground mt-0.5 leading-none">
+                  {formatCurrency(payload.commission, currency)} fee
+                </span>
+              )}
+            </>
           ) : (
             <span className="text-xs text-muted-foreground italic">
               {transaction.decryptError ?? "Decryption required"}
