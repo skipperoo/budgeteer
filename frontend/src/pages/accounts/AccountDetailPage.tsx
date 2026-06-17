@@ -714,7 +714,7 @@ export default function AccountDetailPage() {
                         onClick={() => { setTxType("expense"); setTxCategory(""); }}
                         className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                           txType === "expense"
-                            ? "bg-destructive text-destructive-foreground"
+                            ? "bg-expense text-expense-foreground"
                             : "bg-transparent text-muted-foreground hover:text-foreground"
                         }`}
                       >
@@ -725,7 +725,7 @@ export default function AccountDetailPage() {
                         onClick={() => { setTxType("income"); setTxCategory(""); }}
                         className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                           txType === "income"
-                            ? "bg-primary text-primary-foreground"
+                            ? "bg-income text-income-foreground"
                             : "bg-transparent text-muted-foreground hover:text-foreground"
                         }`}
                       >
@@ -880,7 +880,7 @@ export default function AccountDetailPage() {
                         onClick={() => setEditTxType("expense")}
                         className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                           editTxType === "expense"
-                            ? "bg-destructive text-destructive-foreground"
+                            ? "bg-expense text-expense-foreground"
                             : "bg-transparent text-muted-foreground hover:text-foreground"
                         }`}
                       >
@@ -891,7 +891,7 @@ export default function AccountDetailPage() {
                         onClick={() => setEditTxType("income")}
                         className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                           editTxType === "income"
-                            ? "bg-primary text-primary-foreground"
+                            ? "bg-income text-income-foreground"
                             : "bg-transparent text-muted-foreground hover:text-foreground"
                         }`}
                       >

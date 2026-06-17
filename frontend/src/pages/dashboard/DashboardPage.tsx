@@ -375,7 +375,7 @@ export default function DashboardPage() {
                       onClick={() => { setTxType("expense"); setTxCategory(""); }}
                       className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                         txType === "expense"
-                          ? "bg-destructive text-destructive-foreground"
+                          ? "bg-expense text-expense-foreground"
                           : "bg-transparent text-muted-foreground hover:text-foreground"
                       }`}
                     >
@@ -386,7 +386,7 @@ export default function DashboardPage() {
                       onClick={() => { setTxType("income"); setTxCategory(""); }}
                       className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                         txType === "income"
-                          ? "bg-primary text-primary-foreground"
+                          ? "bg-income text-income-foreground"
                           : "bg-transparent text-muted-foreground hover:text-foreground"
                       }`}
                     >

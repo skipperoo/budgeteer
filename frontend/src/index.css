@@ -43,8 +43,10 @@
 
   /* Income green: soft sage */
   --color-income:  oklch(0.48 0.1 150);
+  --color-income-foreground: oklch(0.98 0.005 150);
   /* Expense red: muted terracotta */
   --color-expense: oklch(0.52 0.13 22);
+  --color-expense-foreground: oklch(0.99 0.005 30);
 
   --radius: 0.625rem;
 }
@@ -80,7 +82,9 @@
   --color-ring:   oklch(0.60 0.06 260);
 
   --color-income:  oklch(0.68 0.1 150);
+  --color-income-foreground: oklch(0.14 0.02 150);
   --color-expense: oklch(0.68 0.12 22);
+  --color-expense-foreground: oklch(0.14 0.02 15);
 }
 
 /* ─── Global resets ───────────────────────────────────── */
