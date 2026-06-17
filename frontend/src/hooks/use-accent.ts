@@ -328,14 +328,19 @@ export function useAccent() {
     return () => observerRef.current?.disconnect();
   }, [themeKey]);
 
-  // Save theme to backend and apply immediately
+  // Save accent color to backend, merging with existing preferences
   const setAccent = useCallback(async (key: ThemeKey) => {
     if (!(key in THEME_PRESETS)) return;
     setThemeKey(key);
     try {
+      // Merge with existing preferences so we don't clobber other fields
+      const { user } = useAuthStore.getState();
+      const currentPrefs = user?.preferences ?? { accent_color: "slate" };
       await apiFetch(ENDPOINTS.preferences, {
         method: "PUT",
-        body: JSON.stringify({ preferences: { accent_color: key } }),
+        body: JSON.stringify({
+          preferences: { ...currentPrefs, accent_color: key },
+        }),
       });
     } catch { /* next /me fetch will reconcile */ }
   }, []);

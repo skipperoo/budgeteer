@@ -508,7 +508,7 @@ export default function AccountDetailPage() {
       );
 
       if (!account) throw new Error("Account not found");
-      const time = new Date().toISOString();
+      const time = "1970-01-01T00:00:00.000Z";
       await apiFetch(ENDPOINTS.transactions(account.id), {
         method: "POST",
         body: JSON.stringify({ time, encrypted_payload: encryptedPayload } as CreateTransactionRequest),

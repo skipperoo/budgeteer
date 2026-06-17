@@ -63,12 +63,12 @@ This is the backlog of Budgeteer
 # BUGS
 
 - [x] The categories are now saved in the local storage of the frontend: they must be saved in the backend under the user data (associated with its profile)
-- [x] The funding transaction should not be displayed as a transaction and should not have a point in time: the account has that base opening balance as it always had it, then its value moves with the transactions added later on.
+- [x] The funding transaction should not be displayed as a transaction and should not have a point in time: the account has that base opening balance as it always had it, then its value moves with the transactions added later on. (Dated to Unix epoch 1970-01-01)
 - [x] The "Average Tx Amount" card should be replaced by "Money flow" and should contain the cumulative incomes/expenses for the selected timerange
 - [ ] Add the env variable `BASE_URL` to configure the base url to include in emails, notifications and so on.
 - [x] The income switch button in the new transaction form should be bright green no matter what is the theme
 - [x] The user should get an overlay when he tries to create a transaction without having at least 1 account availabl
 - [x] In account creation form remove the debit credit switch, leaving only the default mode (debit)
-- [ ] Add the default currency, locale and theme switcher (light/dark) to user preferences sent to the db.
-- [ ] Merge the theme switcher to the accent color card
-- [ ] Change the locale/language card to locale only (add a line in the card as the example with multiple date formats, numbers, and so on). Also, the locale is not enforced in all the ui, fix that.
+- [x] Add the default currency, locale and theme switcher (light/dark) to user preferences sent to the db.
+- [x] Merge the theme switcher to the accent color card
+- [x] Change the locale/language card to locale only (add a line in the card as the example with multiple date formats, numbers, and so on). Also, the locale is not enforced in all the ui, fix that.

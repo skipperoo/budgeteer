@@ -6,6 +6,9 @@ import "time"
 type UserPreferences struct {
 	AccentColor       string  `json:"accent_color"`
 	DefaultCommission float64 `json:"default_commission"`
+	DefaultCurrency   string  `json:"default_currency,omitempty"`
+	Locale            string  `json:"locale,omitempty"`
+	Theme             string  `json:"theme,omitempty"` // "light" or "dark"
 }
 
 type User struct {

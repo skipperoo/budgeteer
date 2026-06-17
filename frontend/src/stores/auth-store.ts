@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getToken, setToken, removeToken } from "@/lib/api";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
+import { syncLocaleFromPreferences } from "@/lib/format";
 import type { User } from "@/types";
 
 // Persist minimal user info to localStorage so the header can show the email
@@ -55,6 +56,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setAuth: (token, user, encryptedKey) => {
     setToken(token);
     setUser({ email: user.email });
+    syncLocaleFromPreferences(user.preferences?.locale);
     set({ token, user, encryptedPrivateKey: encryptedKey });
   },
 
@@ -91,6 +93,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         headers: { Authorization: `Bearer ${tok}` },
       });
       setUser({ email: user.email });
+      syncLocaleFromPreferences(user.preferences?.locale);
       set({ user, encryptedPrivateKey: user.encrypted_private_key });
     } catch {
       // Token is invalid — clear auth state

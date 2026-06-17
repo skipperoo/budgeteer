@@ -63,10 +63,12 @@ export default function SettingsPage() {
   const [emailError, setEmailError] = useState("");
   const [emailSuccess, setEmailSuccess] = useState("");
 
-  // --- Default currency ---
-  const [defaultCurrency, setDefaultCurrency] = useState(() =>
-    getSetting("budgeteer_default_currency", "EUR")
-  );
+  // --- Default currency (from DB preference, fallback to localStorage) ---
+  const [defaultCurrency, setDefaultCurrency] = useState(() => {
+    const fromPrefs = user?.preferences?.default_currency;
+    if (fromPrefs) return fromPrefs;
+    return getSetting("budgeteer_default_currency", "EUR");
+  });
 
   // --- Default commission ---
   const [defaultCommission, setDefaultCommission] = useState(() => {
@@ -83,15 +85,17 @@ export default function SettingsPage() {
     }
   }, [user?.preferences?.default_commission]);
 
-  // --- Locale ---
-  const [locale, setLocale] = useState(() =>
-    getSetting("budgeteer_locale", "en")
-  );
+  // --- Locale (from DB preference, fallback to localStorage) ---
+  const [locale, setLocale] = useState(() => {
+    const fromPrefs = user?.preferences?.locale;
+    if (fromPrefs) return fromPrefs;
+    return getSetting("budgeteer_locale", "en");
+  });
 
   // --- Accent color ---
   const { themeKey, setAccent, presets } = useAccent();
 
-  // Persist currency and locale to localStorage on change
+  // Persist currency and locale to localStorage and DB on change
   useEffect(() => {
     setSetting("budgeteer_default_currency", defaultCurrency);
   }, [defaultCurrency]);
@@ -100,6 +104,40 @@ export default function SettingsPage() {
     setSetting("budgeteer_locale", locale);
     document.documentElement.lang = locale;
   }, [locale]);
+
+  // Debounced save preferences to DB
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const savePreferences = useCallback(async (currency: string, loc: string) => {
+    setPrefsSaving(true);
+    try {
+      const currentPrefs = user?.preferences ?? { accent_color: "slate" };
+      await apiFetch(ENDPOINTS.preferences, {
+        method: "PUT",
+        body: JSON.stringify({
+          preferences: {
+            ...currentPrefs,
+            default_currency: currency,
+            locale: loc,
+          } as UserPreferences,
+        }),
+      });
+    } catch (err: any) {
+      console.error("Failed to save preferences:", err);
+    } finally {
+      setPrefsSaving(false);
+    }
+  }, [user]);
+
+  const prefsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
+    prefsTimerRef.current = setTimeout(() => {
+      savePreferences(defaultCurrency, locale);
+    }, 1500);
+    return () => {
+      if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
+    };
+  }, [defaultCurrency, locale, savePreferences]);
 
   // Save default commission to backend when it changes (debounced save)
   const [commissionSaving, setCommissionSaving] = useState(false);
@@ -324,12 +362,11 @@ export default function SettingsPage() {
           {/* --- Locale Card --- */}
           <Card>
             <CardHeader>
-              <CardTitle>Locale / Language</CardTitle>
+              <CardTitle>Locale</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-3">
-                Choose your preferred language. The UI will use this locale for
-                formatting numbers and dates.
+                Choose your preferred language for formatting numbers, dates, and currency.
               </p>
               <select
                 value={locale}
@@ -342,6 +379,23 @@ export default function SettingsPage() {
                   </option>
                 ))}
               </select>
+              <div className="mt-3 text-xs text-muted-foreground space-y-0.5">
+                <p>
+                  Date:{" "}
+                  {new Intl.DateTimeFormat(locale || "en", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  }).format(new Date())}
+                </p>
+                <p>
+                  Number:{" "}
+                  {(1234567.89).toLocaleString(locale || "en", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -369,29 +423,22 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* --- Theme Card --- */}
+          {/* --- Appearance Card (Theme + Accent Color) --- */}
           <Card>
             <CardHeader>
-              <CardTitle>Theme</CardTitle>
+              <CardTitle>Appearance</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">
-                Switch between light and dark mode.
-              </p>
-              <ThemeToggle />
-            </CardContent>
-          </Card>
-
-          {/* --- Accent Color Card --- */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Accent Color</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">
-                Choose your preferred accent color for buttons and highlights.
-              </p>
-              <div className="grid grid-cols-3 gap-2">
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium block mb-2">Mode</label>
+                <ThemeToggle />
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-2">Accent Color</label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Choose your preferred accent color for buttons and highlights.
+                </p>
+                <div className="grid grid-cols-3 gap-2">
                 {(Object.entries(presets) as [ThemeKey, typeof presets[ThemeKey]][]).map(([key, def]) => (
                   <button
                     key={key}
@@ -415,6 +462,7 @@ export default function SettingsPage() {
                     </span>
                   </button>
                 ))}
+              </div>
               </div>
             </CardContent>
           </Card>

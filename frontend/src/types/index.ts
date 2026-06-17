@@ -3,6 +3,9 @@ export type AccountType = "personal" | "joint" | "savings";
 export interface UserPreferences {
   accent_color: string;
   default_commission?: number;
+  default_currency?: string;
+  locale?: string;
+  theme?: "light" | "dark";
 }
 
 export interface User {

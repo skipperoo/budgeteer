@@ -91,7 +91,7 @@ export default function AccountListPage() {
         await apiFetch(ENDPOINTS.transactions(created.id), {
           method: "POST",
           body: JSON.stringify({ 
-            time: new Date().toISOString(), 
+            time: "1970-01-01T00:00:00.000Z", 
             encrypted_payload: encryptedPayload 
           } as CreateTransactionRequest),
         });

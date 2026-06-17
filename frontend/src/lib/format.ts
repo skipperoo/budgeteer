@@ -6,6 +6,16 @@
 
 const STORAGE_KEY = "budgeteer_locale";
 
+/**
+ * Sync the user's locale preference (loaded from the server) into localStorage
+ * so formatting functions pick it up. Call this when user data loads.
+ */
+export function syncLocaleFromPreferences(locale?: string) {
+  if (locale) {
+    try { localStorage.setItem(STORAGE_KEY, locale); } catch { /* ignore */ }
+  }
+}
+
 function getStoredLocale(): string {
   try {
     return localStorage.getItem(STORAGE_KEY) ?? "en";
