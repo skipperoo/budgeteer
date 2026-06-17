@@ -42,4 +42,7 @@ export const ENDPOINTS = {
   invitations: `${API_BASE}/invitations`,
   invitationAccept: (id: string) => `${API_BASE}/invitations/${id}/accept`,
   invitationDecline: (id: string) => `${API_BASE}/invitations/${id}/decline`,
+  budgets: `${API_BASE}/budgets`,
+  budget: (id: string) => `${API_BASE}/budgets/${id}`,
+  budgetNotify: (id: string) => `${API_BASE}/budgets/${id}/notify`,
 } as const;

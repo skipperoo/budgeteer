@@ -10,6 +10,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { useDateRangeStore } from "@/stores/date-range-store";
 import { BalanceChart } from "@/components/shared/BalanceChart";
+import { BudgetProgressSection } from "@/components/shared/BudgetProgressSection";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64 } from "@/lib/crypto";
@@ -176,12 +177,13 @@ export default function AccountDetailPage() {
                   tx.encrypted_payload,
                   privKeyBase64,
                 );
-                return { id: tx.id, time: tx.time, payload };
+                return { id: tx.id, time: tx.time, account_id: tx.account_id, payload };
               } catch { /* fall through: show "could not decrypt" */ }
             }
             return {
               id: tx.id,
               time: tx.time,
+              account_id: tx.account_id,
               payload: null,
               decryptError: privKeyBase64 ? "Decryption failed" : "Key unavailable",
             };
@@ -193,12 +195,13 @@ export default function AccountDetailPage() {
                 tx.encrypted_payload,
                 keyToUse,
               );
-              return { id: tx.id, time: tx.time, payload };
+              return { id: tx.id, time: tx.time, account_id: tx.account_id, payload };
             } catch { /* fall through: show "could not decrypt" */ }
           }
           return {
             id: tx.id,
             time: tx.time,
+            account_id: tx.account_id,
             payload: null,
             decryptError: keyToUse ? "Decryption failed" : "Key unavailable",
           };
@@ -1181,6 +1184,14 @@ export default function AccountDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Budget Progress (scoped to this account) */}
+      {id && (
+        <BudgetProgressSection
+          transactions={filteredTxs}
+          accountId={id}
+        />
+      )}
 
       {/* Opening Balance Section */}
       {openingBalance !== 0 && (

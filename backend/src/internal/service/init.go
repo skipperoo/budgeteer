@@ -9,6 +9,7 @@ func InitServices() {
 	InitSyncService()
 	InitRuleService()
 	InitNotificationService()
+	InitBudgetService()
 
 	// Initialize invitation service with the server's X25519 keypair
 	// (needed for decrypting/re-encrypting account keys).

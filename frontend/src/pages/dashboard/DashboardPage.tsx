@@ -20,6 +20,7 @@ import { TransactionForm, type TransactionFormData } from "@/components/transact
 import type { CreateTransactionRequest, Transaction } from "@/types";
 import type { DecryptedTransaction } from "@/lib/decrypt-transactions";
 import { BalanceChart } from "@/components/shared/BalanceChart";
+import { BudgetProgressSection } from "@/components/shared/BudgetProgressSection";
 import { getCurrencySymbol, formatCurrency } from "@/lib/format";
 import {
   ResponsiveContainer,
@@ -551,6 +552,9 @@ export default function DashboardPage() {
           }}
         />
       )}
+
+      {/* Budget Progress Section */}
+      <BudgetProgressSection transactions={filteredTxs} />
 
       {/* Pie charts: side by side below the main grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

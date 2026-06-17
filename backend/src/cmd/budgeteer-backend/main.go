@@ -105,6 +105,12 @@ func main() {
 		AddHandler("POST   /v1/rules",          handler.CreateRule).
 		AddHandler("PUT    /v1/rules/{id}",     handler.UpdateRule).
 		AddHandler("DELETE /v1/rules/{id}",     handler.DeleteRule).
+		// Budgets
+		AddHandler("GET    /v1/budgets",          handler.ListBudgets).
+		AddHandler("POST   /v1/budgets",          handler.CreateBudget).
+		AddHandler("PUT    /v1/budgets/{id}",     handler.UpdateBudget).
+		AddHandler("DELETE /v1/budgets/{id}",     handler.DeleteBudget).
+		AddHandler("POST   /v1/budgets/{id}/notify", handler.NotifyBudgetThreshold).
 		// Notifications
 		AddHandler("GET    /v1/notifications",          handler.ListNotifications).
 		AddHandler("GET    /v1/notifications/count",    handler.CountUnreadNotifications).

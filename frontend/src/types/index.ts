@@ -120,3 +120,36 @@ export interface DocumentDataResponse {
   mime_type: string;
   file_name: string;
 }
+
+export interface Budget {
+  id: string;
+  user_id: string;
+  account_id?: string;
+  encrypted_payload: string;
+  period: "monthly" | "yearly";
+  start_date: string;
+  end_date?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetPayload {
+  amount: number;
+  category?: string;
+}
+
+export interface CreateBudgetRequest {
+  account_id?: string;
+  encrypted_payload: string;
+  period: "monthly" | "yearly";
+  start_date: string;
+  end_date?: string;
+}
+
+export interface UpdateBudgetRequest {
+  account_id?: string;
+  encrypted_payload?: string;
+  period?: "monthly" | "yearly";
+  start_date?: string;
+  end_date?: string;
+}

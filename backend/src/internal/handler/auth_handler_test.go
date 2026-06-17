@@ -57,6 +57,7 @@ func handlerSetupTest(t *testing.T) func() {
 		database.Pool.Exec(ctx, "DELETE FROM email_outbox")
 		database.Pool.Exec(ctx, "DELETE FROM otps")
 		database.Pool.Exec(ctx, "DELETE FROM sync_queue")
+		database.Pool.Exec(ctx, "DELETE FROM budgets")
 		database.Pool.Exec(ctx, "DELETE FROM rules")
 		database.Pool.Exec(ctx, "DELETE FROM account_users")
 		database.Pool.Exec(ctx, "DELETE FROM accounts")

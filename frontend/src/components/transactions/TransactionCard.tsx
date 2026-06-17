@@ -14,6 +14,7 @@ import { ArrowUpRight, ArrowDownLeft, Lock, Pencil, Trash2 } from "lucide-react"
 export interface TransactionDisplay {
   id: string;
   time: string;
+  account_id?: string;
   /** Present when decryption succeeded, null when it failed. */
   payload: TransactionPayload | null;
   /** If the transaction can't be decrypted, show a reason. */
