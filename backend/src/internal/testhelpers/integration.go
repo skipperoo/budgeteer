@@ -47,6 +47,8 @@ func migrationSQL() (string, error) {
 		"0006_drop_transaction_documents_fk.sql",
 		"0007_add_rules.sql",
 		"0008_add_invitations.sql",
+		"0009_add_rule_alert_and_income.sql",
+		"0010_add_budgets.sql",
 	}
 
 	var allSQL strings.Builder

@@ -29,14 +29,18 @@ func (r *BudgetRepository) Create(ctx context.Context, b *model.Budget) error {
 func scanBudget(row pgx.Row) (*model.Budget, error) {
 	b := &model.Budget{}
 	var accountID, endDate pgtype.Text
+	var startDate pgtype.Date
 	err := row.Scan(
 		&b.ID, &b.UserID, &accountID, &b.EncryptedPayload,
-		&b.Period, &b.StartDate, &endDate,
+		&b.Period, &startDate, &endDate,
 		&b.LastNotified50, &b.LastNotified80, &b.LastNotified100,
 		&b.CreatedAt, &b.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+	if startDate.Valid {
+		b.StartDate = startDate.Time.Format("2006-01-02")
 	}
 	if accountID.Valid {
 		s := accountID.String
