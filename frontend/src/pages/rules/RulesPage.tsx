@@ -500,6 +500,7 @@ export default function RulesPage() {
                 <option value="income">Income</option>
                 <option value="transfer">Transfer (your accounts)</option>
                 <option value="user_transfer">Transfer (to another user)</option>
+                <option value="mortgage">Mortgage</option>
               </select>
             </div>
 
