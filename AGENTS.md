@@ -1,5 +1,7 @@
 # Budgeteer - Technical Specifications
 
+> **Revision 6** — Added budget spending limits with E2E-encrypted payloads. Budget amounts, categories are ECIES-encrypted with the user's X25519 public key. Budget progress computed client-side; threshold notifications (50%/80%/100%) triggered via `POST /budgets/{id}/notify` which creates in-app notifications. Alert bell moved from sidebar/bottomnav to Header top-right icon-only button. Budgets nav link (PiggyBank icon) replaces Notifications in sidebar and bottomnav. See Section 2 (budget encryption), Section 3 (budget views, alert bell in header), Section 4 (`/v1/budgets/*` endpoints), Section 5 (`budgets` table).
+
 > **Revision 5** — Added commission tracking, income rule type, and rule alert notifications. Key changes: `commission` field in transaction and rule payloads; `income` rule type (positive auto-generated transactions); `alert_offset INTERVAL` column on the `rules` table for pre-fire notifications; `RuleNotifier` background worker; frontend ECIES-prefix detection for rule-generated transactions (`"1|"` → decrypt with X25519 private key, fallback to AES-GCM with account key). See Section 2 (ECIES prefix routing), Section 3 (commission display, income type), Section 4 (RuleNotifier worker, alert_offset API), Section 5 (`alert_offset` + `last_alerted_at` columns).
 
 ---
@@ -36,7 +38,8 @@ To balance E2E encryption with the requirements of TimescaleDB and joint account
   - For account invitations: the inviter encrypts `{"account_key": "base64..."}` with the server's public key.
   - For user_transfer rule invitations: the sender creates the rule with `target_email`, the rule starts as `pending_accepted`. When the receiver accepts, they select an account. The chosen account ID is encrypted with the server's public key and stored on the rule as `target_account_encrypted`.
 - **ECIES Prefix Routing (Frontend):** When decrypting a transaction payload, the frontend checks the first two characters of `encrypted_payload`. If it starts with `"1|"`, the payload was encrypted via ECIES (X25519 + AES-GCM) using the user's X25519 public key (rule-generated transactions). The frontend decrypts it using the in-memory X25519 private key via `decryptECIESPayload`. Otherwise, the payload is an AES-GCM ciphertext encrypted with the account key, and the frontend decrypts it via `decryptTransactionPayload`. This distinction is invisible to the user.
-- **In-App Notifications:** The `notifications` table stores in-app messages. A notification badge in the sidebar/bottom nav shows the unread count, polled every 30 seconds.
+- **Budget Encryption:** Budget payloads (`amount`, `category`) are encrypted with the user's own X25519 public key via the same ECIES scheme (`decryptECIESPayload`), since budgets are personal user settings (not shared account data). Budget metadata (`account_id`, `period`, `start_date`, `end_date`) remains in plaintext for server-side filtering. Progress is computed client-side by decrypting transactions and summing against the decrypted budget amount.
+- **In-App Notifications:** The `notifications` table stores in-app messages. A notification badge in the header (top-right icon-only button) shows the unread count, polled every 30 seconds.
 - **30-Day Expiry:** Pending invitations that are not accepted within 30 days are automatically expired. For rules, the rule is deleted. For accounts, just the invitation record is expired. The inviter receives both an in-app notification and an email.
 - **Known Limitation — Member Removal:** When a user is removed from a joint account, they retain their copy of the Account Key. Full forward secrecy would require re-keying the account (generating a new Account Key and re-encrypting all future transactions). This is deferred to a post-v1 milestone; removal should be documented as revoking write access only.
 
@@ -129,6 +132,11 @@ _Note: All Sync, Accounts, and Users endpoints require Auth middleware (JWT vali
 | **GET**    | `/api/v1/categories`                | Categories | Lists all categories for the authenticated user.                                                                                                                 |
 | **POST**   | `/api/v1/categories`                | Categories | Creates a new category (body: `{ name, type }`).                                                                                                                 |
 | **DELETE** | `/api/v1/categories/{id}`           | Categories | Deletes a category by its ID.                                                                                                                                    |
+| **GET**    | `/api/v1/budgets`                                  | Budgets   | Lists all budgets for the authenticated user.                                                                                                                   |
+| **POST**   | `/api/v1/budgets`                                  | Budgets   | Creates a new budget. Body: `{ account_id?, encrypted_payload, period, start_date, end_date? }`. `encrypted_payload` is ECIES with user's X25519 public key.   |
+| **PUT**    | `/api/v1/budgets/{id}`                             | Budgets   | Updates a budget. Only the owner can update.                                                                                                                    |
+| **DELETE** | `/api/v1/budgets/{id}`                             | Budgets   | Deletes a budget. Only the owner can delete.                                                                                                                    |
+| **POST**   | `/api/v1/budgets/{id}/notify`                      | Budgets   | Marks a budget threshold as notified (50/80/100%). Body: `{ threshold }`. Creates in-app notification.                                                          |
 | **POST**   | `/api/v1/transactions/{id}/documents`             | Documents | Uploads an encrypted document (receipt) for a transaction. Body: `{ encrypted_data, mime_type, file_name, file_size }`. Max 10 MB. |
 | **GET**    | `/api/v1/transactions/{id}/documents`             | Documents | Lists document metadata for a transaction (no encrypted data).                                                                                                   |
 | **GET**    | `/api/v1/transactions/{id}/documents/{docId}/data` | Documents | Returns a document's encrypted data (to be decrypted client-side with the account key).                                                                          |
@@ -465,6 +473,29 @@ CREATE TABLE savings_plans (
 );
 
 -- ============================================================
+-- BUDGETS
+-- Tracks per-account and per-category spending limits.
+-- encrypted_payload contains: amount, category (ECIES with user's X25519 public key).
+-- Metadata (account_id, period) is plaintext for server-side querying.
+-- Progress is computed client-side; threshold notifications are
+-- stored via last_notified_X flags to prevent duplicates.
+-- ============================================================
+CREATE TABLE budgets (
+    id                 UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    account_id         UUID REFERENCES accounts(id) ON DELETE CASCADE, -- NULL = global budget (all accounts)
+    encrypted_payload  TEXT NOT NULL,                                   -- ECIES with user's X25519 public key
+    period             VARCHAR(10) NOT NULL CHECK (period IN ('monthly', 'yearly')),
+    start_date         DATE NOT NULL,
+    end_date           DATE,
+    last_notified_50   TIMESTAMPTZ,                                     -- when 50% threshold was last notified
+    last_notified_80   TIMESTAMPTZ,                                     -- when 80% threshold was last notified
+    last_notified_100  TIMESTAMPTZ,                                     -- when 100% threshold was last notified
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
 -- RULES (Automated payments and transfers)
 -- Encrypted payload is ECIES with the server's X25519 public key.
 -- Scheduling metadata (frequency, next_occurrence) is plaintext
@@ -587,6 +618,9 @@ CREATE INDEX ON email_outbox (status, scheduled_for) WHERE status = 'pending';
 CREATE INDEX ON transaction_documents (transaction_id);
 
 -- User categories
+CREATE INDEX ON user_categories (user_id);
+
+-- Budgets
 CREATE INDEX ON user_categories (user_id);
 
 -- Rules scheduling

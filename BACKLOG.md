@@ -44,13 +44,13 @@ This is the backlog of Budgeteer
   - [x] Email-based account invitations (encrypt with server's public key, re-encrypt on accept)
   - [x] Unread notification badge in sidebar + bottom nav
   - [x] Periodic unread count polling
-- [ ] Budget menu
-  - [ ] Add per account monthly budgets
-  - [ ] Add per category monthly budget
-  - [ ] Notify the user via notifications and emails when you reach the 50%, 80% and 100% budget
-  - [ ] Show in the dashboard and account details a horizontal bar chart where the full length is the budget and the amount fill is what you spent.
-    - [ ] In the dashboard you have the expenses of every account combined and merged and the per category budgets
-    - [ ] In the account details, only the account budget and account expenses
+- [x] Budget menu
+  - [x] Add per account monthly budgets
+  - [x] Add per category monthly budget
+  - [x] Notify the user via notifications and emails when you reach the 50%, 80% and 100% budget
+  - [x] Show in the dashboard and account details a horizontal bar chart where the full length is the budget and the amount fill is what you spent.
+    - [x] In the dashboard you have the expenses of every account combined and merged and the per category budgets
+    - [x] In the account details, only the account budget and account expenses
 - [ ] Implement mortgages and split payments
   - [ ] Select the amount, the duration period and the interest rate
   - [ ] Automatically create a transaction each month (the day of payment has to be settable) of the correct amount
