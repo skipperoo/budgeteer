@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { decryptWithPassword, encryptWithPassword } from "@/lib/crypto";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { useAccent, type ThemeKey } from "@/hooks/use-accent";
+import type { UserPreferences } from "@/types";
 
 const CURRENCIES = [
   { code: "EUR", symbol: "€", name: "Euro" },
@@ -67,6 +68,21 @@ export default function SettingsPage() {
     getSetting("budgeteer_default_currency", "EUR")
   );
 
+  // --- Default commission ---
+  const [defaultCommission, setDefaultCommission] = useState(() => {
+    try {
+      return localStorage.getItem("budgeteer_default_commission") ?? "";
+    } catch { return ""; }
+  });
+
+  // Sync from server preferences when user data loads
+  useEffect(() => {
+    const fromPrefs = user?.preferences?.default_commission;
+    if (fromPrefs != null && fromPrefs > 0) {
+      setDefaultCommission(String(fromPrefs));
+    }
+  }, [user?.preferences?.default_commission]);
+
   // --- Locale ---
   const [locale, setLocale] = useState(() =>
     getSetting("budgeteer_locale", "en")
@@ -84,6 +100,42 @@ export default function SettingsPage() {
     setSetting("budgeteer_locale", locale);
     document.documentElement.lang = locale;
   }, [locale]);
+
+  // Save default commission to backend when it changes (debounced save)
+  const [commissionSaving, setCommissionSaving] = useState(false);
+  const saveCommission = useCallback(async (value: string) => {
+    const numValue = value ? parseFloat(value) : 0;
+    if (isNaN(numValue) || numValue < 0) return;
+    setCommissionSaving(true);
+    try {
+      const currentPrefs = user?.preferences ?? { accent_color: "slate" };
+      await apiFetch(ENDPOINTS.preferences, {
+        method: "PUT",
+        body: JSON.stringify({
+          preferences: {
+            ...currentPrefs,
+            default_commission: numValue,
+          } as UserPreferences,
+        }),
+      });
+    } catch (err: any) {
+      console.error("Failed to save default commission:", err);
+    } finally {
+      setCommissionSaving(false);
+    }
+  }, [user]);
+
+  // Debounced save: trigger 1.5s after the user stops typing
+  const commissionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (commissionTimerRef.current) clearTimeout(commissionTimerRef.current);
+    commissionTimerRef.current = setTimeout(() => {
+      saveCommission(defaultCommission);
+    }, 1500);
+    return () => {
+      if (commissionTimerRef.current) clearTimeout(commissionTimerRef.current);
+    };
+  }, [defaultCommission, saveCommission]);
 
   // --- Password change (P0.2 fix) ---
   // Per AGENTS.md: re-encrypt the EXISTING private key with the new password,
@@ -290,6 +342,30 @@ export default function SettingsPage() {
                   </option>
                 ))}
               </select>
+            </CardContent>
+          </Card>
+
+          {/* --- Default Commission Card --- */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Default Commission</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-3">
+                Pre-fill the commission/fee field when creating new transactions.
+              </p>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={defaultCommission}
+                  onChange={(e) => setDefaultCommission(e.target.value)}
+                  placeholder="0.00"
+                  className="w-28"
+                />
+                <span className="text-sm text-muted-foreground">per transaction</span>
+              </div>
             </CardContent>
           </Card>
 

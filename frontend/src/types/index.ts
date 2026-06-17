@@ -2,6 +2,7 @@ export type AccountType = "personal" | "joint" | "savings";
 
 export interface UserPreferences {
   accent_color: string;
+  default_commission?: number;
 }
 
 export interface User {

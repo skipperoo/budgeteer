@@ -53,6 +53,7 @@ func (s *AccountService) Create(ctx context.Context, userID string, req *model.C
 		UserID:              userID,
 		EncryptedAccountKey: req.EncryptedAccountKey,
 		Role:                "owner",
+		Status:              "active",
 		JoinedAt:            now,
 	}
 	if err := s.AccountUserRepo.Create(ctx, au); err != nil {
@@ -126,28 +127,31 @@ func (s *AccountService) InviteUser(ctx context.Context, accountID, inviterID, u
 		return fmt.Errorf("only owners and admins can invite users")
 	}
 
-	targetUser, err := s.UserRepo.FindByEmail(ctx, userEmail)
-	if err != nil {
-		return fmt.Errorf("database error: %w", err)
-	}
-	if targetUser == nil {
-		return fmt.Errorf("user not found")
-	}
-
-	existing, _ := s.AccountUserRepo.FindByAccountAndUser(ctx, accountID, targetUser.ID)
-	if existing != nil {
-		return fmt.Errorf("user is already a member of this account")
-	}
-
-	newAU := &model.AccountUser{
-		AccountID:           accountID,
-		UserID:              targetUser.ID,
-		EncryptedAccountKey: encryptedAccountKey,
-		Role:                "member",
-		JoinedAt:            time.Now(),
+	// Check if the user is already a member or has a pending invitation
+	if targetUser, _ := s.UserRepo.FindByEmail(ctx, userEmail); targetUser != nil {
+		existing, _ := s.AccountUserRepo.FindByAccountAndUser(ctx, accountID, targetUser.ID)
+		if existing != nil {
+			return fmt.Errorf("user is already a member of this account")
+		}
+		// Also check for pending invitations
+		if Invitations != nil {
+			inv, _ := Invitations.FindInvitationByEntity(ctx, "account", accountID)
+			if inv != nil && inv.InvitedUserID != nil && *inv.InvitedUserID == targetUser.ID && inv.Status == "pending" {
+				return fmt.Errorf("user already has a pending invitation for this account")
+			}
+		}
 	}
 
-	return s.AccountUserRepo.Create(ctx, newAU)
+	// Use the invitation service to create a pending invitation
+	if Invitations == nil {
+		return fmt.Errorf("invitation service not available")
+	}
+
+	if err := Invitations.CreateAccountInvitation(ctx, accountID, inviterID, userEmail, encryptedAccountKey); err != nil {
+		return fmt.Errorf("create invitation: %w", err)
+	}
+
+	return nil
 }
 
 func (s *AccountService) ListUsers(ctx context.Context, accountID string) ([]*model.AccountUser, error) {

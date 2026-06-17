@@ -4,7 +4,8 @@ import "time"
 
 // UserPreferences stores per-user UI/UX settings persisted to the DB.
 type UserPreferences struct {
-	AccentColor string `json:"accent_color"`
+	AccentColor       string  `json:"accent_color"`
+	DefaultCommission float64 `json:"default_commission"`
 }
 
 type User struct {

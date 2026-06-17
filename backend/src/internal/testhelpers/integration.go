@@ -37,37 +37,52 @@ const (
 )
 
 func migrationSQL() (string, error) {
-	candidates := []string{
-		"migrations/0001_initial.sql",
-		"../migrations/0001_initial.sql",
-		"../../migrations/0001_initial.sql",
-	}
-	var data []byte
-	var err error
-	for _, path := range candidates {
-		data, err = os.ReadFile(path)
-		if err == nil {
-			break
-		}
-	}
-	if err != nil {
-		return "", fmt.Errorf("read migration file: %w", err)
+	// Migration files to apply in order
+	migrationFiles := []string{
+		"0001_initial.sql",
+		"0002_add_account_name.sql",
+		"0003_add_user_preferences.sql",
+		"0004_add_user_categories.sql",
+		"0005_add_transaction_documents.sql",
+		"0006_drop_transaction_documents_fk.sql",
+		"0007_add_rules.sql",
+		"0008_add_invitations.sql",
 	}
 
-	lines := strings.Split(string(data), "\n")
-	var filtered []string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		lower := strings.ToLower(trimmed)
-		if lower == "create extension if not exists timescaledb;" {
-			continue
+	var allSQL strings.Builder
+	for _, file := range migrationFiles {
+		candidates := []string{
+			"migrations/" + file,
+			"../migrations/" + file,
+			"../../migrations/" + file,
 		}
-		if strings.HasPrefix(lower, "select create_hypertable") {
-			continue
+		var data []byte
+		var err error
+		for _, path := range candidates {
+			data, err = os.ReadFile(path)
+			if err == nil {
+				break
+			}
 		}
-		filtered = append(filtered, line)
+		if err != nil {
+			return "", fmt.Errorf("read migration file %s: %w", file, err)
+		}
+
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			lower := strings.ToLower(trimmed)
+			if lower == "create extension if not exists timescaledb;" {
+				continue
+			}
+			if strings.HasPrefix(lower, "select create_hypertable") {
+				continue
+			}
+			allSQL.WriteString(line)
+			allSQL.WriteString("\n")
+		}
 	}
-	return strings.Join(filtered, "\n"), nil
+	return allSQL.String(), nil
 }
 
 func SetupPostgres(ctx context.Context) (*PostgresResult, error) {

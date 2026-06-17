@@ -18,6 +18,7 @@ services:
       - db_password
       - smtp_password
       - redis_password
+      - server_encryption_key
     environment:
       - DB_HOST=postgres
       - DB_USER=budgeteer
@@ -29,6 +30,7 @@ services:
       - SMTP_FROM=${SMTP_FROM:-noreply@budgeteer.app}
       - SMTP_SSL=${SMTP_SSL:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RULES_CHECK_INTERVAL=${RULES_CHECK_INTERVAL:-300}
     ports:
       - "8080:8080"
     depends_on:
@@ -79,6 +81,8 @@ secrets:
     file: ./secrets/smtp_password.txt
   redis_password:
     file: ./secrets/redis_password.txt
+  server_encryption_key:
+    file: ./secrets/server_encryption_key.txt
 
 volumes:
   pg_data:

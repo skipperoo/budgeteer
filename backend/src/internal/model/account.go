@@ -27,6 +27,7 @@ type AccountUser struct {
 	UserID              string    `json:"user_id"`
 	EncryptedAccountKey string    `json:"encrypted_account_key"`
 	Role                string    `json:"role"`
+	Status              string    `json:"status"` // pending_accepted, active
 	JoinedAt            time.Time `json:"joined_at"`
 }
 

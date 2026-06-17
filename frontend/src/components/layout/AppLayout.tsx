@@ -1,9 +1,19 @@
+import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { BottomNav } from "./BottomNav";
+import { useNotificationStore } from "@/stores/notification-store";
 
 export function AppLayout() {
+  const fetchUnreadCount = useNotificationStore((s) => s.fetchUnreadCount);
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000); // poll every 30s
+    return () => clearInterval(interval);
+  }, [fetchUnreadCount]);
+
   return (
     <div className="flex h-screen">
       <Sidebar />

@@ -12,10 +12,13 @@ import { useDateRangeStore } from "@/stores/date-range-store";
 import { BalanceChart } from "@/components/shared/BalanceChart";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
-import { bytesToBase64, encryptAccountKeyForRecipient } from "@/lib/crypto";
-import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
+import { bytesToBase64 } from "@/lib/crypto";
+import { encryptForRecipient, decryptECIESPayload } from "@/lib/crypto-rules";
+import { encryptTransactionPayload, decryptTransactionPayload, effectiveAmount } from "@/lib/crypto-transaction";
+import type { TransactionPayload } from "@/lib/crypto-transaction";
 import { encryptFile } from "@/lib/crypto-file";
 import { getAccountKey } from "@/lib/decrypt-transactions";
+import { useRuleStore } from "@/stores/rule-store";
 import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
 import { TransactionDetailOverlay } from "@/components/transactions/TransactionDetailOverlay";
 import { CURRENCIES, getCurrencySymbol, formatCurrency } from "@/lib/format";
@@ -67,6 +70,11 @@ export default function AccountDetailPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [txType, setTxType] = useState<"income" | "expense">("expense");
   const [txAmount, setTxAmount] = useState("");
+  const [txCommission, setTxCommission] = useState(() => {
+    const fromPrefs = currentUser?.preferences?.default_commission;
+    if (fromPrefs != null && fromPrefs > 0) return String(fromPrefs);
+    try { return localStorage.getItem("budgeteer_default_commission") ?? ""; } catch { return ""; }
+  });
   const [txCategory, setTxCategory] = useState("");
   const [txNotes, setTxNotes] = useState("");
   const [txCounterparty, setTxCounterparty] = useState("");
@@ -79,6 +87,7 @@ export default function AccountDetailPage() {
   const [editTxId, setEditTxId] = useState<string | null>(null);
   const [editTxType, setEditTxType] = useState<"income" | "expense">("expense");
   const [editTxAmount, setEditTxAmount] = useState("");
+  const [editTxCommission, setEditTxCommission] = useState("");
   const [editTxCategory, setEditTxCategory] = useState("");
   const [editTxNotes, setEditTxNotes] = useState("");
   const [editTxCounterparty, setEditTxCounterparty] = useState("");
@@ -151,17 +160,34 @@ export default function AccountDetailPage() {
 
       const decrypted: TransactionDisplay[] = await Promise.all(
         raw.map(async (tx) => {
+          // Rule-generated transactions use ECIES (encrypted with user's X25519 public key)
+          // and have the "1|" prefix. User-created transactions use AES-GCM with the account key
+          // and have no prefix.
+          if (tx.encrypted_payload.startsWith("1|")) {
+            if (privKeyBase64) {
+              try {
+                const payload = await decryptECIESPayload<TransactionPayload>(
+                  tx.encrypted_payload,
+                  privKeyBase64,
+                );
+                return { id: tx.id, time: tx.time, payload };
+              } catch { /* fall through: show "could not decrypt" */ }
+            }
+            return {
+              id: tx.id,
+              time: tx.time,
+              payload: null,
+              decryptError: privKeyBase64 ? "Decryption failed" : "Key unavailable",
+            };
+          }
+          // Account-key-encrypted transaction (user-created)
           if (keyToUse) {
             try {
               const payload = await decryptTransactionPayload(
                 tx.encrypted_payload,
-                keyToUse
+                keyToUse,
               );
-              return {
-                id: tx.id,
-                time: tx.time,
-                payload,
-              };
+              return { id: tx.id, time: tx.time, payload };
             } catch { /* fall through: show "could not decrypt" */ }
           }
           return {
@@ -220,18 +246,11 @@ export default function AccountDetailPage() {
     setInviting(true);
 
     try {
-      const { public_key } = await apiFetch<{ public_key: string }>(
-        `${ENDPOINTS.userLookup}?email=${encodeURIComponent(inviteEmail)}`
-      );
-
-      // Reuse the existing account key if we have it
+      // Get the account key
       let keyToUse: string;
       if (accountKeyBase64) {
         keyToUse = accountKeyBase64;
       } else {
-        // Fetch the account key via shared utility (checks cache, sessionStorage,
-        // or decrypts the server-side entry). This will throw if the key cannot
-        // be retrieved (e.g. missing private key or no matching entry).
         keyToUse = await getAccountKey(
           id,
           privKeyBase64 ?? undefined,
@@ -239,8 +258,23 @@ export default function AccountDetailPage() {
         );
       }
 
-      const encrypted = await encryptAccountKeyForRecipient(keyToUse, public_key);
-      const encryptedAccountKey = `${encrypted.ephemeralPublicKey}:${encrypted.ciphertext}`;
+      // Get the server's public key (to encrypt account key for pending invitation)
+      let serverPubKey = useRuleStore.getState().serverPublicKey;
+      if (!serverPubKey) {
+        serverPubKey = await useRuleStore.getState().fetchServerPublicKey();
+      }
+      if (!serverPubKey) {
+        setInviteError("Server public key not available");
+        setInviting(false);
+        return;
+      }
+
+      // Encrypt the account key with the server's public key so the server
+      // can re-encrypt it for the invitee when they accept.
+      const encryptedAccountKey = await encryptForRecipient(
+        { account_key: keyToUse },
+        serverPubKey
+      );
 
       await inviteUser(id, inviteEmail, encryptedAccountKey);
       setInviteOpen(false);
@@ -275,6 +309,7 @@ export default function AccountDetailPage() {
     setEditTxId(txId);
     setEditTxType(tx.payload.amount >= 0 ? "income" : "expense");
     setEditTxAmount(String(Math.abs(tx.payload.amount)));
+    setEditTxCommission(tx.payload.commission ? String(tx.payload.commission) : "");
     setEditTxCategory(tx.payload.category ?? "");
     setEditTxNotes(tx.payload.notes ?? "");
     setEditTxCounterparty(tx.payload.counterparty ?? "");
@@ -300,12 +335,13 @@ export default function AccountDetailPage() {
         throw new Error("Invalid amount");
       }
       const amount = editTxType === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+      const commission = editTxCommission ? parseFloat(editTxCommission) : 0;
 
       const category = editTxCategory || "general";
       addCategory(editTxType as CategoryType, category);
 
       const encryptedPayload = await encryptTransactionPayload(
-        { amount, category, notes: editTxNotes, counterparty: editTxCounterparty },
+        { amount, category, notes: editTxNotes, counterparty: editTxCounterparty, commission: commission > 0 ? commission : undefined },
         accountKeyBase64
       );
 
@@ -345,6 +381,7 @@ export default function AccountDetailPage() {
       setEditTxOpen(false);
       setEditTxId(null);
       setEditTxFile(null);
+      setEditTxCommission("");
       await fetchTransactions();
     } catch (err: any) {
       setEditTxError(err.message);
@@ -385,12 +422,13 @@ export default function AccountDetailPage() {
       }
       // Apply sign based on income/expense toggle
       const amount = txType === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+      const commission = txCommission ? parseFloat(txCommission) : 0;
 
       const category = txCategory || "general";
       addCategory(txType as CategoryType, category);
 
       const encryptedPayload = await encryptTransactionPayload(
-        { amount, category, notes: txNotes, counterparty: txCounterparty },
+        { amount, category, notes: txNotes, counterparty: txCounterparty, commission: commission > 0 ? commission : undefined },
         accountKeyBase64
       );
 
@@ -417,6 +455,7 @@ export default function AccountDetailPage() {
       setCreateOpen(false);
       setTxType("expense");
       setTxAmount("");
+      setTxCommission("");
       setTxCategory("");
       setTxNotes("");
       setTxCounterparty("");
@@ -458,7 +497,7 @@ export default function AccountDetailPage() {
   // All-time balance for this account
   const totalBalance = transactions
     .filter((tx) => tx.payload)
-    .reduce((sum, tx) => sum + (tx.payload?.amount || 0), 0);
+    .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
 
   // Filter transactions to the date range for the chart and list
   const filteredTxs = transactions.filter((tx) => {
@@ -520,7 +559,7 @@ export default function AccountDetailPage() {
     const windowStartEpoch = startDate.getTime();
     for (const tx of transactions) {
       if (new Date(tx.time).getTime() < windowStartEpoch && tx.payload) {
-        openingBalance += tx.payload.amount;
+        openingBalance += effectiveAmount(tx.payload);
       }
     }
 
@@ -534,7 +573,7 @@ export default function AccountDetailPage() {
     for (const tx of filteredTxs) {
       const key = tx.time.slice(0, 10);
       if (key in dayTotals && tx.payload) {
-        dayTotals[key] += tx.payload.amount;
+        dayTotals[key] += effectiveAmount(tx.payload);
       }
     }
 
@@ -560,10 +599,10 @@ export default function AccountDetailPage() {
   const incomeCountAcc = incomeTx.length;
   const expenseCountAcc = expenseTxFromFiltered.length;
   const incomeAvgAcc = incomeTx.length > 0
-    ? incomeTx.reduce((sum, tx) => sum + (tx.payload?.amount ?? 0), 0) / incomeTx.length
+    ? incomeTx.reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0) / incomeTx.length
     : 0;
   const expenseAvgAcc = expenseTxFromFiltered.length > 0
-    ? Math.abs(expenseTxFromFiltered.reduce((sum, tx) => sum + (tx.payload?.amount ?? 0), 0)) / expenseTxFromFiltered.length
+    ? Math.abs(expenseTxFromFiltered.reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0)) / expenseTxFromFiltered.length
     : 0;
   const recentAccountTxs = filteredTxs.slice(0, 10);
 
@@ -644,6 +683,17 @@ export default function AccountDetailPage() {
                       />
                     </div>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Commission / Fee (optional)</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={txCommission}
+                    onChange={(e) => setTxCommission(e.target.value)}
+                    placeholder="0.00"
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Date</label>
@@ -799,6 +849,17 @@ export default function AccountDetailPage() {
                       />
                     </div>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Commission / Fee (optional)</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editTxCommission}
+                    onChange={(e) => setEditTxCommission(e.target.value)}
+                    placeholder="0.00"
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Date</label>

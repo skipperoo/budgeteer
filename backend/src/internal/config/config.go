@@ -2,27 +2,30 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
 )
 
 type Config struct {
-	LogLevel      string
-	DBHost        string
-	DBPort        string
-	DBUser        string
-	DBPassword    string
-	DBName        string
-	RedisHost     string
-	RedisPort     string
-	RedisPassword string
-	SMTPHost      string
-	SMTPPort      string
-	SMTPUser      string
-	SMTPPassword  string
-	SMTPFrom      string
-	SMTPUseSSL    bool
-	JWTSecret     string
-	JWTSecretPath string
+	LogLevel             string
+	DBHost               string
+	DBPort               string
+	DBUser               string
+	DBPassword           string
+	DBName               string
+	RedisHost            string
+	RedisPort            string
+	RedisPassword        string
+	SMTPHost             string
+	SMTPPort             string
+	SMTPUser             string
+	SMTPPassword         string
+	SMTPFrom             string
+	SMTPUseSSL           bool
+	JWTSecret            string
+	JWTSecretPath        string
+	ServerEncryptionKey  string // X25519 private key (base64), from docker secret
+	RulesCheckInterval   int    // seconds, default 300 (5 min)
 }
 
 var Cfg *Config
@@ -44,9 +47,23 @@ func LoadConfig() {
 		SMTPPassword:  readSecret("smtp_password"),
 		SMTPFrom:      getenvOrDefault("SMTP_FROM", "noreply@budgeteer.app"),
 		SMTPUseSSL:    getenvOrDefault("SMTP_SSL", "false") == "true" || getenvOrDefault("SMTP_PORT", "587") == "465",
-		JWTSecret:     readSecret("jwt_secret"),
-		JWTSecretPath: "/run/secrets/jwt_secret",
+		JWTSecret:           readSecret("jwt_secret"),
+		JWTSecretPath:       "/run/secrets/jwt_secret",
+		ServerEncryptionKey: readSecret("server_encryption_key"),
+		RulesCheckInterval:  getenvOrDefaultInt("RULES_CHECK_INTERVAL", 300),
 	}
+}
+
+func getenvOrDefaultInt(key string, def int) int {
+	val := os.Getenv(key)
+	if val == "" {
+		return def
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return def
+	}
+	return n
 }
 
 func getenvOrDefault(key, def string) string {

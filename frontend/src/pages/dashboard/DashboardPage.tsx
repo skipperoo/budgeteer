@@ -11,7 +11,7 @@ import { useDateRangeStore } from "@/stores/date-range-store";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64 } from "@/lib/crypto";
-import { encryptTransactionPayload } from "@/lib/crypto-transaction";
+import { encryptTransactionPayload, effectiveAmount } from "@/lib/crypto-transaction";
 import { fetchAndDecryptTransactions, getAccountKey } from "@/lib/decrypt-transactions";
 import { TransactionCard } from "@/components/transactions/TransactionCard";
 import type { CreateTransactionRequest } from "@/types";
@@ -50,6 +50,11 @@ export default function DashboardPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [txType, setTxType] = useState<"income" | "expense">("expense");
   const [txAmount, setTxAmount] = useState("");
+  const [txCommission, setTxCommission] = useState(() => {
+    const fromPrefs = user?.preferences?.default_commission;
+    if (fromPrefs != null && fromPrefs > 0) return String(fromPrefs);
+    try { return localStorage.getItem("budgeteer_default_commission") ?? ""; } catch { return ""; }
+  });
   const [txCategory, setTxCategory] = useState("");
   const [txNotes, setTxNotes] = useState("");
   const [txCounterparty, setTxCounterparty] = useState("");
@@ -111,13 +116,13 @@ export default function DashboardPage() {
   const currencyMap = Object.fromEntries(accounts.map((a) => [a.id, a.currency]));
 
   // Balance computations (within date range)
-  const totalBalance = filteredTxs.reduce((sum, tx) => sum + tx.payload.amount, 0);
+  const totalBalance = filteredTxs.reduce((sum, tx) => sum + effectiveAmount(tx.payload), 0);
   const totalIncome = filteredTxs
     .filter((tx) => tx.payload.amount > 0)
-    .reduce((sum, tx) => sum + tx.payload.amount, 0);
+    .reduce((sum, tx) => sum + effectiveAmount(tx.payload), 0);
   const totalExpenses = filteredTxs
     .filter((tx) => tx.payload.amount < 0)
-    .reduce((sum, tx) => sum + Math.abs(tx.payload.amount), 0);
+    .reduce((sum, tx) => sum + Math.abs(effectiveAmount(tx.payload)), 0);
   const incomeCount = filteredTxs.filter((tx) => tx.payload.amount > 0).length;
   const expenseCount = filteredTxs.filter((tx) => tx.payload.amount < 0).length;
 
@@ -125,10 +130,10 @@ export default function DashboardPage() {
   const incomeTx = filteredTxs.filter((tx) => tx.payload.amount > 0);
   const expenseTx = filteredTxs.filter((tx) => tx.payload.amount < 0);
   const incomeAvg = incomeTx.length > 0
-    ? incomeTx.reduce((sum, tx) => sum + tx.payload.amount, 0) / incomeTx.length
+    ? incomeTx.reduce((sum, tx) => sum + effectiveAmount(tx.payload), 0) / incomeTx.length
     : 0;
   const expenseAvg = expenseTx.length > 0
-    ? Math.abs(expenseTx.reduce((sum, tx) => sum + tx.payload.amount, 0)) / expenseTx.length
+    ? Math.abs(expenseTx.reduce((sum, tx) => sum + effectiveAmount(tx.payload), 0)) / expenseTx.length
     : 0;
 
   const defaultCurrency = localStorage.getItem("budgeteer_default_currency") || "EUR";
@@ -139,7 +144,7 @@ export default function DashboardPage() {
     const perAccount: Record<string, number> = {};
     for (const tx of allTxs) {
       if (tx.payload) {
-        perAccount[tx.account_id] = (perAccount[tx.account_id] || 0) + tx.payload.amount;
+        perAccount[tx.account_id] = (perAccount[tx.account_id] || 0) + effectiveAmount(tx.payload);
       }
     }
     const byCur: Record<string, number> = {};
@@ -176,7 +181,7 @@ export default function DashboardPage() {
     for (const tx of allTxs) {
       const txTime = new Date(tx.time).getTime();
       if (txTime < windowStartEpoch) {
-        openingBalance += tx.payload ? tx.payload.amount : 0;
+        openingBalance += tx.payload ? effectiveAmount(tx.payload) : 0;
       }
     }
 
@@ -191,7 +196,7 @@ export default function DashboardPage() {
     for (const tx of filteredTxs) {
       const key = tx.time.slice(0, 10);
       if (key in dayTotals) {
-        dayTotals[key] += tx.payload ? tx.payload.amount : 0;
+        dayTotals[key] += tx.payload ? effectiveAmount(tx.payload) : 0;
       }
     }
 
@@ -217,7 +222,7 @@ export default function DashboardPage() {
     filteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount < 0 && tx.payload.category !== "Opening Balance") {
         const cat = tx.payload.category || "General";
-        categories[cat] = (categories[cat] || 0) + Math.abs(tx.payload.amount);
+        categories[cat] = (categories[cat] || 0) + Math.abs(effectiveAmount(tx.payload));
       }
     });
     return Object.entries(categories)
@@ -234,7 +239,7 @@ export default function DashboardPage() {
     filteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount > 0 && tx.payload.category !== "Opening Balance") {
         const cat = tx.payload.category || "General";
-        categories[cat] = (categories[cat] || 0) + tx.payload.amount;
+        categories[cat] = (categories[cat] || 0) + effectiveAmount(tx.payload);
       }
     });
     return Object.entries(categories)
@@ -281,6 +286,7 @@ export default function DashboardPage() {
       }
       // Apply sign based on income/expense toggle
       const amount = txType === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+      const commission = txCommission ? parseFloat(txCommission) : 0;
 
       // Fetch (or retrieve from cache) the account key for the selected account.
       // getAccountKey now checks sessionStorage first, so it can work even
@@ -295,7 +301,7 @@ export default function DashboardPage() {
       addCategory(txType as CategoryType, category);
 
       const encryptedPayload = await encryptTransactionPayload(
-        { amount, category, notes: txNotes, counterparty: txCounterparty },
+        { amount, category, notes: txNotes, counterparty: txCounterparty, commission: commission > 0 ? commission : undefined },
         accountKeyBase64
       );
 
@@ -309,6 +315,7 @@ export default function DashboardPage() {
       setCreateOpen(false);
       setTxType("expense");
       setTxAmount("");
+      setTxCommission("");
       setTxCategory("");
       setTxNotes("");
       setTxCounterparty("");
@@ -399,6 +406,17 @@ export default function DashboardPage() {
                     />
                   </div>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Commission / Fee (optional)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={txCommission}
+                  onChange={(e) => setTxCommission(e.target.value)}
+                  placeholder="0.00"
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Date</label>

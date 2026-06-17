@@ -52,9 +52,12 @@ func handlerSetupTest(t *testing.T) func() {
 		for _, k := range keys {
 			database.Redis.Del(ctx, k)
 		}
+		database.Pool.Exec(ctx, "DELETE FROM notifications")
+		database.Pool.Exec(ctx, "DELETE FROM invitations")
 		database.Pool.Exec(ctx, "DELETE FROM email_outbox")
 		database.Pool.Exec(ctx, "DELETE FROM otps")
 		database.Pool.Exec(ctx, "DELETE FROM sync_queue")
+		database.Pool.Exec(ctx, "DELETE FROM rules")
 		database.Pool.Exec(ctx, "DELETE FROM account_users")
 		database.Pool.Exec(ctx, "DELETE FROM accounts")
 		database.Pool.Exec(ctx, "DELETE FROM transactions")
@@ -219,7 +222,9 @@ func TestLoginHandler_VerifiedUser(t *testing.T) {
 	for _, e := range emails2 {
 		if e.ToAddress == email {
 			fmt.Sscanf(e.Body, "Your login verification code is: %s", &loginOTP)
-			break
+			if loginOTP != "" {
+				break
+			}
 		}
 	}
 	if loginOTP == "" {

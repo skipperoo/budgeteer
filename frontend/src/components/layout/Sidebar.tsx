@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Wallet,
+  ScrollText,
+  Bell,
   Settings,
   LogOut,
   Moon,
@@ -10,18 +12,22 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTheme } from "@/hooks/use-theme";
+import { useNotificationStore } from "@/stores/notification-store";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/accounts", icon: Wallet, label: "Accounts" },
+  { to: "/rules", icon: ScrollText, label: "Rules" },
+  { to: "/notifications", icon: Bell, label: "Notifications" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export function Sidebar() {
   const logout = useAuthStore((s) => s.logout);
   const { theme, toggleTheme } = useTheme();
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
 
   const handleLogout = async () => {
     try {
@@ -52,7 +58,12 @@ export function Sidebar() {
             }
           >
             <item.icon className="h-4 w-4" />
-            {item.label}
+            <span className="flex-1">{item.label}</span>
+            {item.to === "/notifications" && unreadCount > 0 && (
+              <span className="bg-primary text-primary-foreground text-xs rounded-full h-5 min-w-[20px] flex items-center justify-center px-1">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

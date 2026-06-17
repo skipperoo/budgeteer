@@ -101,3 +101,47 @@ export function formatDateTime(dateString: string): string {
     });
   }
 }
+
+/**
+ * Returns the local timezone offset string like "GMT+2" or "GMT-5".
+ */
+export function getGMTOffset(): string {
+  const offset = -new Date().getTimezoneOffset();
+  const sign = offset >= 0 ? "+" : "-";
+  const hours = Math.floor(Math.abs(offset) / 60);
+  const minutes = Math.abs(offset) % 60;
+  return `GMT${sign}${hours}${minutes > 0 ? `:${String(minutes).padStart(2, "0")}` : ""}`;
+}
+
+/**
+ * Formats a date string with both the local time and the GMT offset:
+ * e.g. "Jun 16, 2026, 2:30 PM (GMT+2)"
+ */
+export function formatDateTimeWithOffset(dateString: string): string {
+  const locale = getStoredLocale();
+  try {
+    const local = new Date(dateString).toLocaleString(locale, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${local} (${getGMTOffset()})`;
+  } catch {
+    return formatDateTime(dateString);
+  }
+}
+
+/**
+ * Converts a UTC ISO string to a local datetime-local input value (YYYY-MM-DDTHH:MM).
+ */
+export function utcToLocalDatetime(utcStr: string): string {
+  const d = new Date(utcStr);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
