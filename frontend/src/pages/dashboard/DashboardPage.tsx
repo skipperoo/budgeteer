@@ -516,7 +516,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground">
                   You need at least one account before you can add a transaction.
                 </p>
-                <Button onClick={() => { setNoAccountsDialogOpen(false); navigate("/accounts"); }}>
+                <Button onClick={() => { setNoAccountsDialogOpen(false); navigate("/accounts", { state: { openCreate: true } }); }}>
                   Create an Account
                 </Button>
               </div>
@@ -642,10 +642,12 @@ export default function DashboardPage() {
                   </p>
                   <Button
                     onClick={() => {
-                      if (accounts.length > 0) {
+                      if (accounts.length === 0) {
+                        setNoAccountsDialogOpen(true);
+                      } else {
                         setTxAccountId(accounts[0].id);
+                        setCreateOpen(true);
                       }
-                      setCreateOpen(true);
                     }}
                   >
                     Add Transaction

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -18,6 +18,7 @@ type AccountType = "personal" | "joint" | "savings";
 
 export default function AccountListPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { accounts, fetchAccounts, createAccount, deleteAccount } = useAccountStore();
   const user = useAuthStore((s) => s.user);
   const plaintextPrivateKey = useAuthStore((s) => s.plaintextPrivateKey);
@@ -41,6 +42,16 @@ export default function AccountListPage() {
   useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
+
+  // Auto-open create account dialog when navigated from no-accounts overlay
+  useEffect(() => {
+    const state = location.state as { openCreate?: boolean } | null;
+    if (state?.openCreate) {
+      setOpen(true);
+      // Clear the state so it doesn't re-trigger on re-render
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // Fetch and calculate balances whenever accounts change
   const fetchBalances = useCallback(async () => {

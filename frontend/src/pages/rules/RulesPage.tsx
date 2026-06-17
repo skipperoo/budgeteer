@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
@@ -14,6 +15,7 @@ import { Trash2, Plus, Pencil, Loader2, AlertCircle } from "lucide-react";
 type RuleType = "payment" | "income" | "transfer" | "user_transfer";
 
 export default function RulesPage() {
+  const navigate = useNavigate();
   const {
     rules,
     serverPublicKey,
@@ -31,6 +33,7 @@ export default function RulesPage() {
 
   const [open, setOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
+  const [noAccountsDialogOpen, setNoAccountsDialogOpen] = useState(false);
 
   // Form state (individual fields matching existing codebase pattern)
   const [formName, setFormName] = useState("");
@@ -291,7 +294,13 @@ export default function RulesPage() {
             Automated payments and transfers
           </p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={() => {
+          if (accounts.length === 0) {
+            setNoAccountsDialogOpen(true);
+          } else {
+            openCreate();
+          }
+        }}>
           <Plus className="h-4 w-4 mr-2" />
           New Rule
         </Button>
@@ -693,6 +702,18 @@ export default function RulesPage() {
               {editingRule ? "Update" : "Create"}
             </Button>
           </div>
+        </div>
+      </ResponsiveDialog>
+
+      {/* No accounts overlay */}
+      <ResponsiveDialog open={noAccountsDialogOpen} onOpenChange={setNoAccountsDialogOpen} title="No Accounts Yet">
+        <div className="space-y-4 text-center py-4">
+          <p className="text-sm text-muted-foreground">
+            You need at least one account before you can create a rule.
+          </p>
+          <Button onClick={() => { setNoAccountsDialogOpen(false); navigate("/accounts", { state: { openCreate: true } }); }}>
+            Create an Account
+          </Button>
         </div>
       </ResponsiveDialog>
     </div>
