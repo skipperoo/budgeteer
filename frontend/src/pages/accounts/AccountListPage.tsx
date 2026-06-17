@@ -32,7 +32,6 @@ export default function AccountListPage() {
 
   // --- Initial balance after account creation ---
   const [initialBalance, setInitialBalance] = useState("");
-  const [balType, setBalType] = useState<"income" | "expense">("income");
   const [isCreating, setIsCreating] = useState(false);
 
   // --- Balances state ---
@@ -81,7 +80,7 @@ export default function AccountListPage() {
       // Handle initial balance if provided
       const rawAmount = parseFloat(initialBalance);
       if (created?.id && !isNaN(rawAmount) && rawAmount > 0) {
-        const amount = balType === "income" ? rawAmount : -rawAmount;
+        const amount = rawAmount;
         const accountKey = await getAccountKey(created.id, privKeyBase64 ?? undefined, user?.public_key);
 
         const encryptedPayload = await encryptTransactionPayload(
@@ -103,7 +102,6 @@ export default function AccountListPage() {
       setCurrency("EUR");
       setType("personal");
       setInitialBalance("");
-      setBalType("income");
       
       // Trigger balance refresh
       fetchBalances();
@@ -161,46 +159,21 @@ export default function AccountListPage() {
 
               <div className="space-y-2 pt-2 border-t border-border/50">
                 <label className="text-sm font-medium">Opening Balance (Optional)</label>
-                <div className="flex gap-2">
-                  <div className="flex rounded-md border border-input overflow-hidden shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setBalType("income")}
-                      className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                        balType === "income"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-transparent text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Deposit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBalType("expense")}
-                      className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                        balType === "expense"
-                          ? "bg-destructive text-destructive-foreground"
-                          : "bg-transparent text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Credit
-                    </button>
-                  </div>
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
-                      {balType === "expense" ? "-" : "+"}
-                    </span>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={initialBalance}
-                      onChange={(e) => setInitialBalance(e.target.value)}
-                      placeholder="0.00"
-                      className="pl-7 h-9"
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none select-none">
+                    +
+                  </span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={initialBalance}
+                    onChange={(e) => setInitialBalance(e.target.value)}
+                    placeholder="0.00"
+                    className="pl-7 h-9"
                     />
                   </div>
                 </div>
-              </div>
+
 
               <Button onClick={handleCreate} className="w-full mt-4" disabled={isCreating || !name}>
                 {isCreating ? "Creating..." : "Create Account"}

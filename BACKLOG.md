@@ -68,7 +68,7 @@ This is the backlog of Budgeteer
 - [ ] Add the env variable `BASE_URL` to configure the base url to include in emails, notifications and so on.
 - [x] The income switch button in the new transaction form should be bright green no matter what is the theme
 - [x] The user should get an overlay when he tries to create a transaction without having at least 1 account availabl
-- [ ] In account creation form remove the debit credit switch, leaving only the default mode (debit)
+- [x] In account creation form remove the debit credit switch, leaving only the default mode (debit)
 - [ ] Add the default currency, locale and theme switcher (light/dark) to user preferences sent to the db.
 - [ ] Merge the theme switcher to the accent color card
 - [ ] Change the locale/language card to locale only (add a line in the card as the example with multiple date formats, numbers, and so on). Also, the locale is not enforced in all the ui, fix that.
