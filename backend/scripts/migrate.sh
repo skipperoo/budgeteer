@@ -25,11 +25,9 @@ MIGRATIONS_DIR="$(cd "$(dirname "$0")/../src/migrations" && pwd)"
 : "${DB_USER:=budgeteer}"
 : "${DB_NAME:=budgeteer}"
 
-DB_PASSWORD=""
+DB_PASSWORD="${DB_PASSWORD:-}"
 if [ -f /run/secrets/db_password ]; then
   DB_PASSWORD="$(cat /run/secrets/db_password)"
-else
-  DB_PASSWORD="${DB_PASSWORD:-}"
 fi
 
 export PGHOST="$DB_HOST"
@@ -40,7 +38,7 @@ export PGDATABASE="$DB_NAME"
 
 # --- Helper --------------------------------------------------------
 psql_exec() {
-  psql -q -1 "$@"
+  PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -q -1 -w -X "$@"
 }
 
 echo "📦 Budgeteer Migration Script"

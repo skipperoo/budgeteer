@@ -7,6 +7,7 @@ import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { useBudgetStore } from "@/stores/budget-store";
 import { useAccountStore } from "@/stores/account-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { encryptForRecipient, decryptECIESPayload } from "@/lib/crypto-rules";
 import { bytesToBase64 } from "@/lib/crypto";
 import { formatDate } from "@/lib/format";
@@ -33,6 +34,10 @@ export default function BudgetsPage() {
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+
+  const { getCategories, addCategory } = useCategoryStore();
+  const [showCategoryInput, setShowCategoryInput] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -131,6 +136,26 @@ export default function BudgetsPage() {
     setFormStartDate(budget.start_date);
     setFormEndDate(budget.end_date || "");
     setOpen(true);
+  };
+
+  // Category dropdown handlers
+  const handleSelectCategory = (cat: string) => {
+    if (cat === "__new__") {
+      setShowCategoryInput(true);
+      setNewCategory("");
+    } else {
+      setFormCategory(cat);
+      setShowCategoryInput(false);
+    }
+  };
+
+  const handleAddNewCategory = () => {
+    const cat = newCategory.trim();
+    if (!cat) return;
+    addCategory("expense", cat);
+    setFormCategory(cat);
+    setShowCategoryInput(false);
+    setNewCategory("");
   };
 
   const handleSave = async () => {
@@ -260,7 +285,7 @@ export default function BudgetsPage() {
                         </span>
                       )}
                     </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5 capitalize">
                       {budget.period}
                       {budget.end_date && ` · until ${formatDate(budget.end_date)}`}
                     </p>
@@ -343,12 +368,50 @@ export default function BudgetsPage() {
 
           <div className="space-y-2">
             <Label htmlFor="budget-category">Category (optional)</Label>
-            <Input
-              id="budget-category"
-              value={formCategory}
-              onChange={(e) => setFormCategory(e.target.value)}
-              placeholder="e.g. Groceries, Dining, Utilities"
-            />
+            {!showCategoryInput ? (
+              <div className="flex gap-2">
+                <select
+                  id="budget-category"
+                  value={formCategory}
+                  onChange={(e) => handleSelectCategory(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                  <option value="">All Categories</option>
+                  {getCategories("expense").map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                  <option value="__new__">+ Add new category...</option>
+                </select>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  placeholder="New category name"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddNewCategory();
+                    }
+                  }}
+                  autoFocus
+                />
+                <Button type="button" size="sm" onClick={handleAddNewCategory}>
+                  Add
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowCategoryInput(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               Leave empty to apply to all categories.
             </p>
