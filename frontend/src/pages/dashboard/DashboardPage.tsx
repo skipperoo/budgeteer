@@ -46,6 +46,9 @@ export default function DashboardPage() {
     return d >= dateRange.start && d <= dateRange.end;
   });
 
+  // No-accounts overlay
+  const [noAccountsDialogOpen, setNoAccountsDialogOpen] = useState(false);
+
   // Create transaction dialog state
   const [createOpen, setCreateOpen] = useState(false);
   const [txType, setTxType] = useState<"income" | "expense">("expense");
@@ -345,7 +348,8 @@ export default function DashboardPage() {
       {/* Header with Add Transaction button */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <ResponsiveDialog open={createOpen} onOpenChange={setCreateOpen} title="New Transaction" trigger={<Button size="lg">+ New Transaction</Button>}>
+        {accounts.length > 0 ? (
+          <ResponsiveDialog open={createOpen} onOpenChange={setCreateOpen} title="New Transaction" trigger={<Button size="lg">+ New Transaction</Button>}>
           <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Account</label>
@@ -502,6 +506,23 @@ export default function DashboardPage() {
               </Button>
             </div>
         </ResponsiveDialog>
+        ) : (
+          <>
+            <Button size="lg" onClick={() => setNoAccountsDialogOpen(true)}>
+              + New Transaction
+            </Button>
+            <ResponsiveDialog open={noAccountsDialogOpen} onOpenChange={setNoAccountsDialogOpen} title="No Accounts Yet">
+              <div className="space-y-4 text-center py-4">
+                <p className="text-sm text-muted-foreground">
+                  You need at least one account before you can add a transaction.
+                </p>
+                <Button onClick={() => { setNoAccountsDialogOpen(false); navigate("/accounts"); }}>
+                  Create an Account
+                </Button>
+              </div>
+            </ResponsiveDialog>
+          </>
+        )}
       </div>
 
       {/* Summary cards */}
