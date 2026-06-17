@@ -101,6 +101,12 @@ export default function AccountDetailPage() {
   const [detailTx, setDetailTx] = useState<TransactionDisplay | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
+  // --- Opening balance edit state ---
+  const [openingBalanceEditOpen, setOpeningBalanceEditOpen] = useState(false);
+  const [openingBalanceInput, setOpeningBalanceInput] = useState("");
+  const [openingBalanceSaving, setOpeningBalanceSaving] = useState(false);
+  const [openingBalanceError, setOpeningBalanceError] = useState("");
+
   // --- File upload state (create) ---
   const [txFile, setTxFile] = useState<File | null>(null);
   const createFileRef = useRef<HTMLInputElement>(null);
@@ -470,6 +476,53 @@ export default function AccountDetailPage() {
     }
   };
 
+  const handleEditOpeningBalance = async () => {
+    setOpeningBalanceError("");
+    const raw = parseFloat(openingBalanceInput);
+    if (isNaN(raw) || raw < 0) {
+      setOpeningBalanceError("Please enter a valid positive amount");
+      return;
+    }
+
+    // Desired opening balance (always positive/income style in the UI)
+    const desiredOpeningBalance = raw;
+    const diff = desiredOpeningBalance - openingBalance;
+    if (Math.abs(diff) < 0.001) {
+      setOpeningBalanceEditOpen(false);
+      return;
+    }
+
+    setOpeningBalanceSaving(true);
+    try {
+      const accountKeyBase64Val = accountKeyBase64;
+      if (!accountKeyBase64Val) throw new Error("Account key not available");
+
+      const encryptedPayload = await encryptTransactionPayload(
+        {
+          amount: diff,
+          category: "Opening Balance",
+          notes: "Opening balance adjustment",
+          counterparty: "Opening Balance",
+        },
+        accountKeyBase64Val
+      );
+
+      if (!account) throw new Error("Account not found");
+      const time = new Date().toISOString();
+      await apiFetch(ENDPOINTS.transactions(account.id), {
+        method: "POST",
+        body: JSON.stringify({ time, encrypted_payload: encryptedPayload } as CreateTransactionRequest),
+      });
+
+      setOpeningBalanceEditOpen(false);
+      await fetchTransactions();
+    } catch (err: any) {
+      setOpeningBalanceError(err.message);
+    } finally {
+      setOpeningBalanceSaving(false);
+    }
+  };
+
   const handleDeleteTransaction = async (txId: string) => {
     if (!confirm("Delete this transaction?")) return;
     try {
@@ -523,7 +576,7 @@ export default function AccountDetailPage() {
     filteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount < 0 && tx.payload.category !== "Opening Balance") {
         const cat = tx.payload.category || "General";
-        categories[cat] = (categories[cat] || 0) + Math.abs(tx.payload.amount);
+        categories[cat] = (categories[cat] || 0) + Math.abs(effectiveAmount(tx.payload));
       }
     });
     return Object.entries(categories)
@@ -537,7 +590,7 @@ export default function AccountDetailPage() {
     filteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount > 0 && tx.payload.category !== "Opening Balance") {
         const cat = tx.payload.category || "General";
-        categories[cat] = (categories[cat] || 0) + tx.payload.amount;
+        categories[cat] = (categories[cat] || 0) + effectiveAmount(tx.payload);
       }
     });
     return Object.entries(categories)
@@ -593,9 +646,20 @@ export default function AccountDetailPage() {
     });
   })();
 
-  // Summary stats for dashboard-like layout
-  const incomeTx = filteredTxs.filter((tx) => tx.payload && tx.payload.amount > 0);
-  const expenseTxFromFiltered = filteredTxs.filter((tx) => tx.payload && tx.payload.amount < 0);
+  // Opening balance: sum of all "Opening Balance" transactions
+  const openingTxs = transactions.filter(
+    (tx) => tx.payload && tx.payload.category === "Opening Balance"
+  );
+  const openingBalance = openingTxs.reduce(
+    (sum, tx) => sum + effectiveAmount(tx.payload!), 0
+  );
+
+  // Regular transactions: exclude "Opening Balance"
+  const regularFilteredTxs = filteredTxs.filter(
+    (tx) => !tx.payload || tx.payload.category !== "Opening Balance"
+  );
+  const incomeTx = regularFilteredTxs.filter((tx) => tx.payload && tx.payload.amount > 0);
+  const expenseTxFromFiltered = regularFilteredTxs.filter((tx) => tx.payload && tx.payload.amount < 0);
   const incomeCountAcc = incomeTx.length;
   const expenseCountAcc = expenseTxFromFiltered.length;
   const incomeAvgAcc = incomeTx.length > 0
@@ -604,7 +668,7 @@ export default function AccountDetailPage() {
   const expenseAvgAcc = expenseTxFromFiltered.length > 0
     ? Math.abs(expenseTxFromFiltered.reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0)) / expenseTxFromFiltered.length
     : 0;
-  const recentAccountTxs = filteredTxs.slice(0, 10);
+  const recentAccountTxs = regularFilteredTxs.slice(0, 10);
 
   return (
     <div className="space-y-3">
@@ -1110,6 +1174,75 @@ export default function AccountDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Opening Balance Section */}
+      {openingBalance !== 0 && (
+        <Card
+          className="cursor-pointer hover:bg-accent/40 transition-all duration-200"
+          onClick={() => {
+            setOpeningBalanceInput(String(Math.abs(openingBalance)));
+            setOpeningBalanceError("");
+            setOpeningBalanceEditOpen(true);
+          }}
+        >
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center rounded-full h-8 w-8 bg-income/10 text-income shrink-0 text-sm font-bold">
+                ⊕
+              </div>
+              <div>
+                <span className="font-semibold text-sm">Opening Balance</span>
+                <span className="block text-[10px] text-muted-foreground uppercase tracking-wider">Base capital — click to edit</span>
+              </div>
+            </div>
+            <span className="text-base font-bold tabular-nums text-income">
+              {formatCurrency(openingBalance, account?.currency ?? "EUR", true)}
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Opening Balance Edit Dialog */}
+      <ResponsiveDialog open={openingBalanceEditOpen} onOpenChange={setOpeningBalanceEditOpen} title="Edit Opening Balance">
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Set the base opening balance for this account. This creates an adjustment transaction to move the balance from the current value to the new value.
+          </p>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Current: {formatCurrency(openingBalance, account?.currency ?? "EUR", true)}
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={openingBalanceInput}
+              onChange={(e) => setOpeningBalanceInput(e.target.value)}
+              placeholder="0.00"
+              required
+            />
+          </div>
+          {openingBalanceError && (
+            <p className="text-sm text-destructive">{openingBalanceError}</p>
+          )}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setOpeningBalanceEditOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={handleEditOpeningBalance}
+              disabled={openingBalanceSaving}
+            >
+              {openingBalanceSaving ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </div>
+      </ResponsiveDialog>
 
       {/* Main Grid: Balance chart + Recent Transactions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">

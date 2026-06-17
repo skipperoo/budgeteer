@@ -112,23 +112,25 @@ export default function DashboardPage() {
     refreshTransactions();
   }, [refreshTransactions]);
 
-  const recentTxs = filteredTxs.slice(0, 10);
+  // Exclude "Opening Balance" from income/expense stats (it's an accounting entry)
+  const regularTxs = filteredTxs.filter((tx) => tx.payload.category !== "Opening Balance");
+  const recentTxs = regularTxs.slice(0, 10);
   const currencyMap = Object.fromEntries(accounts.map((a) => [a.id, a.currency]));
 
   // Balance computations (within date range)
   const totalBalance = filteredTxs.reduce((sum, tx) => sum + effectiveAmount(tx.payload), 0);
-  const totalIncome = filteredTxs
+  const totalIncome = regularTxs
     .filter((tx) => tx.payload.amount > 0)
     .reduce((sum, tx) => sum + effectiveAmount(tx.payload), 0);
-  const totalExpenses = filteredTxs
+  const totalExpenses = regularTxs
     .filter((tx) => tx.payload.amount < 0)
     .reduce((sum, tx) => sum + Math.abs(effectiveAmount(tx.payload)), 0);
-  const incomeCount = filteredTxs.filter((tx) => tx.payload.amount > 0).length;
-  const expenseCount = filteredTxs.filter((tx) => tx.payload.amount < 0).length;
+  const incomeCount = regularTxs.filter((tx) => tx.payload.amount > 0).length;
+  const expenseCount = regularTxs.filter((tx) => tx.payload.amount < 0).length;
 
   // Average income and expense amounts
-  const incomeTx = filteredTxs.filter((tx) => tx.payload.amount > 0);
-  const expenseTx = filteredTxs.filter((tx) => tx.payload.amount < 0);
+  const incomeTx = regularTxs.filter((tx) => tx.payload.amount > 0);
+  const expenseTx = regularTxs.filter((tx) => tx.payload.amount < 0);
   const incomeAvg = incomeTx.length > 0
     ? incomeTx.reduce((sum, tx) => sum + effectiveAmount(tx.payload), 0) / incomeTx.length
     : 0;
