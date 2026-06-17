@@ -288,16 +288,18 @@ func (s *RuleService) executePayment(ctx context.Context, rule *model.Rule, payl
 		return errors.New("source account not found")
 	}
 
-	// Check balance (balance is in cents, payload.Amount is in dollars)
+	// The accounts.balance column only reflects rule-created transactions.
+	// Manual/E2E-encrypted transactions are invisible to the server, so the
+	// stored balance may be zero even when the account has sufficient funds.
+	// We warn but proceed rather than blocking incorrectly.
 	balance, err := s.RuleRepo.GetAccountBalance(ctx, payload.SourceAccountID)
 	if err != nil {
 		return fmt.Errorf("get balance: %w", err)
 	}
 	amountCents := int64(math.Round(payload.Amount * 100))
 	if balance < amountCents {
-		logger.Warning("Rule %s: insufficient balance in account %s (balance=%d, amount=%.2f)",
+		logger.Warning("Rule %s: stored balance low for account %s (balance=%d, amount=%.2f) — proceeding anyway",
 			rule.ID, payload.SourceAccountID, balance, payload.Amount)
-		return errors.New("insufficient balance")
 	}
 
 	// Get user's public key
@@ -409,16 +411,15 @@ func (s *RuleService) executeTransfer(ctx context.Context, rule *model.Rule, pay
 		return errors.New("currency mismatch between accounts")
 	}
 
-	// Check balance (balance is in cents, payload.Amount is in dollars)
+	// The accounts.balance column only reflects rule-created transactions.
 	balance, err := s.RuleRepo.GetAccountBalance(ctx, payload.SourceAccountID)
 	if err != nil {
 		return fmt.Errorf("get balance: %w", err)
 	}
 	amountCents := int64(math.Round(payload.Amount * 100))
 	if balance < amountCents {
-		logger.Warning("Rule %s: insufficient balance in account %s (balance=%d, amount=%.2f)",
+		logger.Warning("Rule %s: stored balance low for account %s (balance=%d, amount=%.2f) — proceeding anyway",
 			rule.ID, payload.SourceAccountID, balance, payload.Amount)
-		return errors.New("insufficient balance")
 	}
 
 	// Get user's public key
@@ -580,16 +581,15 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 		return errors.New("currency mismatch between accounts")
 	}
 
-	// Check balance (balance is in cents, payload.Amount is in dollars)
+	// The accounts.balance column only reflects rule-created transactions.
 	balance, err := s.RuleRepo.GetAccountBalance(ctx, payload.SourceAccountID)
 	if err != nil {
 		return fmt.Errorf("get balance: %w", err)
 	}
 	amountCents := int64(math.Round(payload.Amount * 100))
 	if balance < amountCents {
-		logger.Warning("Rule %s: insufficient balance in account %s (balance=%d, amount=%.2f)",
+		logger.Warning("Rule %s: stored balance low for account %s (balance=%d, amount=%.2f) — proceeding anyway",
 			rule.ID, payload.SourceAccountID, balance, payload.Amount)
-		return errors.New("insufficient balance")
 	}
 
 	// Get both users' public keys

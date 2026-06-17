@@ -58,9 +58,10 @@ This is the backlog of Budgeteer
 - [ ] Add the remember device option not to be asked the otp again
   - [ ] Create a access secrets list on the user data
   - [ ] When the remember device option is on and the user issues the correct otp create a new secret associate with a fingerprint of the device
-  - [ ] When the user signs in again make the login flow send the
+  - [ ] When the user signs in again make the login flow send the device fingerprint and the secret stored on the device and check that the couple <fingerprint, secret> is present in the access secret list. If so, let the user in, otherwise ask for the otp again and if the remember device option was set add the new <fingerprint, secret> to the backend
 
 # BUGS
 
 - [x] The categories are now saved in the local storage of the frontend: they must be saved in the backend under the user data (associated with its profile)
+- [ ] The funding transaction should not be displayed as a transaction and should not have a point in time: the account has that base opening balance as it always had it, then its value moves with the transactions added later on.
 - [ ] The "Average Tx Amount" card should be replaced by "Money flow" and should contain the cumulative incomes/expenses for the selected timerange

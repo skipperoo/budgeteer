@@ -573,7 +573,7 @@ func TestRuleServiceProcessDueRules_Payment(t *testing.T) {
 	}
 }
 
-func TestRuleServiceProcessDueRules_InsufficientBalance(t *testing.T) {
+func TestRuleServiceProcessDueRules_LowStoredBalanceProceeds(t *testing.T) {
 	cleanup := setupRuleDB(t)
 	defer cleanup()
 
@@ -581,7 +581,7 @@ func TestRuleServiceProcessDueRules_InsufficientBalance(t *testing.T) {
 
 	ctx := context.Background()
 
-	user, _, _ := createTestUser(t, "rule-insufficient@test.com")
+	user, _, _ := createTestUser(t, "rule-lowbalance@test.com")
 
 	// Give the user a public key
 	_, userPubKey, err := crypto.GenerateServerKeypair()
@@ -594,7 +594,8 @@ func TestRuleServiceProcessDueRules_InsufficientBalance(t *testing.T) {
 		t.Fatalf("Update user public key failed: %v", err)
 	}
 
-	// Create an account with very low balance
+	// Create an account with very low stored balance (the real balance may
+	// be in encrypted transactions the server can't see).
 	accountID := uuid.New().String()
 	_, err = database.Pool.Exec(ctx, `
 		INSERT INTO accounts (id, currency, type, created_by, created_at, updated_at, balance)
@@ -611,10 +612,10 @@ func TestRuleServiceProcessDueRules_InsufficientBalance(t *testing.T) {
 		t.Fatalf("Insert account_user failed: %v", err)
 	}
 
-	// Create rule with amount higher than balance
+	// Create rule with amount higher than stored balance
 	payload := encryptRulePayload(t, pubKey, &model.RulePayload{
 		Type:            "payment",
-		Amount:          50.00, // $50, but only $1 available
+		Amount:          50.00, // $50, but stored balance is only $1
 		SourceAccountID: accountID,
 	})
 
@@ -623,23 +624,24 @@ func TestRuleServiceProcessDueRules_InsufficientBalance(t *testing.T) {
 	_, err = database.Pool.Exec(ctx, `
 		INSERT INTO rules (id, created_by, name, encrypted_payload, frequency, next_occurrence, occurrences_so_far, is_active, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, 0, true, 'active', $7, $7)
-	`, uuid.New().String(), user.ID, "Insufficient", payload, "monthly", pastTime, now)
+	`, uuid.New().String(), user.ID, "LowStoredBalance", payload, "monthly", pastTime, now)
 	if err != nil {
 		t.Fatalf("Insert rule failed: %v", err)
 	}
 
-	// ProcessDueRules should log the error but not panic or return it
+	// ProcessDueRules should warn about low stored balance but still proceed
 	Rules.ProcessDueRules(ctx)
 
-	// Verify no transaction was created
+	// Verify a transaction WAS created (the rule proceeds despite low stored
+	// balance because the real balance may be in encrypted transactions).
 	var txCount int
 	err = database.Pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM transactions WHERE account_id = $1`, accountID).Scan(&txCount)
 	if err != nil {
 		t.Fatalf("Count transactions failed: %v", err)
 	}
-	if txCount != 0 {
-		t.Fatalf("Expected 0 transactions for insufficient balance, got %d", txCount)
+	if txCount != 1 {
+		t.Fatalf("Expected 1 transaction despite low stored balance, got %d", txCount)
 	}
 }
 
