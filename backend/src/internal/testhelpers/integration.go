@@ -49,6 +49,7 @@ func migrationSQL() (string, error) {
 		"0008_add_invitations.sql",
 		"0009_add_rule_alert_and_income.sql",
 		"0010_add_budgets.sql",
+		"0011_add_budget_name.sql",
 	}
 
 	var allSQL strings.Builder

@@ -31,6 +31,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./frontend
     expose:
       - "80"
     depends_on:
@@ -42,6 +46,10 @@ services:
     build:
       context: ./backend/src
       dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./backend
     secrets:
       - jwt_secret
       - db_password

@@ -8,6 +8,7 @@ import "time"
 type Budget struct {
 	ID                string     `json:"id"`
 	UserID            string     `json:"user_id"`
+	Name              string     `json:"name"`
 	AccountID         *string    `json:"account_id,omitempty"`
 	EncryptedPayload  string     `json:"encrypted_payload"`
 	Period            string     `json:"period"`
@@ -28,6 +29,7 @@ type BudgetPayload struct {
 
 // CreateBudgetRequest is the API request body for creating a budget.
 type CreateBudgetRequest struct {
+	Name             string  `json:"name"`
 	AccountID        *string `json:"account_id,omitempty"`
 	EncryptedPayload string  `json:"encrypted_payload"`
 	Period           string  `json:"period"`
@@ -37,6 +39,7 @@ type CreateBudgetRequest struct {
 
 // UpdateBudgetRequest is the API request body for updating a budget.
 type UpdateBudgetRequest struct {
+	Name             *string `json:"name,omitempty"`
 	AccountID        *string `json:"account_id,omitempty"`
 	EncryptedPayload *string `json:"encrypted_payload,omitempty"`
 	Period           *string `json:"period,omitempty"`

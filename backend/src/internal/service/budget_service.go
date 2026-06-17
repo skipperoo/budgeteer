@@ -51,6 +51,7 @@ func (s *BudgetService) CreateBudget(ctx context.Context, userID string, req *mo
 	budget := &model.Budget{
 		ID:               uuid.New().String(),
 		UserID:           userID,
+		Name:             req.Name,
 		AccountID:        req.AccountID,
 		EncryptedPayload: req.EncryptedPayload,
 		Period:           req.Period,
@@ -79,7 +80,14 @@ func (s *BudgetService) UpdateBudget(ctx context.Context, budgetID, userID strin
 	}
 
 	if req.AccountID != nil {
-		budget.AccountID = req.AccountID
+		if *req.AccountID == "" {
+			budget.AccountID = nil
+		} else {
+			budget.AccountID = req.AccountID
+		}
+	}
+	if req.Name != nil {
+		budget.Name = *req.Name
 	}
 	if req.EncryptedPayload != nil {
 		budget.EncryptedPayload = *req.EncryptedPayload

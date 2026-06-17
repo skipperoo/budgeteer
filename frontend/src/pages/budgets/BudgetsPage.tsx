@@ -35,6 +35,7 @@ export default function BudgetsPage() {
   const [formError, setFormError] = useState("");
 
   // Form state
+  const [formName, setFormName] = useState("");
   const [formAmount, setFormAmount] = useState("");
   const [formCategory, setFormCategory] = useState("");
   const [formPeriod, setFormPeriod] = useState<"monthly" | "yearly">("monthly");
@@ -89,6 +90,7 @@ export default function BudgetsPage() {
 
   const openCreate = () => {
     setEditingBudget(null);
+    setFormName("");
     setFormAmount("");
     setFormCategory("");
     setFormPeriod("monthly");
@@ -103,6 +105,8 @@ export default function BudgetsPage() {
   const openEdit = async (budget: Budget) => {
     setEditingBudget(budget);
     setFormError("");
+
+    setFormName(budget.name || "");
 
     // Try to decrypt existing payload
     try {
@@ -154,14 +158,17 @@ export default function BudgetsPage() {
 
       if (editingBudget) {
         await updateBudget(editingBudget.id, {
+          name: formName.trim() || undefined,
           encrypted_payload: encryptedPayload,
           period: formPeriod,
           start_date: formStartDate,
           end_date: formEndDate || undefined,
-          account_id: formAccountId || undefined,
+          // Send empty string for "All Accounts" (backend converts "" to NULL)
+          account_id: formAccountId,
         });
       } else {
         await createBudget({
+          name: formName.trim() || "Budget",
           encrypted_payload: encryptedPayload,
           period: formPeriod,
           start_date: formStartDate,
@@ -242,13 +249,19 @@ export default function BudgetsPage() {
               <Card key={budget.id}>
                 <CardHeader className="pb-3 flex flex-row items-start justify-between">
                   <div>
-                    <CardTitle className="text-base">
-                      {payload?.category || accountName}
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <span>{budget.name || payload?.category || "Budget"}</span>
+                      <span className="text-xs text-muted-foreground font-normal">
+                        ({accountName})
+                      </span>
+                      {payload?.category && (
+                        <span className="text-[10px] uppercase font-bold tracking-wider bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded">
+                          {payload.category}
+                        </span>
+                      )}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {budget.account_id
-                        ? `${accountName} · ${budget.period}`
-                        : `${budget.period} · all accounts`}
+                      {budget.period}
                       {budget.end_date && ` · until ${formatDate(budget.end_date)}`}
                     </p>
                   </div>
@@ -275,7 +288,7 @@ export default function BudgetsPage() {
                 <CardContent>
                   {payload ? (
                     <BudgetProgressBar
-                      label={payload.category || accountName}
+                      name={budget.name || payload.category || "Budget"}
                       current={0} // will be computed from transactions
                       max={payload.amount}
                       currency={accountCurrency}
@@ -303,6 +316,17 @@ export default function BudgetsPage() {
         title={editingBudget ? "Edit Budget" : "New Budget"}
       >
         <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="budget-name">Budget Name</Label>
+            <Input
+              id="budget-name"
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              placeholder="e.g. Monthly Groceries"
+              required
+            />
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="budget-amount">Budget Amount</Label>
             <Input

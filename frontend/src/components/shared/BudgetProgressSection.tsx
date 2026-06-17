@@ -114,10 +114,7 @@ export function BudgetProgressSection({
           : "USD";
 
       // Determine date range for this budget's period
-      // Monthly budgets: only current month; Yearly budgets: only current year.
-      // If explicit end_date is set, use that as the upper bound.
-      // If explicit start_date is set, the budget counts from that date forward.
-      const budgetStartStr = budget.start_date; // "YYYY-MM-DD"
+      const budgetStartStr = budget.start_date;
       const budgetStart = budgetStartStr ? new Date(budgetStartStr + "T00:00:00Z") : null;
 
       let periodStart: Date;
@@ -175,7 +172,7 @@ export function BudgetProgressSection({
 
       items.push({
         budgetId: budget.id,
-        label: payload.category || "All Categories",
+        label: budget.name || payload.category || "Budget",
         spent,
         max: payload.amount,
         accountId: budget.account_id || undefined,
@@ -232,16 +229,30 @@ export function BudgetProgressSection({
             No budgets set. Create budgets to track spending limits.
           </p>
         )}
-        {progressItems.map((item) => (
-          <BudgetProgressBar
-            key={item.budgetId}
-            label={item.label}
-            current={item.spent}
-            max={item.max}
-            currency={item.currency}
-            compact={compact}
-          />
-        ))}
+        {progressItems.map((item) => {
+          // Build account label
+          const acc = item.accountId
+            ? accounts.find((a) => a.id === item.accountId)
+            : null;
+          const accountLabel = acc
+            ? acc.name || acc.currency
+            : item.accountId
+              ? item.accountId.slice(0, 8)
+              : "All Accounts";
+
+          return (
+            <BudgetProgressBar
+              key={item.budgetId}
+              name={item.label}
+              current={item.spent}
+              max={item.max}
+              currency={item.currency}
+              compact={compact}
+              category={item.category}
+              accountLabel={accountLabel}
+            />
+          );
+        })}
       </CardContent>
     </Card>
   );

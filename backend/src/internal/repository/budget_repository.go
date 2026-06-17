@@ -15,11 +15,11 @@ type BudgetRepository struct{}
 
 func (r *BudgetRepository) Create(ctx context.Context, b *model.Budget) error {
 	q := database.GetQuerier(ctx)
-	query := `INSERT INTO budgets (id, user_id, account_id, encrypted_payload, period, start_date, end_date,
+	query := `INSERT INTO budgets (id, user_id, name, account_id, encrypted_payload, period, start_date, end_date,
 	          last_notified_50, last_notified_80, last_notified_100, created_at, updated_at)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
 	_, err := q.Exec(ctx, query,
-		b.ID, b.UserID, b.AccountID, b.EncryptedPayload,
+		b.ID, b.UserID, b.Name, b.AccountID, b.EncryptedPayload,
 		b.Period, b.StartDate, b.EndDate,
 		b.LastNotified50, b.LastNotified80, b.LastNotified100,
 		b.CreatedAt, b.UpdatedAt)
@@ -31,7 +31,7 @@ func scanBudget(row pgx.Row) (*model.Budget, error) {
 	var accountID, endDate pgtype.Text
 	var startDate pgtype.Date
 	err := row.Scan(
-		&b.ID, &b.UserID, &accountID, &b.EncryptedPayload,
+		&b.ID, &b.UserID, &b.Name, &accountID, &b.EncryptedPayload,
 		&b.Period, &startDate, &endDate,
 		&b.LastNotified50, &b.LastNotified80, &b.LastNotified100,
 		&b.CreatedAt, &b.UpdatedAt,
@@ -71,7 +71,7 @@ func scanBudgets(rows pgx.Rows, err error) ([]*model.Budget, error) {
 
 func (r *BudgetRepository) FindByID(ctx context.Context, id string) (*model.Budget, error) {
 	q := database.GetQuerier(ctx)
-	query := `SELECT id, user_id, account_id, encrypted_payload, period, start_date, end_date,
+	query := `SELECT id, user_id, name, account_id, encrypted_payload, period, start_date, end_date,
 	          last_notified_50, last_notified_80, last_notified_100, created_at, updated_at
 	          FROM budgets WHERE id = $1`
 	row := q.QueryRow(ctx, query, id)
@@ -80,7 +80,7 @@ func (r *BudgetRepository) FindByID(ctx context.Context, id string) (*model.Budg
 
 func (r *BudgetRepository) ListByUserID(ctx context.Context, userID string) ([]*model.Budget, error) {
 	q := database.GetQuerier(ctx)
-	query := `SELECT id, user_id, account_id, encrypted_payload, period, start_date, end_date,
+	query := `SELECT id, user_id, name, account_id, encrypted_payload, period, start_date, end_date,
 	          last_notified_50, last_notified_80, last_notified_100, created_at, updated_at
 	          FROM budgets WHERE user_id = $1 ORDER BY created_at DESC`
 	return scanBudgets(q.Query(ctx, query, userID))
@@ -88,10 +88,10 @@ func (r *BudgetRepository) ListByUserID(ctx context.Context, userID string) ([]*
 
 func (r *BudgetRepository) Update(ctx context.Context, b *model.Budget) error {
 	q := database.GetQuerier(ctx)
-	query := `UPDATE budgets SET account_id = $1, encrypted_payload = $2, period = $3,
-	          start_date = $4, end_date = $5, updated_at = $6 WHERE id = $7`
+	query := `UPDATE budgets SET name = $1, account_id = $2, encrypted_payload = $3, period = $4,
+	          start_date = $5, end_date = $6, updated_at = $7 WHERE id = $8`
 	_, err := q.Exec(ctx, query,
-		b.AccountID, b.EncryptedPayload, b.Period,
+		b.Name, b.AccountID, b.EncryptedPayload, b.Period,
 		b.StartDate, b.EndDate, time.Now().UTC(), b.ID)
 	return err
 }

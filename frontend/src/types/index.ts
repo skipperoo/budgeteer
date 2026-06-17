@@ -124,6 +124,7 @@ export interface DocumentDataResponse {
 export interface Budget {
   id: string;
   user_id: string;
+  name: string;
   account_id?: string;
   encrypted_payload: string;
   period: "monthly" | "yearly";
@@ -139,6 +140,7 @@ export interface BudgetPayload {
 }
 
 export interface CreateBudgetRequest {
+  name: string;
   account_id?: string;
   encrypted_payload: string;
   period: "monthly" | "yearly";
@@ -147,6 +149,7 @@ export interface CreateBudgetRequest {
 }
 
 export interface UpdateBudgetRequest {
+  name?: string;
   account_id?: string;
   encrypted_payload?: string;
   period?: "monthly" | "yearly";

@@ -55,10 +55,12 @@ This is the backlog of Budgeteer
   - [ ] Select the amount, the duration period and the interest rate
   - [ ] Automatically create a transaction each month (the day of payment has to be settable) of the correct amount
   - [ ] IF the interest rate is != 0 the transaction info card must report the amount paid in interest
-- [ ] Add the remember device option not to be asked the otp again
+- [ ] Add the remember device option not to be asked the otp again and pin unlock
   - [ ] Create a access secrets list on the user data
   - [ ] When the remember device option is on and the user issues the correct otp create a new secret associate with a fingerprint of the device
   - [ ] When the user signs in again make the login flow send the device fingerprint and the secret stored on the device and check that the couple <fingerprint, secret> is present in the access secret list. If so, let the user in, otherwise ask for the otp again and if the remember device option was set add the new <fingerprint, secret> to the backend. Note that the <fingerprint, secret> pair is encrypted using the user's password, so that it can be checked only when the user can provide basic authentication.
+  - [ ] Add an option in settings to decrypt the data using a pin instead of password the password gets encrypted in the localstorage using the pin set by the user and then the pin is used to decrypt the password on the fly when needed. The pin is never stored on the device. When the pin prompt is shown also a button to reset the pin and use the password instead is shown
+- [ ] Verify the change password flow to check that when the password is used, all the server-side secrets encrypted with the user password get decrypted with the old password and re-encrypted with the new password, otherwise the application should raise an error and revert the password change
 
 # BUGS
 

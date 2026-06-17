@@ -24,9 +24,9 @@ func TestListBudgetsHandler(t *testing.T) {
 	now := time.Now().UTC()
 	budgetID := uuid.New().String()
 	_, err := database.Pool.Exec(context.Background(),
-		`INSERT INTO budgets (id, user_id, encrypted_payload, period, start_date, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		budgetID, user.ID, "encrypted-payload", "monthly", now.Format("2006-01-02"), now, now)
+		`INSERT INTO budgets (id, user_id, name, encrypted_payload, period, start_date, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		budgetID, user.ID, "Test Budget", "encrypted-payload", "monthly", now.Format("2006-01-02"), now, now)
 	if err != nil {
 		t.Fatalf("Failed to create budget: %v", err)
 	}
@@ -47,6 +47,9 @@ func TestListBudgetsHandler(t *testing.T) {
 	}
 	if budgets[0].ID != budgetID {
 		t.Fatalf("Expected budget ID %s, got %s", budgetID, budgets[0].ID)
+	}
+	if budgets[0].Name != "Test Budget" {
+		t.Fatalf("Expected name 'Test Budget', got %q", budgets[0].Name)
 	}
 }
 
@@ -98,6 +101,7 @@ func TestCreateBudgetHandler(t *testing.T) {
 	user, _, _ := createHandlerTestUser(t, "handler-create-budget@test.com")
 
 	body := map[string]interface{}{
+		"name":              "Groceries Budget",
 		"encrypted_payload": "1|encrypted-data-here",
 		"period":            "monthly",
 		"start_date":        time.Now().UTC().Format("2006-01-02"),
@@ -116,6 +120,9 @@ func TestCreateBudgetHandler(t *testing.T) {
 	json.NewDecoder(w.Body).Decode(&budget)
 	if budget.ID == "" {
 		t.Fatal("Response should include budget ID")
+	}
+	if budget.Name != "Groceries Budget" {
+		t.Fatalf("Expected name 'Groceries Budget', got %q", budget.Name)
 	}
 	if budget.Period != "monthly" {
 		t.Fatalf("Expected period 'monthly', got %q", budget.Period)
@@ -204,9 +211,9 @@ func TestDeleteBudgetHandler(t *testing.T) {
 	now := time.Now().UTC()
 	budgetID := uuid.New().String()
 	_, err := database.Pool.Exec(context.Background(),
-		`INSERT INTO budgets (id, user_id, encrypted_payload, period, start_date, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		budgetID, user.ID, "encrypted-payload", "monthly", now.Format("2006-01-02"), now, now)
+		`INSERT INTO budgets (id, user_id, name, encrypted_payload, period, start_date, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		budgetID, user.ID, "Test", "encrypted-payload", "monthly", now.Format("2006-01-02"), now, now)
 	if err != nil {
 		t.Fatalf("Failed to create budget: %v", err)
 	}
@@ -261,9 +268,9 @@ func TestNotifyBudgetThresholdHandler(t *testing.T) {
 	now := time.Now().UTC()
 	budgetID := uuid.New().String()
 	_, err := database.Pool.Exec(context.Background(),
-		`INSERT INTO budgets (id, user_id, encrypted_payload, period, start_date, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		budgetID, user.ID, "encrypted-payload", "monthly", now.Format("2006-01-02"), now, now)
+		`INSERT INTO budgets (id, user_id, name, encrypted_payload, period, start_date, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		budgetID, user.ID, "Test", "encrypted-payload", "monthly", now.Format("2006-01-02"), now, now)
 	if err != nil {
 		t.Fatalf("Failed to create budget: %v", err)
 	}
@@ -309,9 +316,9 @@ func TestNotifyBudgetThresholdHandler_Duplicate(t *testing.T) {
 	now := time.Now().UTC()
 	budgetID := uuid.New().String()
 	_, err := database.Pool.Exec(context.Background(),
-		`INSERT INTO budgets (id, user_id, encrypted_payload, period, start_date, last_notified_80, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7)`,
-		budgetID, user.ID, "encrypted-payload", "monthly", now.Format("2006-01-02"), now, now)
+		`INSERT INTO budgets (id, user_id, name, encrypted_payload, period, start_date, last_notified_80, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)`,
+		budgetID, user.ID, "Test", "encrypted-payload", "monthly", now.Format("2006-01-02"), now, now)
 	if err != nil {
 		t.Fatalf("Failed to create budget: %v", err)
 	}

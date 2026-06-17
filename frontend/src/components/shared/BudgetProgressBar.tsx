@@ -2,20 +2,31 @@ import { cn } from "@/lib/utils";
 import { getCurrencySymbol } from "@/lib/format";
 
 interface BudgetProgressBarProps {
-  label: string;
-  current: number;      // spent amount in currency units
-  max: number;          // budget limit in currency units
+  /** Budget display name (plaintext label from budget form) */
+  name: string;
+  /** Current spent amount in currency units */
+  current: number;
+  /** Budget limit in currency units */
+  max: number;
+  /** Currency code */
   currency?: string;
-  compact?: boolean;    // smaller variant for cards
+  /** Compact variant for cards */
+  compact?: boolean;
+  /** Optional category to show as a pill badge */
+  category?: string;
+  /** Optional account label, e.g. "Checking" or "All Accounts" */
+  accountLabel?: string;
   className?: string;
 }
 
 export function BudgetProgressBar({
-  label,
+  name,
   current,
   max,
   currency = "USD",
   compact = false,
+  category,
+  accountLabel,
   className,
 }: BudgetProgressBarProps) {
   const ratio = max > 0 ? Math.min(current / max, 1) : 0;
@@ -32,13 +43,27 @@ export function BudgetProgressBar({
           ? "bg-income"
           : "bg-primary";
 
-  const barWidth = `${Math.max(percent, 4)}%`;
+  // Minimum 2% so the bar is faintly visible at very low progress
+  // but 0% when nothing has been spent
+  const barWidth = `${percent === 0 ? 0 : Math.max(percent, 2)}%`;
 
   return (
     <div className={cn("space-y-1.5", className)}>
-      <div className={cn("flex items-center justify-between", compact ? "text-xs" : "text-sm")}>
-        <span className="font-medium text-foreground truncate mr-2">{label}</span>
-        <span className={cn("tabular-nums whitespace-nowrap", percent >= 80 ? "text-destructive" : "text-muted-foreground")}>
+      <div className={cn("flex items-center justify-between gap-2", compact ? "text-xs" : "text-sm")}>
+        <span className="font-medium text-foreground truncate min-w-0 flex items-center gap-1.5">
+          <span className="truncate">{name}</span>
+          {accountLabel && (
+            <span className="text-muted-foreground/70 font-normal shrink-0">
+              ({accountLabel})
+            </span>
+          )}
+          {category && (
+            <span className="text-[10px] uppercase font-bold tracking-wider bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded shrink-0">
+              {category}
+            </span>
+          )}
+        </span>
+        <span className={cn("tabular-nums whitespace-nowrap shrink-0", percent >= 80 ? "text-destructive" : "text-muted-foreground")}>
           {symbol}{Math.abs(current).toFixed(2)} / {symbol}{max.toFixed(2)}
         </span>
       </div>
@@ -50,7 +75,7 @@ export function BudgetProgressBar({
           aria-valuenow={percent}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label={`${label}: ${percent}% used`}
+          aria-label={`${name}: ${percent}% used`}
         />
       </div>
       <div className={cn("flex justify-between", compact ? "text-[10px]" : "text-xs")}>

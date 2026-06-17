@@ -40,6 +40,7 @@ const mockBudgets = [
   {
     id: "budget-1",
     user_id: "user-1",
+    name: "Groceries Budget",
     account_id: "account-1",
     encrypted_payload: "encrypted_budget_1",
     period: "monthly" as const,
@@ -54,6 +55,7 @@ const mockBudgets = [
   {
     id: "budget-2",
     user_id: "user-1",
+    name: "Yearly Budget",
     account_id: null, // global budget
     encrypted_payload: "encrypted_budget_2",
     period: "yearly" as const,
