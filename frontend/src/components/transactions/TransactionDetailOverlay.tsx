@@ -242,6 +242,26 @@ export function TransactionDetailOverlay({
                 <span className="text-muted-foreground italic">None</span>
               )}
             </div>
+            {payload.interest_amount != null && payload.interest_amount > 0 && (
+              <>
+                <div>
+                  <span className="block text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
+                    Amount
+                  </span>
+                  <span className="font-medium">
+                    {formatCurrency(Math.abs(payload.amount), currency)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
+                    Interest Paid
+                  </span>
+                  <span className="font-medium text-destructive">
+                    {formatCurrency(payload.interest_amount, currency)}
+                  </span>
+                </div>
+              </>
+            )}
             {payload.commission && payload.commission > 0 && (
               <>
                 <div>
@@ -261,16 +281,6 @@ export function TransactionDetailOverlay({
                   </span>
                 </div>
               </>
-            )}
-            {payload.interest_amount != null && payload.interest_amount > 0 && (
-              <div>
-                <span className="block text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
-                  Interest Paid
-                </span>
-                <span className="font-medium text-destructive">
-                  {formatCurrency(payload.interest_amount, currency)}
-                </span>
-              </div>
             )}
             <div className="col-span-2">
               <span className="block text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
