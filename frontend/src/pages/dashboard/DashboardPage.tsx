@@ -543,24 +543,29 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Average Tx Amount
+              Money Flow
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tabular-nums leading-tight">
-              {filteredTxs.length > 0 ? (
-                <div className="flex flex-row gap-0.5">
-                  <span className="text-income text-sm font-semibold tabular-nums">
-                    {formatCurrency(incomeAvg, defaultCurrency)}
-                  </span>
-                  <span className="text-sm font-bold">/</span>
-                  <span className="text-expense text-sm font-semibold tabular-nums">
-                    {formatCurrency(expenseAvg, defaultCurrency)}
-                  </span>
-                </div>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Income</span>
+                <span className="font-semibold tabular-nums text-income">
+                  {formatCurrency(totalIncome, defaultCurrency)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Expenses</span>
+                <span className="font-semibold tabular-nums text-expense">
+                  -{formatCurrency(totalExpenses, defaultCurrency)}
+                </span>
+              </div>
+              <div className="border-t border-border pt-1 mt-1 flex items-center justify-between text-sm font-bold">
+                <span>Net</span>
+                <span className={`tabular-nums ${totalIncome - totalExpenses >= 0 ? "text-income" : "text-expense"}`}>
+                  {formatCurrency(totalIncome - totalExpenses, defaultCurrency, true)}
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>

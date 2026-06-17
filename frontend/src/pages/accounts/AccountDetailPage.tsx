@@ -1154,23 +1154,30 @@ export default function AccountDetailPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Average Tx Amount
+              Money Flow
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {filteredTxs.length > 0 ? (
-              <div className="flex flex-row gap-0.5">
-                <span className="text-income text-sm font-semibold tabular-nums">
-                  {formatCurrency(incomeAvgAcc, account.currency)}
-                </span>
-                <span className="text-sm font-bold">/</span>
-                <span className="text-expense text-sm font-semibold tabular-nums">
-                  {formatCurrency(expenseAvgAcc, account.currency)}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Income</span>
+                <span className="font-semibold tabular-nums text-income">
+                  {formatCurrency(incomeTotal, account.currency)}
                 </span>
               </div>
-            ) : (
-              <span className="text-muted-foreground">—</span>
-            )}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Expenses</span>
+                <span className="font-semibold tabular-nums text-expense">
+                  -{formatCurrency(expenseTotal, account.currency)}
+                </span>
+              </div>
+              <div className="border-t border-border pt-1 mt-1 flex items-center justify-between text-sm font-bold">
+                <span>Net</span>
+                <span className={`tabular-nums ${incomeTotal - expenseTotal >= 0 ? "text-income" : "text-expense"}`}>
+                  {formatCurrency(incomeTotal - expenseTotal, account.currency, true)}
+                </span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -64,7 +64,7 @@ This is the backlog of Budgeteer
 
 - [x] The categories are now saved in the local storage of the frontend: they must be saved in the backend under the user data (associated with its profile)
 - [x] The funding transaction should not be displayed as a transaction and should not have a point in time: the account has that base opening balance as it always had it, then its value moves with the transactions added later on.
-- [ ] The "Average Tx Amount" card should be replaced by "Money flow" and should contain the cumulative incomes/expenses for the selected timerange
+- [x] The "Average Tx Amount" card should be replaced by "Money flow" and should contain the cumulative incomes/expenses for the selected timerange
 - [ ] Add the env variable `BASE_URL` to configure the base url to include in emails, notifications and so on.
 - [ ] The income switch button in the new transaction form should be bright green no matter what is the theme
 - [ ] The user should get an overlay when he tries to create a transaction without having at least 1 account availabl
