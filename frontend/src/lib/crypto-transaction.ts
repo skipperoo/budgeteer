@@ -15,6 +15,7 @@ export interface TransactionPayload {
   notes: string;
   counterparty: string;
   commission?: number; // fee added to amount; default 0
+  interest_amount?: number; // mortgage interest portion (rule-generated only)
 }
 
 /**

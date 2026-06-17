@@ -51,10 +51,15 @@ This is the backlog of Budgeteer
   - [x] Show in the dashboard and account details a horizontal bar chart where the full length is the budget and the amount fill is what you spent.
     - [x] In the dashboard you have the expenses of every account combined and merged and the per category budgets
     - [x] In the account details, only the account budget and account expenses
-- [ ] Implement mortgages and split payments
-  - [ ] Select the amount, the duration period and the interest rate
-  - [ ] Automatically create a transaction each month (the day of payment has to be settable) of the correct amount
-  - [ ] IF the interest rate is != 0 the transaction info card must report the amount paid in interest
+- [x] Implement mortgages (rules disguised as special transactions)
+  - [x] Select the amount, the duration period, the interest rate, and the amortization type (French/Italian)
+  - [x] Automatically create a transaction each month (the day of payment has to be settable) of the correct amount
+  - [x] IF the interest rate is != 0 the transaction info card must report the amount paid in interest
+  - [x] E2E-encrypted mortgage payload (total amount, interest rate, term, payment day, amortization type all encrypted)
+  - [x] Remaining balance tracked inside the encrypted payload, re-encrypted after each payment
+  - [x] Both French (fixed payment) and Italian (decreasing payment) amortization supported
+  - [x] Amortization type explanation modal accessible from the mortgage form
+  - [x] Rule auto-deactivates when mortgage is paid off (remaining_balance <= 0)
 - [ ] Add the remember device option not to be asked the otp again and pin unlock
   - [ ] Create a access secrets list on the user data
   - [ ] When the remember device option is on and the user issues the correct otp create a new secret associate with a fingerprint of the device

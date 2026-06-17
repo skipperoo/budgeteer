@@ -132,6 +132,11 @@ export function TransactionCard({
                   {formatCurrency(payload.commission, currency)} fee
                 </span>
               )}
+              {payload.interest_amount != null && payload.interest_amount > 0 && (
+                <span className="text-[10px] text-muted-foreground mt-0.5 leading-none">
+                  {formatCurrency(payload.interest_amount, currency)} interest
+                </span>
+              )}
             </>
           ) : (
             <span className="text-xs text-muted-foreground italic">

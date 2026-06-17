@@ -10,9 +10,9 @@ import { useAccountStore } from "@/stores/account-store";
 import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { encryptForRecipient } from "@/lib/crypto-rules";
 import { formatDate, formatDateTimeWithOffset, utcToLocalDatetime, getGMTOffset } from "@/lib/format";
-import { Trash2, Plus, Pencil, Loader2, AlertCircle } from "lucide-react";
+import { Trash2, Plus, Pencil, Loader2, AlertCircle, Info } from "lucide-react";
 
-type RuleType = "payment" | "income" | "transfer" | "user_transfer";
+type RuleType = "payment" | "income" | "transfer" | "user_transfer" | "mortgage";
 
 export default function RulesPage() {
   const navigate = useNavigate();
@@ -57,6 +57,14 @@ export default function RulesPage() {
   const [showCategoryInput, setShowCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
+  // Mortgage-specific form state
+  const [formMortgageTotalAmount, setFormMortgageTotalAmount] = useState("");
+  const [formMortgageInterestRate, setFormMortgageInterestRate] = useState("");
+  const [formMortgageTermMonths, setFormMortgageTermMonths] = useState("");
+  const [formMortgagePaymentDay, setFormMortgagePaymentDay] = useState("1");
+  const [formMortgageAmortizationType, setFormMortgageAmortizationType] = useState("french");
+  const [amortizationModalOpen, setAmortizationModalOpen] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -94,6 +102,11 @@ export default function RulesPage() {
     setFormNextOccurrence(utcToLocalDatetime(new Date(Date.now() + 86400000).toISOString()));
     setFormEndDate("");
     setFormMaxOccurrences("");
+    setFormMortgageTotalAmount("");
+    setFormMortgageInterestRate("");
+    setFormMortgageTermMonths("");
+    setFormMortgagePaymentDay("1");
+    setFormMortgageAmortizationType("french");
     setShowCategoryInput(false);
     setNewCategoryName("");
     setFormError(null);
@@ -148,7 +161,7 @@ export default function RulesPage() {
       setFormError("Name is required");
       return;
     }
-    if (!formAmount || parseFloat(formAmount) <= 0) {
+    if (formType !== "mortgage" && (!formAmount || parseFloat(formAmount) <= 0)) {
       setFormError("Amount must be positive");
       return;
     }
@@ -171,25 +184,63 @@ export default function RulesPage() {
       setFormError("Target email is required for user transfers");
       return;
     }
+    if (formType === "mortgage") {
+      if (!formMortgageTotalAmount || parseFloat(formMortgageTotalAmount) <= 0) {
+        setFormError("Total mortgage amount is required");
+        return;
+      }
+      if (!formMortgageInterestRate || parseFloat(formMortgageInterestRate) < 0) {
+        setFormError("Interest rate is required");
+        return;
+      }
+      if (!formMortgageTermMonths || parseInt(formMortgageTermMonths, 10) < 1) {
+        setFormError("Term in months is required");
+        return;
+      }
+      if (!formMortgagePaymentDay || parseInt(formMortgagePaymentDay, 10) < 1 || parseInt(formMortgagePaymentDay, 10) > 28) {
+        setFormError("Payment day must be between 1 and 28");
+        return;
+      }
+    }
 
     setSaving(true);
     try {
       const commission = formCommission ? parseFloat(formCommission) : 0;
-      const payload = {
-        type: formType,
-        amount: parseFloat(formAmount),
-        source_account_id: formSourceAccountId,
-        target_account_id:
-          formType === "transfer"
-            ? formTargetAccountId
-            : undefined,
-        // For user_transfer with invitation flow, target_account_id and
-        // target_user_id are set by the server upon acceptance (not by sender).
-        category_id: formCategory || undefined,
-        notes: formNotes || undefined,
-        counterparty: formCounterparty || undefined,
-        commission: commission > 0 ? commission : undefined,
-      };
+
+      let payload: Record<string, unknown>;
+
+      if (formType === "mortgage") {
+        payload = {
+          type: formType,
+          source_account_id: formSourceAccountId,
+          category_id: formCategory || undefined,
+          notes: formNotes || undefined,
+          counterparty: formCounterparty || undefined,
+          commission: commission > 0 ? commission : undefined,
+          mortgage_total_amount: parseFloat(formMortgageTotalAmount),
+          mortgage_interest_rate: parseFloat(formMortgageInterestRate),
+          mortgage_term_months: parseInt(formMortgageTermMonths, 10),
+          mortgage_payment_day: parseInt(formMortgagePaymentDay, 10),
+          mortgage_amortization_type: formMortgageAmortizationType,
+          mortgage_remaining_balance: parseFloat(formMortgageTotalAmount),
+        };
+      } else {
+        payload = {
+          type: formType,
+          amount: parseFloat(formAmount),
+          source_account_id: formSourceAccountId,
+          target_account_id:
+            formType === "transfer"
+              ? formTargetAccountId
+              : undefined,
+          // For user_transfer with invitation flow, target_account_id and
+          // target_user_id are set by the server upon acceptance (not by sender).
+          category_id: formCategory || undefined,
+          notes: formNotes || undefined,
+          counterparty: formCounterparty || undefined,
+          commission: commission > 0 ? commission : undefined,
+        };
+      }
 
       if (!serverPublicKey) {
         await fetchServerPublicKey();
@@ -439,6 +490,9 @@ export default function RulesPage() {
                 onChange={(e) => {
                   setFormType(e.target.value as RuleType);
                   setFormCategory("");
+                  if (e.target.value === "mortgage") {
+                    setFormFrequency("monthly");
+                  }
                 }}
                 className={selectStyles}
               >
@@ -449,19 +503,21 @@ export default function RulesPage() {
               </select>
             </div>
 
-            {/* Amount */}
-            <div className="space-y-1">
-              <Label htmlFor="rule-amount">Amount</Label>
-              <Input
-                id="rule-amount"
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={formAmount}
-                onChange={(e) => setFormAmount(e.target.value)}
-                placeholder="100.00"
-              />
-            </div>
+            {/* Amount (not shown for mortgages — computed from mortgage parameters) */}
+            {formType !== "mortgage" && (
+              <div className="space-y-1">
+                <Label htmlFor="rule-amount">Amount</Label>
+                <Input
+                  id="rule-amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={formAmount}
+                  onChange={(e) => setFormAmount(e.target.value)}
+                  placeholder="100.00"
+                />
+              </div>
+            )}
 
             {/* Source Account */}
             <div className="space-y-1">
@@ -480,6 +536,90 @@ export default function RulesPage() {
                 ))}
               </select>
             </div>
+
+            {/* Mortgage-specific fields */}
+            {formType === "mortgage" && (
+              <>
+                <div className="space-y-1">
+                  <Label htmlFor="rule-mortgage-total">Total Mortgage Amount</Label>
+                  <Input
+                    id="rule-mortgage-total"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={formMortgageTotalAmount}
+                    onChange={(e) => setFormMortgageTotalAmount(e.target.value)}
+                    placeholder="200000.00"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="rule-mortgage-rate">Interest Rate (% per year)</Label>
+                  <Input
+                    id="rule-mortgage-rate"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formMortgageInterestRate}
+                    onChange={(e) => setFormMortgageInterestRate(e.target.value)}
+                    placeholder="3.5"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="rule-mortgage-term">Term (months)</Label>
+                  <Input
+                    id="rule-mortgage-term"
+                    type="number"
+                    min="1"
+                    value={formMortgageTermMonths}
+                    onChange={(e) => setFormMortgageTermMonths(e.target.value)}
+                    placeholder="360"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="rule-mortgage-day">Payment Day of Month (1-28)</Label>
+                  <Input
+                    id="rule-mortgage-day"
+                    type="number"
+                    min="1"
+                    max="28"
+                    value={formMortgagePaymentDay}
+                    onChange={(e) => setFormMortgagePaymentDay(e.target.value)}
+                    placeholder="1"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="rule-mortgage-amortization">Amortization Type</Label>
+                    <button
+                      type="button"
+                      onClick={() => setAmortizationModalOpen(true)}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      title="Learn about amortization types"
+                    >
+                      <Info className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <select
+                    id="rule-mortgage-amortization"
+                    value={formMortgageAmortizationType}
+                    onChange={(e) => setFormMortgageAmortizationType(e.target.value)}
+                    className={selectStyles}
+                  >
+                    <option value="french">French — Fixed Payment</option>
+                    <option value="italian">Italian — Decreasing Payment</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setAmortizationModalOpen(true)}
+                      className="underline hover:text-foreground transition-colors"
+                    >
+                      Learn the difference between French and Italian amortization
+                    </button>
+                  </p>
+                </div>
+              </>
+            )}
 
             {/* Target Account (for self transfers only — user_transfer receiver chooses their own account) */}
             {formType === "transfer" && (
@@ -642,6 +782,7 @@ export default function RulesPage() {
               <select
                 id="rule-frequency"
                 value={formFrequency}
+                disabled={formType === "mortgage"}
                 onChange={(e) => setFormFrequency(e.target.value)}
                 className={selectStyles}
               >
@@ -651,6 +792,11 @@ export default function RulesPage() {
                   </option>
                 ))}
               </select>
+              {formType === "mortgage" && (
+                <p className="text-xs text-muted-foreground">
+                  Mortgages are always monthly.
+                </p>
+              )}
             </div>
 
             {/* First Occurrence */}
@@ -701,6 +847,51 @@ export default function RulesPage() {
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editingRule ? "Update" : "Create"}
             </Button>
+          </div>
+        </div>
+      </ResponsiveDialog>
+
+      {/* Amortization type explanation modal */}
+      <ResponsiveDialog
+        open={amortizationModalOpen}
+        onOpenChange={setAmortizationModalOpen}
+        title="Amortization Types Explained"
+      >
+        <div className="space-y-4 py-2 text-sm">
+          <div className="space-y-2">
+            <h3 className="font-semibold text-base">French Amortization (Fixed Payment)</h3>
+            <p>
+              The most common type of mortgage amortization. Your monthly payment stays the
+              <strong> same amount every month</strong> for the entire loan term.
+            </p>
+            <p className="text-muted-foreground">
+              Each payment is split into interest and principal. Early payments are mostly interest;
+              later payments are mostly principal. This means you pay more interest upfront but have
+              predictable monthly payments.
+            </p>
+            <div className="bg-muted rounded-md p-3 text-xs space-y-1">
+              <p className="font-medium">Example: $200,000 at 3.5% for 30 years</p>
+              <p>→ Fixed monthly payment of <strong>$898.09</strong></p>
+              <p>→ Month 1: <span className="text-destructive">$583.33 interest</span> + $314.76 principal</p>
+              <p>→ Month 360: <span className="text-destructive">$2.60 interest</span> + $895.49 principal</p>
+            </div>
+          </div>
+          <div className="border-t pt-4 space-y-2">
+            <h3 className="font-semibold text-base">Italian Amortization (Decreasing Payment)</h3>
+            <p>
+              Your monthly payment <strong>decreases over time</strong>. The principal portion is the
+              same every month, but the interest portion shrinks as the loan balance decreases.
+            </p>
+            <p className="text-muted-foreground">
+              You pay less total interest compared to French amortization, but your early payments are
+              higher. This is also called "straight-line" or "constant principal" amortization.
+            </p>
+            <div className="bg-muted rounded-md p-3 text-xs space-y-1">
+              <p className="font-medium">Example: $200,000 at 3.5% for 30 years</p>
+              <p>→ Principal portion: <strong>$555.56</strong> every month</p>
+              <p>→ Month 1: <span className="text-destructive">$583.33 interest</span> + $555.56 principal = $1,138.89</p>
+              <p>→ Month 360: <span className="text-destructive">$1.62 interest</span> + $555.56 principal = $557.18</p>
+            </div>
           </div>
         </div>
       </ResponsiveDialog>

@@ -64,6 +64,10 @@ func setupRuleDB(t *testing.T) context.CancelFunc {
 		)
 	`)
 
+	// Migration 0009: alert_offset and last_alerted_at
+	database.Pool.Exec(ctx, `ALTER TABLE rules ADD COLUMN IF NOT EXISTS alert_offset INTERVAL`)
+	database.Pool.Exec(ctx, `ALTER TABLE rules ADD COLUMN IF NOT EXISTS last_alerted_at TIMESTAMPTZ`)
+
 	// Invitations table
 	database.Pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS invitations (
@@ -827,5 +831,369 @@ func TestRuleServiceProcessDueRules_MaxOccurrences(t *testing.T) {
 	}
 	if rule.IsActive {
 		t.Fatal("Expected rule to be deactivated after reaching max_occurrences")
+	}
+}
+
+func TestRuleServiceProcessDueRules_MortgageFrench(t *testing.T) {
+	cleanup := setupRuleDB(t)
+	defer cleanup()
+
+	privKey, pubKey := initRuleServiceWithKeys(t)
+
+	ctx := context.Background()
+
+	user, _, _ := createTestUser(t, "rule-mortgage-fr@test.com")
+
+	// Give the user a full keypair (save priv key for payload decryption)
+	userPrivKey, userPubKey, err := crypto.GenerateServerKeypair()
+	if err != nil {
+		t.Fatalf("Generate user keypair failed: %v", err)
+	}
+	userPubKeyB64 := base64.StdEncoding.EncodeToString(userPubKey)
+	_, err = database.Pool.Exec(ctx, `UPDATE users SET public_key = $1 WHERE id = $2`, userPubKeyB64, user.ID)
+	if err != nil {
+		t.Fatalf("Update user public key failed: %v", err)
+	}
+
+	// Create an account with sufficient balance
+	accountID := uuid.New().String()
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO accounts (id, currency, type, created_by, created_at, updated_at, balance)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, accountID, "USD", "personal", user.ID, time.Now(), time.Now(), 5000000) // $50,000.00
+	if err != nil {
+		t.Fatalf("Insert account failed: %v", err)
+	}
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO account_users (account_id, user_id, encrypted_account_key, role, status, joined_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, accountID, user.ID, "test-key", "owner", "active", time.Now())
+	if err != nil {
+		t.Fatalf("Insert account_user failed: %v", err)
+	}
+
+	// Mortgage: $100,000 total at 5% yearly, 360 months (30 years), French amortization
+	totalAmount := 100000.00
+	interestRate := 5.0
+	termMonths := 360
+	paymentDay := 1
+	remainingBalance := totalAmount
+
+	payload := encryptRulePayload(t, pubKey, &model.RulePayload{
+		Type:                     "mortgage",
+		SourceAccountID:          accountID,
+		CategoryID:               "cat-mortgage",
+		Notes:                    "Home mortgage",
+		Counterparty:             "Bank",
+		MortgageTotalAmount:      totalAmount,
+		MortgageInterestRate:     interestRate,
+		MortgageTermMonths:       termMonths,
+		MortgagePaymentDay:       paymentDay,
+		MortgageAmortizationType: "french",
+		MortgageRemainingBalance: remainingBalance,
+	})
+
+	ruleID := uuid.New().String()
+	pastTime := time.Now().UTC().Add(-1 * time.Hour)
+	now := time.Now().UTC()
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO rules (id, created_by, name, encrypted_payload, frequency, next_occurrence, occurrences_so_far, is_active, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 0, true, 'active', $7, $7)
+	`, ruleID, user.ID, "Home Mortgage", payload, "monthly", pastTime, now)
+	if err != nil {
+		t.Fatalf("Insert rule failed: %v", err)
+	}
+
+	// Process due rules
+	Rules.ProcessDueRules(ctx)
+
+	// Verify a transaction was created
+	var txCount int
+	err = database.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM transactions WHERE account_id = $1 AND created_by = $2`,
+		accountID, user.ID).Scan(&txCount)
+	if err != nil {
+		t.Fatalf("Count transactions failed: %v", err)
+	}
+	if txCount != 1 {
+		t.Fatalf("Expected 1 transaction, got %d", txCount)
+	}
+
+	// Verify the transaction payload contains interest_amount
+	var encryptedTxPayload string
+	err = database.Pool.QueryRow(ctx,
+		`SELECT encrypted_payload FROM transactions WHERE account_id = $1 AND created_by = $2 LIMIT 1`,
+		accountID, user.ID).Scan(&encryptedTxPayload)
+	if err != nil {
+		t.Fatalf("Get transaction payload failed: %v", err)
+	}
+
+	// Decrypt with user's private key (the tx was encrypted with user's public key)
+	txPayloadJSON, err := crypto.DecryptWithPrivateKey(encryptedTxPayload, userPrivKey)
+	if err != nil {
+		t.Fatalf("Decrypt transaction payload failed: %v", err)
+	}
+	var txPayload map[string]interface{}
+	if err := json.Unmarshal(txPayloadJSON, &txPayload); err != nil {
+		t.Fatalf("Unmarshal transaction payload failed: %v", err)
+	}
+
+	// Check interest_amount is present and positive
+	interestAmount, ok := txPayload["interest_amount"].(float64)
+	if !ok {
+		t.Fatal("Expected interest_amount in transaction payload")
+	}
+	if interestAmount <= 0 {
+		t.Fatalf("Expected positive interest_amount, got %f", interestAmount)
+	}
+
+	// Verify the rule's encrypted payload was updated (remaining_balance decreased)
+	ruleRepo := &repository.RuleRepository{}
+	rule, err := ruleRepo.FindByID(ctx, ruleID)
+	if err != nil {
+		t.Fatalf("FindByID rule failed: %v", err)
+	}
+
+	// Decrypt the updated rule payload with server private key
+	updatedPayloadJSON, err := crypto.DecryptWithPrivateKey(rule.EncryptedPayload, privKey)
+	if err != nil {
+		t.Fatalf("Decrypt updated rule payload failed: %v", err)
+	}
+	var updatedPayload model.RulePayload
+	if err := json.Unmarshal(updatedPayloadJSON, &updatedPayload); err != nil {
+		t.Fatalf("Unmarshal updated rule payload failed: %v", err)
+	}
+
+	// Remaining balance should have decreased
+	if updatedPayload.MortgageRemainingBalance >= remainingBalance {
+		t.Fatalf("Expected remaining_balance < %.2f, got %.2f", remainingBalance, updatedPayload.MortgageRemainingBalance)
+	}
+	if updatedPayload.MortgageRemainingBalance <= 0 {
+		t.Fatal("Expected remaining_balance > 0 after first payment")
+	}
+
+	// occurrences_so_far should be 1
+	if rule.OccurrencesSoFar != 1 {
+		t.Fatalf("Expected occurrences_so_far=1, got %d", rule.OccurrencesSoFar)
+	}
+}
+
+func TestRuleServiceProcessDueRules_MortgageItalian(t *testing.T) {
+	cleanup := setupRuleDB(t)
+	defer cleanup()
+
+	privKey, pubKey := initRuleServiceWithKeys(t)
+
+	ctx := context.Background()
+
+	user, _, _ := createTestUser(t, "rule-mortgage-it@test.com")
+
+	// Give the user a full keypair (save priv key for payload decryption)
+	userPrivKey, userPubKey, err := crypto.GenerateServerKeypair()
+	if err != nil {
+		t.Fatalf("Generate user keypair failed: %v", err)
+	}
+	userPubKeyB64 := base64.StdEncoding.EncodeToString(userPubKey)
+	_, err = database.Pool.Exec(ctx, `UPDATE users SET public_key = $1 WHERE id = $2`, userPubKeyB64, user.ID)
+	if err != nil {
+		t.Fatalf("Update user public key failed: %v", err)
+	}
+
+	accountID := uuid.New().String()
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO accounts (id, currency, type, created_by, created_at, updated_at, balance)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, accountID, "USD", "personal", user.ID, time.Now(), time.Now(), 50000000) // $500,000.00
+	if err != nil {
+		t.Fatalf("Insert account failed: %v", err)
+	}
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO account_users (account_id, user_id, encrypted_account_key, role, status, joined_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, accountID, user.ID, "test-key", "owner", "active", time.Now())
+	if err != nil {
+		t.Fatalf("Insert account_user failed: %v", err)
+	}
+
+	// Mortgage: $200,000 at 3.5%, 240 months (20 years), Italian amortization
+	totalAmount := 200000.00
+	interestRate := 3.5
+	termMonths := 240
+	remainingBalance := totalAmount
+
+	payload := encryptRulePayload(t, pubKey, &model.RulePayload{
+		Type:                     "mortgage",
+		SourceAccountID:          accountID,
+		CategoryID:               "cat-mortgage",
+		MortgageTotalAmount:      totalAmount,
+		MortgageInterestRate:     interestRate,
+		MortgageTermMonths:       termMonths,
+		MortgagePaymentDay:       15,
+		MortgageAmortizationType: "italian",
+		MortgageRemainingBalance: remainingBalance,
+	})
+
+	ruleID := uuid.New().String()
+	pastTime := time.Now().UTC().Add(-1 * time.Hour)
+	now := time.Now().UTC()
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO rules (id, created_by, name, encrypted_payload, frequency, next_occurrence, occurrences_so_far, is_active, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 0, true, 'active', $7, $7)
+	`, ruleID, user.ID, "Italian Mortgage", payload, "monthly", pastTime, now)
+	if err != nil {
+		t.Fatalf("Insert rule failed: %v", err)
+	}
+
+	Rules.ProcessDueRules(ctx)
+
+	// Verify a transaction was created
+	var txCount int
+	err = database.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM transactions WHERE account_id = $1`, accountID).Scan(&txCount)
+	if err != nil {
+		t.Fatalf("Count transactions failed: %v", err)
+	}
+	if txCount != 1 {
+		t.Fatalf("Expected 1 transaction, got %d", txCount)
+	}
+
+	// Verify balance was decreased
+	var balance int64
+	err = database.Pool.QueryRow(ctx,
+		`SELECT balance FROM accounts WHERE id = $1`, accountID).Scan(&balance)
+	if err != nil {
+		t.Fatalf("Get balance failed: %v", err)
+	}
+	if balance >= 50000000 {
+		t.Fatal("Expected balance to have decreased after mortgage payment")
+	}
+
+	// Decrypt the transaction payload and verify interest_amount
+	var encryptedTxPayload string
+	err = database.Pool.QueryRow(ctx,
+		`SELECT encrypted_payload FROM transactions WHERE account_id = $1 LIMIT 1`,
+		accountID).Scan(&encryptedTxPayload)
+	if err != nil {
+		t.Fatalf("Get transaction payload failed: %v", err)
+	}
+	txPayloadJSON, err := crypto.DecryptWithPrivateKey(encryptedTxPayload, userPrivKey)
+	if err != nil {
+		t.Fatalf("Decrypt transaction payload failed: %v", err)
+	}
+	var txPayload map[string]interface{}
+	if err := json.Unmarshal(txPayloadJSON, &txPayload); err != nil {
+		t.Fatalf("Unmarshal transaction payload failed: %v", err)
+	}
+	interestAmount, ok := txPayload["interest_amount"].(float64)
+	if !ok {
+		t.Fatal("Expected interest_amount in transaction payload")
+	}
+	if interestAmount <= 0 {
+		t.Fatalf("Expected positive interest_amount, got %f", interestAmount)
+	}
+
+	// Verify remaining_balance decreased
+	ruleRepo := &repository.RuleRepository{}
+	rule, err := ruleRepo.FindByID(ctx, ruleID)
+	if err != nil {
+		t.Fatalf("FindByID rule failed: %v", err)
+	}
+	updatedPayloadJSON, err := crypto.DecryptWithPrivateKey(rule.EncryptedPayload, privKey)
+	if err != nil {
+		t.Fatalf("Decrypt updated rule payload failed: %v", err)
+	}
+	var updatedPayload model.RulePayload
+	if err := json.Unmarshal(updatedPayloadJSON, &updatedPayload); err != nil {
+		t.Fatalf("Unmarshal updated rule payload failed: %v", err)
+	}
+	if updatedPayload.MortgageRemainingBalance >= remainingBalance {
+		t.Fatalf("Expected remaining_balance < %.2f, got %.2f", remainingBalance, updatedPayload.MortgageRemainingBalance)
+	}
+}
+
+func TestRuleServiceProcessDueRules_MortgagePaidOff(t *testing.T) {
+	cleanup := setupRuleDB(t)
+	defer cleanup()
+
+	privKey, pubKey := initRuleServiceWithKeys(t)
+
+	ctx := context.Background()
+
+	user, _, _ := createTestUser(t, "rule-mortgage-paid@test.com")
+
+	_, userPubKey, err := crypto.GenerateServerKeypair()
+	if err != nil {
+		t.Fatalf("Generate user keypair failed: %v", err)
+	}
+	userPubKeyB64 := base64.StdEncoding.EncodeToString(userPubKey)
+	_, err = database.Pool.Exec(ctx, `UPDATE users SET public_key = $1 WHERE id = $2`, userPubKeyB64, user.ID)
+	if err != nil {
+		t.Fatalf("Update user public key failed: %v", err)
+	}
+
+	accountID := uuid.New().String()
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO accounts (id, currency, type, created_by, created_at, updated_at, balance)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, accountID, "USD", "personal", user.ID, time.Now(), time.Now(), 500000)
+	if err != nil {
+		t.Fatalf("Insert account failed: %v", err)
+	}
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO account_users (account_id, user_id, encrypted_account_key, role, status, joined_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, accountID, user.ID, "test-key", "owner", "active", time.Now())
+	if err != nil {
+		t.Fatalf("Insert account_user failed: %v", err)
+	}
+
+	// Small mortgage almost paid off: $300 remaining, 0% interest, 12 month term
+	// French amortization with 0% rate: payment = 5000/12 = 416.67
+	// With remaining=300 (< 416.67), the clamp pays off the full remaining balance
+	payload := encryptRulePayload(t, pubKey, &model.RulePayload{
+		Type:                     "mortgage",
+		SourceAccountID:          accountID,
+		MortgageTotalAmount:      5000.00,
+		MortgageInterestRate:     0,
+		MortgageTermMonths:       12,
+		MortgagePaymentDay:       1,
+		MortgageAmortizationType: "french",
+		MortgageRemainingBalance: 300.00, // less than one payment → pays off
+	})
+
+	ruleID := uuid.New().String()
+	pastTime := time.Now().UTC().Add(-1 * time.Hour)
+	now := time.Now().UTC()
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO rules (id, created_by, name, encrypted_payload, frequency, next_occurrence, occurrences_so_far, is_active, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 0, true, 'active', $7, $7)
+	`, ruleID, user.ID, "Almost Paid", payload, "monthly", pastTime, now)
+	if err != nil {
+		t.Fatalf("Insert rule failed: %v", err)
+	}
+
+	Rules.ProcessDueRules(ctx)
+
+	// Verify rule was deactivated (paid off)
+	ruleRepo := &repository.RuleRepository{}
+	rule, err := ruleRepo.FindByID(ctx, ruleID)
+	if err != nil {
+		t.Fatalf("FindByID rule failed: %v", err)
+	}
+	if rule.IsActive {
+		t.Fatal("Expected mortgage rule to be deactivated after being paid off")
+	}
+
+	// Verify no remaining balance
+	updatedPayloadJSON, err := crypto.DecryptWithPrivateKey(rule.EncryptedPayload, privKey)
+	if err != nil {
+		t.Fatalf("Decrypt updated rule payload failed: %v", err)
+	}
+	var updatedPayload model.RulePayload
+	if err := json.Unmarshal(updatedPayloadJSON, &updatedPayload); err != nil {
+		t.Fatalf("Unmarshal updated rule payload failed: %v", err)
+	}
+	if updatedPayload.MortgageRemainingBalance > 0 {
+		t.Fatalf("Expected remaining_balance=0 after paid off, got %.2f", updatedPayload.MortgageRemainingBalance)
 	}
 }

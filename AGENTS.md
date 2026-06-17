@@ -1,5 +1,7 @@
 # Budgeteer - Technical Specifications
 
+> **Revision 7** — Added mortgage rules with French/Italian amortization. New `mortgage` rule type: payload includes `mortgage_total_amount`, `mortgage_interest_rate`, `mortgage_term_months`, `mortgage_payment_day`, `mortgage_amortization_type`, `mortgage_remaining_balance` — all ECIES-encrypted with the server's X25519 public key. The Rule Scheduler computes the monthly payment using the amortization formula, creates ECIES-encrypted transactions with `interest_amount` field, updates the remaining balance in the payload, and re-encrypts it with the server's public key. The rule auto-deactivates when `remaining_balance <= 0`. Transaction cards and detail overlays display `interest_amount` separately from the principal. A new amortization type dropdown in the Rules form offers French (fixed payment) and Italian (decreasing payment) options with an info modal explaining the difference. See Section 2 (ECIES prefix routing for interest-bearing transactions), Section 3 (mortgage form, amortization modal, interest display), Section 4 (executeMortgage in RuleService), Section 5 (new mortgage fields in RulePayload).
+
 > **Revision 6** — Added budget spending limits with E2E-encrypted payloads. Budget amounts, categories are ECIES-encrypted with the user's X25519 public key. Budget progress computed client-side; threshold notifications (50%/80%/100%) triggered via `POST /budgets/{id}/notify` which creates in-app notifications. Alert bell moved from sidebar/bottomnav to Header top-right icon-only button. Budgets nav link (PiggyBank icon) replaces Notifications in sidebar and bottomnav. See Section 2 (budget encryption), Section 3 (budget views, alert bell in header), Section 4 (`/v1/budgets/*` endpoints), Section 5 (`budgets` table).
 
 > **Revision 5** — Added commission tracking, income rule type, and rule alert notifications. Key changes: `commission` field in transaction and rule payloads; `income` rule type (positive auto-generated transactions); `alert_offset INTERVAL` column on the `rules` table for pre-fire notifications; `RuleNotifier` background worker; frontend ECIES-prefix detection for rule-generated transactions (`"1|"` → decrypt with X25519 private key, fallback to AES-GCM with account key). See Section 2 (ECIES prefix routing), Section 3 (commission display, income type), Section 4 (RuleNotifier worker, alert_offset API), Section 5 (`alert_offset` + `last_alerted_at` columns).
@@ -71,11 +73,13 @@ Upon login, the user's `encrypted_private_key` is fetched from the server and de
   - **Joint Accounts:** Invite users via email/ID to share accounts seamlessly.
 - **Rules Management:**
   - Create/list/edit/delete automated rules for recurring payments and transfers.
-  - Rule types: `payment` (recurring expense), `transfer` (between own accounts), `user_transfer` (cross-user), `income` (positive auto-generated income).
+  - Rule types: `payment` (recurring expense), `transfer` (between own accounts), `user_transfer` (cross-user), `income` (positive auto-generated income), `mortgage` (amortized loan payment).
   - Rule data is encrypted client-side with the server's X25519 public key before being sent to the API.
   - Scheduling fields (frequency, next_occurrence, alert_offset) are plaintext for server-side querying.
   - Generated transactions are encrypted with the target user's X25519 public key and stored with an ECIES `1|` prefix.
   - Commission field optional on all rule types (shown separately from the amount in transaction cards and detail overlays).
+  - Mortgage-generated transactions include `interest_amount` field in the encrypted payload, shown separately from principal in transaction cards and detail overlays.
+  - Mortgage form includes fields for total amount, interest rate, term (months), payment day (1-28), and amortization type (French/Italian). An info modal explains the difference between the two amortization methods.
   - Alert offset dropdown (1 hour, 2 hours, 12 hours, 1 day, 2 days, 1 week, 2 weeks) creates a pre-fire notification + email via the RuleNotifier worker.
 - **Settings:**
   - Account management (password changes trigger re-encryption of the private key with the new password-derived key; see Section 4 API).
@@ -105,7 +109,7 @@ Categories are stored on the **backend** under the user's profile (the `user_cat
   - **Email Dispatcher:** Polls the `email_outbox` table (status = `pending`, respecting `scheduled_for`) to send OTPs, registration validations, and notification emails via SMTP. Increments `retry_count` on failure; stops retrying after 5 attempts (`status = 'failed'`).
   - **Savings Plan Cron:** Daily job checking for savings plans where `tracking_end` has passed or where `last_logged_at` is older than 30 days. If no recent activity is detected from plain-text metadata, it queues a reminder email.
   - **Sync Queue Cleanup:** Daily job deleting `sync_queue` rows where `consumed_at IS NOT NULL AND consumed_at < NOW() - INTERVAL '30 days'`. Prevents unbounded table growth.
-  - **Rule Scheduler:** Polls the `rules` table for active rules where `next_occurrence <= NOW()`, decrypts the rule payload with the server's X25519 private key, checks preconditions (sufficient balance, matching currencies), and atomically creates transactions (encrypted with the user's X25519 public key via ECIES) and updates account balances. For `user_transfer` rules created via invitation, the target account is decrypted from `target_account_encrypted` and the target user is looked up from the invitation. Configurable interval via `RULES_CHECK_INTERVAL` env var (default: 300 seconds).
+  - **Rule Scheduler:** Polls the `rules` table for active rules where `next_occurrence <= NOW()`, decrypts the rule payload with the server's X25519 private key, checks preconditions (sufficient balance, matching currencies), and atomically creates transactions (encrypted with the user's X25519 public key via ECIES) and updates account balances. For `user_transfer` rules created via invitation, the target account is decrypted from `target_account_encrypted` and the target user is looked up from the invitation. For `mortgage` rules, the scheduler computes the monthly payment using the amortization formula (French fixed or Italian decreasing), creates a transaction with `interest_amount` in the payload, updates the remaining balance in the encrypted payload, and re-encrypts it with the server's public key. The rule auto-deactivates when `remaining_balance <= 0`. Configurable interval via `RULES_CHECK_INTERVAL` env var (default: 300 seconds).
   - **Rule Notifier:** Polls the `rules` table for active rules where `alert_offset IS NOT NULL` and `(next_occurrence - alert_offset) <= NOW()`. Sends an in-app notification and queues an email for each rule, then sets `last_alerted_at` to avoid duplicate alerts. Configurable interval via `RULES_CHECK_INTERVAL` env var (default: 300 seconds).
   - **Invitation Expiry:** Runs every 6 hours, checks the `invitations` table for pending invitations where `expires_at < NOW()`. For expired rule invitations, the rule is deleted. The invitation is marked `expired`, the inviter receives an in-app notification and an email via the email_outbox.
 
@@ -400,7 +404,7 @@ CREATE TABLE user_categories (
 
 -- ============================================================
 -- TRANSACTIONS (TimescaleDB Hypertable)
--- Encrypted payload contains: amount, category, notes, counterparty, commission.
+-- Encrypted payload contains: amount, category, notes, counterparty, commission, interest_amount (mortgage).
 -- Routing metadata (account_id, time) is intentionally plain text.
 -- ============================================================
 CREATE TABLE transactions (

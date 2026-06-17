@@ -271,8 +271,23 @@ func (s *RuleService) executeRule(ctx context.Context, rule *model.Rule, now tim
 	}
 
 	// Validate payload
-	if payload.SourceAccountID == "" || payload.Amount <= 0 {
-		return errors.New("invalid rule payload: missing source_account_id or amount")
+	if payload.SourceAccountID == "" {
+		return errors.New("invalid rule payload: missing source_account_id")
+	}
+	if payload.Type != "mortgage" && payload.Amount <= 0 {
+		return errors.New("invalid rule payload: amount must be positive")
+	}
+	// For mortgages, validate mortgage-specific fields
+	if payload.Type == "mortgage" {
+		if payload.MortgageTotalAmount <= 0 || payload.MortgageInterestRate < 0 ||
+			payload.MortgageTermMonths <= 0 || payload.MortgagePaymentDay < 1 || payload.MortgagePaymentDay > 28 ||
+			(payload.MortgageAmortizationType != "french" && payload.MortgageAmortizationType != "italian") {
+			return errors.New("invalid mortgage payload: missing or invalid mortgage fields")
+		}
+		// Initialize remaining_balance if first execution
+		if payload.MortgageRemainingBalance <= 0 {
+			payload.MortgageRemainingBalance = payload.MortgageTotalAmount
+		}
 	}
 
 	switch payload.Type {
@@ -284,6 +299,8 @@ func (s *RuleService) executeRule(ctx context.Context, rule *model.Rule, now tim
 		return s.executeTransfer(ctx, rule, &payload, now)
 	case "user_transfer":
 		return s.executeUserTransfer(ctx, rule, &payload, now)
+	case "mortgage":
+		return s.executeMortgage(ctx, rule, &payload, now)
 	default:
 		return fmt.Errorf("unknown rule type: %s", payload.Type)
 	}
@@ -809,6 +826,170 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 		rule.ID, rule.Name, payload.Amount,
 		payload.SourceAccountID, rule.CreatedBy,
 		targetAccountID, targetUserID)
+	return nil
+}
+
+func (s *RuleService) executeMortgage(ctx context.Context, rule *model.Rule, payload *model.RulePayload, now time.Time) error {
+	sourceCurrency, err := s.RuleRepo.GetAccountCurrency(ctx, payload.SourceAccountID)
+	if err != nil {
+		return fmt.Errorf("get source currency: %w", err)
+	}
+	if sourceCurrency == "" {
+		return errors.New("source account not found")
+	}
+
+	// Calculate monthly interest rate (yearly rate in %, convert to decimal monthly)
+	monthlyRate := payload.MortgageInterestRate / 100.0 / 12.0
+	remainingBalance := payload.MortgageRemainingBalance
+
+	if remainingBalance <= 0 {
+		return errors.New("mortgage already paid off")
+	}
+
+	n := float64(payload.MortgageTermMonths)
+	var paymentAmount, interestPortion, principalPortion float64
+
+	switch payload.MortgageAmortizationType {
+	case "italian":
+		// Italian amortization: constant principal, decreasing total payment
+		principalPerMonth := payload.MortgageTotalAmount / n
+		interestPortion = remainingBalance * monthlyRate
+		paymentAmount = principalPerMonth + interestPortion
+		principalPortion = principalPerMonth
+	default: // "french"
+		// French amortization: fixed total payment each month
+		if monthlyRate > 0 {
+			// Standard amortization formula: P * (r * (1+r)^n) / ((1+r)^n - 1)
+			compound := math.Pow(1+monthlyRate, n)
+			paymentAmount = payload.MortgageTotalAmount * (monthlyRate * compound) / (compound - 1)
+		} else {
+			// 0% interest — split evenly
+			paymentAmount = payload.MortgageTotalAmount / n
+		}
+		interestPortion = remainingBalance * monthlyRate
+		principalPortion = paymentAmount - interestPortion
+	}
+
+	// Clamp principal to remaining balance on the final payment
+	if principalPortion > remainingBalance {
+		principalPortion = remainingBalance
+		paymentAmount = principalPortion + interestPortion
+	}
+
+	newRemainingBalance := remainingBalance - principalPortion
+	if newRemainingBalance < 0 {
+		newRemainingBalance = 0
+	}
+
+	amountCents := int64(math.Round(paymentAmount * 100))
+
+	// Get user's public key
+	userPubKey, err := s.RuleRepo.GetUserPublicKey(ctx, rule.CreatedBy)
+	if err != nil {
+		return fmt.Errorf("get user public key: %w", err)
+	}
+	if userPubKey == "" {
+		return errors.New("user not found")
+	}
+	userPubKeyBytes, err := base64.StdEncoding.DecodeString(userPubKey)
+	if err != nil {
+		return fmt.Errorf("decode user public key: %w", err)
+	}
+
+	// Build transaction payload with interest_amount
+	txPayload := map[string]interface{}{
+		"amount":          -paymentAmount, // expense
+		"category":        payload.CategoryID,
+		"commission":      payload.Commission,
+		"notes":           payload.Notes,
+		"counterparty":    payload.Counterparty,
+		"rule_id":         rule.ID,
+		"interest_amount": interestPortion,
+	}
+	txPayloadJSON, _ := json.Marshal(txPayload)
+
+	// Encrypt with user's public key (ECIES 1| prefix)
+	encryptedPayload, err := crypto.EncryptWithPublicKey(txPayloadJSON, userPubKeyBytes)
+	if err != nil {
+		return fmt.Errorf("encrypt transaction payload: %w", err)
+	}
+
+	// Schedule the payment on the payment day of the current month
+	txTime := time.Date(now.Year(), now.Month(), payload.MortgagePaymentDay, 12, 0, 0, 0, time.UTC)
+
+	tx := &model.Transaction{
+		ID:               uuid.New().String(),
+		Time:             txTime,
+		AccountID:        payload.SourceAccountID,
+		CreatedBy:        rule.CreatedBy,
+		EncryptedPayload: encryptedPayload,
+		Version:          1,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	// Update remaining_balance and re-encrypt the rule payload
+	payload.MortgageRemainingBalance = newRemainingBalance
+	newPayloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal updated mortgage payload: %w", err)
+	}
+	newEncryptedPayload, err := crypto.EncryptWithPublicKey(newPayloadJSON, s.ServerPublicKey)
+	if err != nil {
+		return fmt.Errorf("re-encrypt mortgage payload: %w", err)
+	}
+
+	// All database operations in a transaction
+	txErr := database.WithTx(ctx, func(txCtx context.Context) error {
+		// Insert the transaction
+		if err := s.RuleRepo.InsertRuleTransaction(txCtx, tx); err != nil {
+			return fmt.Errorf("insert transaction: %w", err)
+		}
+
+		// Update balance (negative for expense)
+		if err := s.RuleRepo.UpdateAccountBalances(txCtx, []repository.BalanceUpdate{
+			{AccountID: payload.SourceAccountID, Change: -amountCents},
+		}); err != nil {
+			return fmt.Errorf("update balance: %w", err)
+		}
+
+		// Update rule's next occurrence (monthly) and occurrences count
+		next := computeNextOccurrence(rule.Frequency, rule.NextOccurrence)
+		if _, err := s.RuleRepo.UpdateNextOccurrence(txCtx, rule.ID, next, now); err != nil {
+			return fmt.Errorf("update next occurrence: %w", err)
+		}
+
+		// Update the encrypted payload with new remaining_balance
+		if err := s.RuleRepo.UpdateRulePayload(txCtx, rule.ID, newEncryptedPayload); err != nil {
+			return fmt.Errorf("update rule payload: %w", err)
+		}
+
+		// Deactivate if paid off or max_occurrences reached
+		if newRemainingBalance <= 0 {
+			if err := s.RuleRepo.DeactivateRule(txCtx, rule.ID); err != nil {
+				return fmt.Errorf("deactivate rule (paid off): %w", err)
+			}
+		}
+		if rule.MaxOccurrences != nil && rule.OccurrencesSoFar+1 >= *rule.MaxOccurrences {
+			if err := s.RuleRepo.DeactivateRule(txCtx, rule.ID); err != nil {
+				return fmt.Errorf("deactivate rule (max occurrences): %w", err)
+			}
+		}
+		if rule.EndDate != nil && next.After(*rule.EndDate) {
+			if err := s.RuleRepo.DeactivateRule(txCtx, rule.ID); err != nil {
+				return fmt.Errorf("deactivate rule (end date): %w", err)
+			}
+		}
+
+		return nil
+	})
+
+	if txErr != nil {
+		return txErr
+	}
+
+	logger.Info("Rule %s (%s) executed: mortgage payment of %.2f (interest: %.2f, principal: %.2f) from account %s, remaining: %.2f",
+		rule.ID, rule.Name, paymentAmount, interestPortion, principalPortion, payload.SourceAccountID, newRemainingBalance)
 	return nil
 }
 

@@ -26,7 +26,7 @@ type Rule struct {
 
 // RulePayload is the decrypted payload inside EncryptedPayload.
 type RulePayload struct {
-	Type            string  `json:"type"`             // payment, transfer, user_transfer, income
+	Type            string  `json:"type"`             // payment, transfer, user_transfer, income, mortgage
 	Amount          float64 `json:"amount"`
 	SourceAccountID string  `json:"source_account_id"`
 	TargetAccountID string  `json:"target_account_id,omitempty"`
@@ -35,6 +35,14 @@ type RulePayload struct {
 	Notes           string  `json:"notes,omitempty"`
 	Counterparty    string  `json:"counterparty,omitempty"`
 	Commission      float64 `json:"commission,omitempty"` // fee added to amount; default 0
+
+	// Mortgage-specific fields
+	MortgageTotalAmount      float64 `json:"mortgage_total_amount,omitempty"`
+	MortgageInterestRate     float64 `json:"mortgage_interest_rate,omitempty"`      // yearly rate in % (e.g. 3.5 = 3.5%)
+	MortgageTermMonths       int     `json:"mortgage_term_months,omitempty"`        // total term in months
+	MortgagePaymentDay       int     `json:"mortgage_payment_day,omitempty"`        // day of month (1-28)
+	MortgageAmortizationType string  `json:"mortgage_amortization_type,omitempty"` // "french" or "italian"
+	MortgageRemainingBalance float64 `json:"mortgage_remaining_balance,omitempty"`  // updated after each payment
 }
 
 // CreateRuleRequest is the API request body for creating a rule.
