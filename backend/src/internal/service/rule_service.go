@@ -532,12 +532,22 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 	targetAccountID := payload.TargetAccountID
 
 	if targetAccountID == "" && rule.TargetAccountEncrypted != nil && *rule.TargetAccountEncrypted != "" {
-		// Decrypt the receiver's chosen account using the server's private key
+		// Decrypt the receiver's chosen account using the server's private key.
+		// The encrypted data is JSON: {"account_id": "..."} stored by the frontend.
 		decrypted, err := crypto.DecryptWithPrivateKey(*rule.TargetAccountEncrypted, s.ServerPrivateKey)
 		if err != nil {
 			return fmt.Errorf("decrypt target account: %w", err)
 		}
-		targetAccountID = string(decrypted)
+		// Try to parse as JSON first (modern format)
+		var targetAcct struct {
+			AccountID string `json:"account_id"`
+		}
+		if err := json.Unmarshal(decrypted, &targetAcct); err == nil && targetAcct.AccountID != "" {
+			targetAccountID = targetAcct.AccountID
+		} else {
+			// Fallback: assume raw decrypted data IS the account ID (legacy format)
+			targetAccountID = string(decrypted)
+		}
 	}
 
 	// For user_transfer rules created via invitation, the target_user_id
