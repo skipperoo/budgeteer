@@ -21,6 +21,7 @@ interface BudgetProgressItem {
 
 interface BudgetTransaction {
   account_id?: string;
+  time: string;
   payload: TransactionPayload | null;
 }
 
@@ -89,12 +90,16 @@ export function BudgetProgressSection({
     });
   }, [budgets, accountId]);
 
-  // Compute progress for each budget
+  // Compute progress for each budget, filtering by the budget's own period
   const progressItems: BudgetProgressItem[] = useMemo(() => {
     const currencyMap: Record<string, string> = {};
     for (const acc of accounts) {
       currencyMap[acc.id] = acc.currency;
     }
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed
 
     const items: BudgetProgressItem[] = [];
 
@@ -108,8 +113,47 @@ export function BudgetProgressSection({
           ? accounts[0].currency
           : "USD";
 
+      // Determine date range for this budget's period
+      // Monthly budgets: only current month; Yearly budgets: only current year.
+      // If explicit end_date is set, use that as the upper bound.
+      // If explicit start_date is set, the budget counts from that date forward.
+      const budgetStartStr = budget.start_date; // "YYYY-MM-DD"
+      const budgetStart = budgetStartStr ? new Date(budgetStartStr + "T00:00:00Z") : null;
+
+      let periodStart: Date;
+      let periodEnd: Date;
+
+      if (budget.period === "yearly") {
+        periodStart = new Date(`${currentYear}-01-01T00:00:00Z`);
+        periodEnd = new Date(`${currentYear + 1}-01-01T00:00:00Z`);
+      } else {
+        // monthly
+        periodStart = new Date(`${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01T00:00:00Z`);
+        // next month 1st
+        if (currentMonth === 11) {
+          periodEnd = new Date(`${currentYear + 1}-01-01T00:00:00Z`);
+        } else {
+          periodEnd = new Date(`${currentYear}-${String(currentMonth + 2).padStart(2, "0")}-01T00:00:00Z`);
+        }
+      }
+
+      // If the budget has a start_date after periodStart, use it instead
+      if (budgetStart && budgetStart > periodStart) {
+        periodStart = budgetStart;
+      }
+      // If the budget has an end_date, cap the period
+      if (budget.end_date) {
+        const customEnd = new Date(budget.end_date + "T23:59:59Z");
+        if (customEnd < periodEnd) {
+          periodEnd = customEnd;
+        }
+      }
+
       // Filter transactions for this budget
-      let relevantTxs = transactions;
+      let relevantTxs = transactions.filter((tx) => {
+        const txTime = new Date(tx.time);
+        return txTime >= periodStart && txTime <= periodEnd;
+      });
       if (budget.account_id) {
         relevantTxs = relevantTxs.filter(
           (tx) => tx.account_id === budget.account_id,

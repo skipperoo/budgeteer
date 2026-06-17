@@ -58,6 +58,12 @@ export default function DashboardPage() {
   const [txCreating, setTxCreating] = useState(false);
   const [txCreateError, setTxCreateError] = useState("");
 
+  // Edit transaction dialog state
+  const [editTx, setEditTx] = useState<DecryptedTransaction | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [txUpdating, setTxUpdating] = useState(false);
+  const [txUpdateError, setTxUpdateError] = useState("");
+
   // Transaction detail overlay state
   const [detailTx, setDetailTx] = useState<DecryptedTransaction | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -265,11 +271,12 @@ export default function DashboardPage() {
     }
   }, [privKeyBase64, user]);
 
-  // Edit a transaction from the detail overlay: navigate to the account detail page
+  // Edit a transaction from the detail overlay: open inline edit dialog
   const handleEditFromOverlay = useCallback((txId: string) => {
     if (!detailTx) return;
-    navigate(`/accounts/${detailTx.account_id}`);
-  }, [detailTx, navigate]);
+    setEditTx(detailTx);
+    setEditOpen(true);
+  }, [detailTx]);
 
   // Delete a transaction from the detail overlay
   const handleDeleteFromOverlay = useCallback(async (txId: string) => {
@@ -332,6 +339,65 @@ export default function DashboardPage() {
       setTxCreateError(err.message);
     } finally {
       setTxCreating(false);
+    }
+  };
+
+  // Update transaction (called by TransactionForm in edit mode)
+  const handleUpdateTransaction = async (data: TransactionFormData) => {
+    if (!editTx) return;
+    setTxUpdateError("");
+    setTxUpdating(true);
+
+    try {
+      const rawAmount = parseFloat(data.amount);
+      if (isNaN(rawAmount)) throw new Error("Invalid amount");
+      const amount = data.type === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+      const commission = data.commission ? parseFloat(data.commission) : 0;
+
+      const accountKeyBase64 = await getAccountKey(
+        editTx.account_id,
+        privKeyBase64 ?? undefined,
+        user?.public_key
+      );
+
+      const category = data.category || "general";
+      addCategory(data.type as CategoryType, category);
+
+      const encryptedPayload = await encryptTransactionPayload(
+        { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined },
+        accountKeyBase64
+      );
+
+      const time = new Date(data.date + "T12:00:00Z").toISOString();
+
+      await apiFetch(ENDPOINTS.transaction(editTx.id), {
+        method: "PUT",
+        body: JSON.stringify({ time, encrypted_payload: encryptedPayload } as CreateTransactionRequest),
+      });
+
+      // Upload new document if provided
+      if (data.file) {
+        const fileData = await encryptFile(data.file, accountKeyBase64);
+        await apiFetch(ENDPOINTS.transactionDocuments(editTx.id), {
+          method: "POST",
+          body: JSON.stringify(fileData),
+        });
+      }
+
+      // Delete documents marked for removal
+      for (const docId of data.documentsToDelete) {
+        await apiFetch(ENDPOINTS.transactionDocument(editTx.id, docId), {
+          method: "DELETE",
+        });
+      }
+
+      setEditOpen(false);
+      setEditTx(null);
+      refreshTransactions();
+    } catch (err: any) {
+      setTxUpdateError(err.message);
+    } finally {
+      setTxUpdating(false);
     }
   };
 
@@ -553,8 +619,32 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Budget Progress Section */}
-      <BudgetProgressSection transactions={filteredTxs} />
+      {/* Edit transaction dialog (inline, no account selector since account is fixed) */}
+      {editTx?.payload && (
+        <ResponsiveDialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); if (!open) setEditTx(null); }} title="Edit Transaction">
+          <TransactionForm
+            accountId={editTx.account_id}
+            initialValues={{
+              type: editTx.payload.amount >= 0 ? "income" : "expense",
+              amount: String(Math.abs(editTx.payload.amount)),
+              commission: editTx.payload.commission ? String(editTx.payload.commission) : "",
+              date: editTx.time.slice(0, 10),
+              category: editTx.payload.category ?? "",
+              counterparty: editTx.payload.counterparty ?? "",
+              notes: editTx.payload.notes ?? "",
+            }}
+            getCategories={getCategories}
+            addCategory={addCategory}
+            onSave={handleUpdateTransaction}
+            saving={txUpdating}
+            error={txUpdateError}
+            submitLabel="Save"
+          />
+        </ResponsiveDialog>
+      )}
+
+      {/* Budget Progress Section — pass all transactions (not filtered by date range) so budgets correctly compute against their own period */}
+      <BudgetProgressSection transactions={allTxs} />
 
       {/* Pie charts: side by side below the main grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

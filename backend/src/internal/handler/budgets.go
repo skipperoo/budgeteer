@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"budgeteer-backend/internal/logger"
 	"budgeteer-backend/internal/middleware"
 	"budgeteer-backend/internal/model"
 	"budgeteer-backend/internal/service"
@@ -21,6 +22,7 @@ func ListBudgets(w http.ResponseWriter, r *http.Request) {
 
 	budgets, err := service.Budgets.ListBudgets(r.Context(), claims.UserID)
 	if err != nil {
+		logger.Error("ListBudgets: %v", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(model.Error{Error: "failed to list budgets"})

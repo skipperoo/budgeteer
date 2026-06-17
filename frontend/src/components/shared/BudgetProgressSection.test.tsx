@@ -174,14 +174,18 @@ describe("BudgetProgressSection", () => {
       },
     );
 
-    // Provide some transactions
+    // Provide some transactions within the current month (for monthly budget period filtering)
+    const now = new Date();
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     const transactions = [
       {
         account_id: "account-1",
+        time: `${thisMonth}-05T12:00:00Z`,
         payload: { amount: -100, category: "Groceries", notes: "", counterparty: "" },
       },
       {
         account_id: "account-1",
+        time: `${thisMonth}-15T12:00:00Z`,
         payload: { amount: -200, category: "Groceries", notes: "", counterparty: "" },
       },
     ];
