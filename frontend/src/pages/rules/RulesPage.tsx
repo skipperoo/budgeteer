@@ -9,7 +9,7 @@ import { useRuleStore, type Rule, type CreateRuleRequest } from "@/stores/rule-s
 import { useAccountStore } from "@/stores/account-store";
 import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { encryptForRecipient } from "@/lib/crypto-rules";
-import { formatDate, formatDateTimeWithOffset, utcToLocalDatetime, getGMTOffset } from "@/lib/format";
+import { formatDate, formatDateTimeWithOffset, formatCurrency, utcToLocalDatetime, getGMTOffset } from "@/lib/format";
 import { Trash2, Plus, Pencil, Loader2, AlertCircle, Info } from "lucide-react";
 
 type RuleType = "payment" | "income" | "transfer" | "user_transfer" | "mortgage";
@@ -426,6 +426,60 @@ export default function RulesPage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Last run</span>
                       <span>{formatDate(rule.last_triggered_at)}</span>
+                    </div>
+                  )}
+                  {rule.mortgage_progress && (
+                    <div className="mt-4 pt-3 border-t space-y-3">
+                      {/* Progress bar */}
+                      <div>
+                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                          <span>Repaid</span>
+                          <span>
+                            {rule.mortgage_progress.total_payments_made} of {rule.mortgage_progress.term_months} payments
+                          </span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2.5">
+                          <div
+                            className="bg-primary h-2.5 rounded-full transition-all"
+                            style={{
+                              width: `${Math.min(
+                                100,
+                                (rule.mortgage_progress.total_payments_made / rule.mortgage_progress.term_months) * 100
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {/* Stats */}
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="bg-secondary/40 rounded-md p-2 text-center">
+                          <span className="block text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
+                            Paid
+                          </span>
+                          <span className="font-semibold text-income tabular-nums">
+                            {formatCurrency(
+                              Math.max(0, rule.mortgage_progress.total_amount - rule.mortgage_progress.remaining_balance),
+                              rule.mortgage_progress.currency
+                            )}
+                          </span>
+                        </div>
+                        <div className="bg-secondary/40 rounded-md p-2 text-center">
+                          <span className="block text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
+                            Interest
+                          </span>
+                          <span className="font-semibold text-destructive tabular-nums">
+                            {formatCurrency(rule.mortgage_progress.total_interest_paid, rule.mortgage_progress.currency)}
+                          </span>
+                        </div>
+                        <div className="bg-secondary/40 rounded-md p-2 text-center">
+                          <span className="block text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
+                            Remaining
+                          </span>
+                          <span className="font-semibold tabular-nums">
+                            {formatCurrency(rule.mortgage_progress.remaining_balance, rule.mortgage_progress.currency)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

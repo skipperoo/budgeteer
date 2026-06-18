@@ -19,9 +19,10 @@ type Rule struct {
 	TargetEmail           *string    `json:"target_email,omitempty"`
 	TargetAccountEncrypted *string   `json:"target_account_encrypted,omitempty"`
 	AlertOffset           *string    `json:"alert_offset,omitempty"` // e.g. "1 hour", "2 days" — plaintext for scheduler
-	LastAlertedAt         *time.Time `json:"last_alerted_at,omitempty"`
-	CreatedAt             time.Time  `json:"created_at"`
-	UpdatedAt             time.Time  `json:"updated_at"`
+	LastAlertedAt         *time.Time        `json:"last_alerted_at,omitempty"`
+	MortgageProgress      *MortgageProgress `json:"mortgage_progress,omitempty"`
+	CreatedAt             time.Time         `json:"created_at"`
+	UpdatedAt             time.Time         `json:"updated_at"`
 }
 
 // RulePayload is the decrypted payload inside EncryptedPayload.
@@ -67,6 +68,20 @@ type UpdateRuleRequest struct {
 	MaxOccurrences   *int    `json:"max_occurrences,omitempty"`
 	IsActive         *bool   `json:"is_active,omitempty"`
 	AlertOffset      *string `json:"alert_offset,omitempty"`
+}
+
+// MortgageProgress contains decrypted mortgage progress data for display in the rules view.
+// Only populated for mortgage-type rules; nil for all other rule types.
+// Computed server-side from the encrypted rule payload using the amortization formula.
+type MortgageProgress struct {
+	TotalAmount       float64 `json:"total_amount"`
+	RemainingBalance  float64 `json:"remaining_balance"`
+	InterestRate      float64 `json:"interest_rate"`
+	TermMonths        int     `json:"term_months"`
+	AmortizationType  string  `json:"amortization_type"`
+	TotalPaymentsMade int     `json:"total_payments_made"`
+	TotalInterestPaid float64 `json:"total_interest_paid"`
+	Currency          string  `json:"currency"`
 }
 
 // ServerPublicKeyResponse is returned by the public-key endpoint.

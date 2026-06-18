@@ -2,6 +2,17 @@ import { create } from "zustand";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 
+export interface MortgageProgress {
+  total_amount: number;
+  remaining_balance: number;
+  interest_rate: number;
+  term_months: number;
+  amortization_type: string;
+  total_payments_made: number;
+  total_interest_paid: number;
+  currency: string;
+}
+
 export interface Rule {
   id: string;
   created_by: string;
@@ -18,6 +29,7 @@ export interface Rule {
   target_email?: string;
   target_account_encrypted?: string;
   alert_offset?: string; // e.g. "1 hour", "2 days"
+  mortgage_progress?: MortgageProgress;
   created_at: string;
   updated_at: string;
 }

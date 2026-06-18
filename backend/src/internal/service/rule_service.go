@@ -156,7 +156,30 @@ func (s *RuleService) CreateRule(ctx context.Context, userID string, req *model.
 
 // ListRules returns all rules for a user.
 func (s *RuleService) ListRules(ctx context.Context, userID string) ([]*model.Rule, error) {
-	return s.RuleRepo.ListByUserID(ctx, userID)
+	rules, err := s.RuleRepo.ListByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	for _, rule := range rules {
+		rule.MortgageProgress = s.ComputeMortgageProgress(ctx, rule.EncryptedPayload)
+	}
+	return rules, nil
+}
+
+// GetRule returns a single rule for the authenticated user.
+func (s *RuleService) GetRule(ctx context.Context, ruleID, userID string) (*model.Rule, error) {
+	rule, err := s.RuleRepo.FindByID(ctx, ruleID)
+	if err != nil {
+		return nil, fmt.Errorf("find rule: %w", err)
+	}
+	if rule == nil {
+		return nil, errors.New("rule not found")
+	}
+	if rule.CreatedBy != userID {
+		return nil, errors.New("unauthorized")
+	}
+	rule.MortgageProgress = s.ComputeMortgageProgress(ctx, rule.EncryptedPayload)
+	return rule, nil
 }
 
 // UpdateRule updates a rule.
@@ -217,6 +240,7 @@ func (s *RuleService) UpdateRule(ctx context.Context, ruleID, userID string, req
 	if err := s.RuleRepo.Update(ctx, rule); err != nil {
 		return nil, fmt.Errorf("update rule: %w", err)
 	}
+	rule.MortgageProgress = s.ComputeMortgageProgress(ctx, rule.EncryptedPayload)
 	return rule, nil
 }
 
@@ -827,6 +851,92 @@ func (s *RuleService) executeUserTransfer(ctx context.Context, rule *model.Rule,
 		payload.SourceAccountID, rule.CreatedBy,
 		targetAccountID, targetUserID)
 	return nil
+}
+
+// ComputeMortgageProgress decrypts a rule's payload and computes mortgage progress stats.
+// Returns nil if the rule is not a mortgage type or if decryption fails.
+func (s *RuleService) ComputeMortgageProgress(ctx context.Context, encryptedPayload string) *model.MortgageProgress {
+	payloadJSON, err := crypto.DecryptWithPrivateKey(encryptedPayload, s.ServerPrivateKey)
+	if err != nil {
+		return nil
+	}
+	var payload model.RulePayload
+	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
+		return nil
+	}
+	if payload.Type != "mortgage" {
+		return nil
+	}
+
+	total := payload.MortgageTotalAmount
+	remaining := payload.MortgageRemainingBalance
+	rate := payload.MortgageInterestRate
+	term := payload.MortgageTermMonths
+	amortType := payload.MortgageAmortizationType
+	paymentsMade := 0
+	totalInterest := 0.0
+
+	// Look up currency from the source account
+	currency, _ := s.RuleRepo.GetAccountCurrency(ctx, payload.SourceAccountID)
+	if currency == "" {
+		currency = "EUR"
+	}
+
+	if rate > 0 {
+		monthlyRate := rate / 100.0 / 12.0
+		n := float64(term)
+		if amortType == "italian" {
+			principalPerMonth := total / n
+			bal := total
+			for i := 0; i < term; i++ {
+				interest := bal * monthlyRate
+				bal -= principalPerMonth
+				if bal < 0 {
+					bal = 0
+				}
+				// Stop when remaining matches (allow small rounding tolerance)
+				if bal <= remaining+0.01 {
+					paymentsMade = i + 1
+					totalInterest += interest
+					break
+				}
+				totalInterest += interest
+			}
+		} else {
+			// French amortization: fixed payment
+			compound := math.Pow(1+monthlyRate, n)
+			schedulePayment := total * (monthlyRate * compound) / (compound - 1)
+			bal := total
+			for i := 0; i < term; i++ {
+				interest := bal * monthlyRate
+				principal := schedulePayment - interest
+				if principal > bal {
+					principal = bal
+				}
+				bal -= principal
+				if bal < 0 {
+					bal = 0
+				}
+				if bal <= remaining+0.01 {
+					paymentsMade = i + 1
+					totalInterest += interest
+					break
+				}
+				totalInterest += interest
+			}
+		}
+	}
+
+	return &model.MortgageProgress{
+		TotalAmount:       total,
+		RemainingBalance:  remaining,
+		InterestRate:      rate,
+		TermMonths:        term,
+		AmortizationType:  amortType,
+		TotalPaymentsMade: paymentsMade,
+		TotalInterestPaid: totalInterest,
+		Currency:          currency,
+	}
 }
 
 func (s *RuleService) executeMortgage(ctx context.Context, rule *model.Rule, payload *model.RulePayload, now time.Time) error {
