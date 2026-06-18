@@ -89,6 +89,7 @@ export default function AccountDetailPage() {
   const [editTxType, setEditTxType] = useState<"income" | "expense">("expense");
   const [editTxAmount, setEditTxAmount] = useState("");
   const [editTxCommission, setEditTxCommission] = useState("");
+  const [editTxInterest, setEditTxInterest] = useState("");
   const [editTxCategory, setEditTxCategory] = useState("");
   const [editTxNotes, setEditTxNotes] = useState("");
   const [editTxCounterparty, setEditTxCounterparty] = useState("");
@@ -319,6 +320,7 @@ export default function AccountDetailPage() {
     setEditTxType(tx.payload.amount >= 0 ? "income" : "expense");
     setEditTxAmount(String(Math.abs(tx.payload.amount)));
     setEditTxCommission(tx.payload.commission ? String(tx.payload.commission) : "");
+    setEditTxInterest(tx.payload.interest_amount ? String(tx.payload.interest_amount) : "");
     setEditTxCategory(tx.payload.category ?? "");
     setEditTxNotes(tx.payload.notes ?? "");
     setEditTxCounterparty(tx.payload.counterparty ?? "");
@@ -349,8 +351,9 @@ export default function AccountDetailPage() {
       const category = editTxCategory || "general";
       addCategory(editTxType as CategoryType, category);
 
+      const interest = editTxInterest ? parseFloat(editTxInterest) : 0;
       const encryptedPayload = await encryptTransactionPayload(
-        { amount, category, notes: editTxNotes, counterparty: editTxCounterparty, commission: commission > 0 ? commission : undefined },
+        { amount, category, notes: editTxNotes, counterparty: editTxCounterparty, commission: commission > 0 ? commission : undefined, interest_amount: interest > 0 ? interest : undefined },
         accountKeyBase64
       );
 
