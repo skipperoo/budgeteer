@@ -52,6 +52,7 @@ func handlerSetupTest(t *testing.T) func() {
 		for _, k := range keys {
 			database.Redis.Del(ctx, k)
 		}
+		database.Pool.Exec(ctx, "DELETE FROM access_secrets")
 		database.Pool.Exec(ctx, "DELETE FROM notifications")
 		database.Pool.Exec(ctx, "DELETE FROM invitations")
 		database.Pool.Exec(ctx, "DELETE FROM email_outbox")

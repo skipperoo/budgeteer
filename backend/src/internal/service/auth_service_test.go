@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"testing"
 
@@ -44,6 +46,7 @@ func setupTestDB(t *testing.T) context.CancelFunc {
 		for _, k := range keys {
 			database.Redis.Del(ctx, k)
 		}
+		database.Pool.Exec(ctx, "DELETE FROM access_secrets")
 		database.Pool.Exec(ctx, "DELETE FROM notifications")
 		database.Pool.Exec(ctx, "DELETE FROM invitations")
 		database.Pool.Exec(ctx, "DELETE FROM email_outbox")
@@ -241,6 +244,208 @@ func TestAuthServiceLoginWrongPassword(t *testing.T) {
 	_, _, err := Auth.Login(context.Background(), email, "wrong-password")
 	if err == nil {
 		t.Fatal("Login with wrong password should fail")
+	}
+}
+
+func TestAuthServiceStoreAndVerifyAccessSecret(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	InitAuthService()
+
+	email := "device-test@example.com"
+	password := "SecureP@ss123"
+
+	// Create a verified user
+	userRepo := &repository.UserRepository{}
+	hashedPW, _ := HashPassword(password)
+	user := &model.User{
+		ID:                  "00000000-0000-0000-0000-000000000010",
+		Email:               email,
+		PasswordHash:        hashedPW,
+		PublicKey:           "pk",
+		EncryptedPrivateKey: "ek",
+		IsVerified:          true,
+	}
+	if err := userRepo.Create(context.Background(), user); err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	fingerprintHash := "abc123def456"
+	deviceToken := "random-device-token-12345"
+
+	// Compute SHA-256 hash of (device_token + fingerprint + password)
+	payload := deviceToken + fingerprintHash + password
+	hash := sha256.Sum256([]byte(payload))
+	secretHash := hex.EncodeToString(hash[:])
+
+	// Store the access secret
+	err := Auth.StoreAccessSecret(context.Background(), user.ID, &model.StoreAccessSecretRequest{
+		FingerprintHash: fingerprintHash,
+		SecretHash:      secretHash,
+		DeviceName:      "Test Device",
+	})
+	if err != nil {
+		t.Fatalf("StoreAccessSecret failed: %v", err)
+	}
+
+	// List devices
+	secrets, err := Auth.ListAccessSecrets(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("ListAccessSecrets failed: %v", err)
+	}
+	if len(secrets) != 1 {
+		t.Fatalf("Expected 1 device, got %d", len(secrets))
+	}
+	if secrets[0].DeviceName != "Test Device" {
+		t.Fatalf("Expected device name 'Test Device', got %q", secrets[0].DeviceName)
+	}
+	if secrets[0].SecretHash == "" {
+		t.Fatal("Secret hash should not be empty")
+	}
+
+	// LoginWithDevice with correct credentials
+	_, token, err := Auth.LoginWithDevice(context.Background(), &model.LoginWithDeviceRequest{
+		Email:           email,
+		Password:        password,
+		FingerprintHash: fingerprintHash,
+		DeviceToken:     deviceToken,
+	})
+	if err != nil {
+		t.Fatalf("LoginWithDevice failed: %v", err)
+	}
+	if token == "" {
+		t.Fatal("LoginWithDevice returned empty token")
+	}
+}
+
+func TestAuthServiceLoginWithDevice_WrongToken(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	InitAuthService()
+
+	email := "device-wrong-token@example.com"
+	password := "SecureP@ss123"
+
+	userRepo := &repository.UserRepository{}
+	hashedPW, _ := HashPassword(password)
+	user := &model.User{
+		ID:                  "00000000-0000-0000-0000-000000000011",
+		Email:               email,
+		PasswordHash:        hashedPW,
+		PublicKey:           "pk",
+		EncryptedPrivateKey: "ek",
+		IsVerified:          true,
+	}
+	userRepo.Create(context.Background(), user)
+
+	fingerprintHash := "wrong-token-fingerprint"
+	deviceToken := "correct-device-token"
+	payload := deviceToken + fingerprintHash + password
+	secretHash, _ := HashPassword(payload)
+	Auth.StoreAccessSecret(context.Background(), user.ID, &model.StoreAccessSecretRequest{
+		FingerprintHash: fingerprintHash,
+		SecretHash:      secretHash,
+		DeviceName:      "Device",
+	})
+
+	// Try with wrong device token
+	_, _, err := Auth.LoginWithDevice(context.Background(), &model.LoginWithDeviceRequest{
+		Email:           email,
+		Password:        password,
+		FingerprintHash: fingerprintHash,
+		DeviceToken:     "wrong-device-token",
+	})
+	if err == nil {
+		t.Fatal("LoginWithDevice with wrong token should fail")
+	}
+}
+
+func TestAuthServiceLoginWithDevice_UnrecognizedFingerprint(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	InitAuthService()
+
+	email := "device-no-match@example.com"
+	password := "SecureP@ss123"
+
+	userRepo := &repository.UserRepository{}
+	hashedPW, _ := HashPassword(password)
+	user := &model.User{
+		ID:                  "00000000-0000-0000-0000-000000000012",
+		Email:               email,
+		PasswordHash:        hashedPW,
+		PublicKey:           "pk",
+		EncryptedPrivateKey: "ek",
+		IsVerified:          true,
+	}
+	userRepo.Create(context.Background(), user)
+
+	// Try with a fingerprint that was never stored
+	_, _, err := Auth.LoginWithDevice(context.Background(), &model.LoginWithDeviceRequest{
+		Email:           email,
+		Password:        password,
+		FingerprintHash: "unknown-fingerprint",
+		DeviceToken:     "some-token",
+	})
+	if err == nil {
+		t.Fatal("LoginWithDevice with unknown fingerprint should fail")
+	}
+}
+
+func TestAuthServiceRemoveAccessSecret(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	InitAuthService()
+
+	email := "device-remove@example.com"
+	password := "SecureP@ss123"
+
+	userRepo := &repository.UserRepository{}
+	hashedPW, _ := HashPassword(password)
+	user := &model.User{
+		ID:                  "00000000-0000-0000-0000-000000000013",
+		Email:               email,
+		PasswordHash:        hashedPW,
+		PublicKey:           "pk",
+		EncryptedPrivateKey: "ek",
+		IsVerified:          true,
+	}
+	userRepo.Create(context.Background(), user)
+
+	// Store a device
+	fingerprintHash := "remove-me-fingerprint"
+	payload := "token" + fingerprintHash + password
+	hash := sha256.Sum256([]byte(payload))
+	secretHash := hex.EncodeToString(hash[:])
+	err := Auth.StoreAccessSecret(context.Background(), user.ID, &model.StoreAccessSecretRequest{
+		FingerprintHash: fingerprintHash,
+		SecretHash:      secretHash,
+		DeviceName:      "To Remove",
+	})
+	if err != nil {
+		t.Fatalf("StoreAccessSecret failed: %v", err)
+	}
+
+	// List to get the ID
+	secrets, _ := Auth.ListAccessSecrets(context.Background(), user.ID)
+	if len(secrets) != 1 {
+		t.Fatalf("Expected 1 device, got %d", len(secrets))
+	}
+
+	// Remove it
+	err = Auth.RemoveAccessSecret(context.Background(), user.ID, secrets[0].ID)
+	if err != nil {
+		t.Fatalf("RemoveAccessSecret failed: %v", err)
+	}
+
+	// List should be empty now
+	secrets, _ = Auth.ListAccessSecrets(context.Background(), user.ID)
+	if len(secrets) != 0 {
+		t.Fatalf("Expected 0 devices after removal, got %d", len(secrets))
 	}
 }
 

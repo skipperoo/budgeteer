@@ -45,4 +45,7 @@ export const ENDPOINTS = {
   budgets: `${API_BASE}/budgets`,
   budget: (id: string) => `${API_BASE}/budgets/${id}`,
   budgetNotify: (id: string) => `${API_BASE}/budgets/${id}/notify`,
+  loginWithDevice: `${API_BASE}/auth/login-with-device`,
+  devices: `${API_BASE}/auth/devices`,
+  device: (id: string) => `${API_BASE}/auth/devices/${id}`,
 } as const;

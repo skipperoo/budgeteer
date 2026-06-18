@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"budgeteer-backend/internal/logger"
 	"budgeteer-backend/internal/middleware"
@@ -189,6 +190,133 @@ func Me(w http.ResponseWriter, r *http.Request) {
 		IsVerified:          user.IsVerified,
 		Preferences:         user.Preferences,
 	})
+}
+
+// LoginWithDevice checks device credentials and returns a JWT directly,
+// bypassing the OTP step for recognized devices.
+func LoginWithDevice(w http.ResponseWriter, r *http.Request) {
+	var req model.LoginWithDeviceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body"})
+		return
+	}
+	defer r.Body.Close()
+
+	user, token, err := service.Auth.LoginWithDevice(r.Context(), &req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(model.Error{Error: err.Error()})
+		return
+	}
+
+	logger.Info("User logged in via device: %s", user.Email)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(model.LoginResponse{Token: token})
+}
+
+// StoreAccessSecret records a new device secret for the authenticated user.
+func StoreAccessSecret(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
+	if !ok || claims == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(model.Error{Error: "unauthorized"})
+		return
+	}
+
+	var req model.StoreAccessSecretRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body"})
+		return
+	}
+	defer r.Body.Close()
+
+	if err := service.Auth.StoreAccessSecret(r.Context(), claims.UserID, &req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(model.Error{Error: "failed to store device secret"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"message": "device stored successfully"})
+}
+
+// ListAccessSecrets returns all remembered devices for the authenticated user.
+func ListAccessSecrets(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
+	if !ok || claims == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(model.Error{Error: "unauthorized"})
+		return
+	}
+
+	secrets, err := service.Auth.ListAccessSecrets(r.Context(), claims.UserID)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(model.Error{Error: "failed to list devices"})
+		return
+	}
+	if secrets == nil {
+		secrets = []*model.AccessSecret{}
+	}
+
+	// Redact the secret_hash from the response
+	type SafeAccessSecret struct {
+		ID             string     `json:"id"`
+		DeviceName     string     `json:"device_name,omitempty"`
+		LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+		CreatedAt      time.Time  `json:"created_at"`
+	}
+	safeList := make([]SafeAccessSecret, len(secrets))
+	for i, s := range secrets {
+		safeList[i] = SafeAccessSecret{
+			ID:         s.ID,
+			DeviceName: s.DeviceName,
+			LastUsedAt: s.LastUsedAt,
+			CreatedAt:  s.CreatedAt,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"devices": safeList})
+}
+
+// RemoveAccessSecret deletes a remembered device for the authenticated user.
+func RemoveAccessSecret(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
+	if !ok || claims == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(model.Error{Error: "unauthorized"})
+		return
+	}
+
+	secretID := r.PathValue("id")
+	if secretID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "missing device id"})
+		return
+	}
+
+	if err := service.Auth.RemoveAccessSecret(r.Context(), claims.UserID, secretID); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(model.Error{Error: "failed to remove device"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "device removed successfully"})
 }
 
 func ChangePassword(w http.ResponseWriter, r *http.Request) {

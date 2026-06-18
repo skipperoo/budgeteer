@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { decryptWithPassword, base64ToBytes } from "@/lib/crypto";
+import { getPinData, isPinEnabled, clearPinData } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -13,11 +14,17 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
  * an encrypted_private_key from the server) but the private key hasn't
  * been decrypted yet (e.g. after a page refresh where `hydrate()` ran
  * but the password was not available), this component shows a password
- * dialog to re-derive the key in-memory.
+ * or PIN dialog to re-derive the key in-memory.
  *
  * The decrypted private key is stored in the Zustand auth store
  * (memory only — never persisted to localStorage/IndexedDB).
  * It is cleared on logout or tab close.
+ *
+ * PIN unlock flow:
+ * 1. If a PIN was set up, the encrypted password is stored in localStorage
+ * 2. The user enters their PIN, which decrypts the stored password
+ * 3. The decrypted password is then used to decrypt the private key
+ * 4. A "Use password instead" button is always available
  */
 export default function PrivateKeyGate({
   children,
@@ -32,8 +39,13 @@ export default function PrivateKeyGate({
   const hydrating = useAuthStore((s) => s.hydrating);
 
   const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Show PIN input when a PIN is set; allow switching to password
+  const pinEnabled = isPinEnabled();
+  const [showPinInput, setShowPinInput] = useState(() => pinEnabled);
 
   // Don't show anything while the initial hydration is in flight
   if (hydrating) {
@@ -85,19 +97,54 @@ export default function PrivateKeyGate({
     );
   }
 
-  // Private key is available on the server but not yet decrypted in memory.
-  // Show a password prompt so the user can re-decrypt their key.
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Attempt to decrypt the private key using either a PIN or password.
+  const decryptKey = async (secret: string) => {
+    const plaintextKey = await decryptWithPassword(
+      encryptedPrivateKey,
+      secret
+    );
+    const keyBytes = base64ToBytes(plaintextKey).buffer;
+    setPrivateKey(keyBytes as ArrayBuffer);
+  };
+
+  // PIN-based unlock: decrypt the stored password with the PIN, then use
+  // the password to decrypt the private key.
+  const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+
     try {
-      const plaintextKey = await decryptWithPassword(
-        encryptedPrivateKey,
-        password
+      const pinData = getPinData();
+      if (!pinData) {
+        setError("No PIN data found. Please use your password instead.");
+        setShowPinInput(false);
+        return;
+      }
+
+      // Decrypt the stored password using the PIN
+      const decryptedPassword = await decryptWithPassword(
+        pinData.encrypted_password,
+        pin
       );
-      const keyBytes = base64ToBytes(plaintextKey).buffer;
-      setPrivateKey(keyBytes as ArrayBuffer);
+
+      // Use the decrypted password to unlock the private key
+      await decryptKey(decryptedPassword);
+    } catch {
+      setError("Incorrect PIN");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Password-based unlock
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      await decryptKey(password);
     } catch {
       setError("Incorrect password");
     } finally {
@@ -105,35 +152,91 @@ export default function PrivateKeyGate({
     }
   };
 
+  // Switch from PIN to password mode
+  const switchToPassword = () => {
+    setShowPinInput(false);
+    setError("");
+    setPin("");
+  };
+
   return (
     <div className="h-screen flex items-center justify-center">
       <Card className="w-full max-w-sm mx-4">
         <CardHeader>
           <CardTitle className="text-xl text-center">
-            Enter your password
+            {showPinInput
+              ? "Enter your PIN"
+              : "Enter your password"}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4 text-center">
             Your encryption key needs to be unlocked to access your data.
           </p>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Password</label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoFocus
-                placeholder="Enter your password"
-              />
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Unlocking..." : "Unlock"}
-            </Button>
-          </form>
+
+          {showPinInput ? (
+            /* PIN unlock form */
+            <form onSubmit={handlePinSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">PIN</label>
+                <Input
+                  type="password"
+                  inputMode="numeric"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  required
+                  autoFocus
+                  placeholder="Enter your PIN"
+                  maxLength={6}
+                />
+              </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Unlocking..." : "Unlock with PIN"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={switchToPassword}
+              >
+                Use password instead
+              </Button>
+            </form>
+          ) : (
+            /* Password unlock form */
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Password</label>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoFocus
+                  placeholder="Enter your password"
+                />
+              </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Unlocking..." : "Unlock"}
+              </Button>
+              {pinEnabled && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setShowPinInput(true);
+                    setError("");
+                    setPassword("");
+                  }}
+                >
+                  Back to PIN
+                </Button>
+              )}
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>
