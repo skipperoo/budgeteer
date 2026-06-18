@@ -10,6 +10,8 @@ import (
 	"budgeteer-backend/internal/model"
 	"budgeteer-backend/internal/repository"
 	"budgeteer-backend/internal/service"
+
+	"github.com/google/uuid"
 )
 
 // RuleNotifier periodically checks for rules that need pre-firing alerts.
@@ -94,7 +96,7 @@ func (w *RuleNotifier) sendAlert(ctx context.Context, rule *model.Rule) {
 		logger.Error("Rule notifier: failed to find user %s for rule %s: %v", rule.CreatedBy, rule.ID, err)
 	} else {
 		email := &model.EmailOutbox{
-			ID:           fmt.Sprintf("%x", time.Now().UnixNano()),
+			ID:           uuid.New().String(),
 			ToAddress:    user.Email,
 			Subject:      fmt.Sprintf("Budgeteer: Rule '%s' due soon", rule.Name),
 			Body:         fmt.Sprintf("Your rule '%s' is about to fire at %s.\n\nAlert offset: %s\nDue time: %s\n\nYou can view and manage your rules in the Budgeteer app.", rule.Name, rule.NextOccurrence.Format("Jan 2, 2006 15:04 UTC"), *rule.AlertOffset, rule.NextOccurrence.Format("Jan 2, 2006 15:04 UTC")),

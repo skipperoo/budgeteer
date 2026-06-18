@@ -127,7 +127,7 @@ export function TransactionCard({
               >
                 {formatCurrency(totalAmount!, currency, true)}
               </span>
-              {payload.commission && payload.commission > 0 && (
+              {payload.commission != null && payload.commission > 0 && (
                 <span className="text-[10px] text-muted-foreground mt-0.5 leading-none">
                   {formatCurrency(payload.commission, currency)} fee
                 </span>

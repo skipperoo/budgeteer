@@ -931,6 +931,19 @@ export default function AccountDetailPage() {
                     placeholder="0.00"
                   />
                 </div>
+                {editTxInterest !== "" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Interest Paid</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editTxInterest}
+                      onChange={(e) => setEditTxInterest(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Date</label>
                   <Input
