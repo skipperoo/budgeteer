@@ -64,6 +64,7 @@ func main() {
 		AddHandler("POST /api/v1/auth/verify-otp", handler.VerifyOTP).
 		AddHandler("POST /api/v1/auth/login",             handler.Login).
 		AddHandler("POST /api/v1/auth/login-verify-otp", handler.LoginVerifyOTP).
+		AddHandler("POST /api/v1/auth/login-with-device", handler.LoginWithDevice).
 		AddHandler("GET  /api/v1/health",                 handler.HealthCheck).
 		AddHandler("GET  /api/v1/rules/public-key",       handler.RulePublicKey)
 
@@ -77,6 +78,9 @@ func main() {
 		AddHandler("PUT    /v1/auth/password",             handler.ChangePassword).
 		AddHandler("GET    /v1/auth/preferences",           handler.GetPreferences).
 		AddHandler("PUT    /v1/auth/preferences",           handler.UpdatePreferences).
+		AddHandler("POST   /v1/auth/devices",               handler.StoreAccessSecret).
+		AddHandler("GET    /v1/auth/devices",               handler.ListAccessSecrets).
+		AddHandler("DELETE /v1/auth/devices/{id}",          handler.RemoveAccessSecret).
 		AddHandler("GET    /v1/users/lookup",              handler.LookupUser).
 		AddHandler("GET    /v1/sync/pull",                 handler.SyncPull).
 		AddHandler("POST   /v1/sync/push",                 handler.SyncPush).

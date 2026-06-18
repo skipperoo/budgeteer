@@ -235,6 +235,73 @@ describe("salt generation", () => {
   });
 });
 
+describe("change password re-encryption roundtrip", () => {
+  it("should decrypt with old password, re-encrypt with new password, and decrypt with new password", async () => {
+    // Simulate the change password flow:
+    // 1. Private key encrypted with old password on the server
+    // 2. User decrypts it with old password (login flow)
+    // 3. User re-encrypts the same private key with new password
+    // 4. New encrypted blob is stored on the server
+    // 5. User can decrypt it with new password on next login
+
+    const privateKey = "my-super-secret-x25519-private-key-data";
+    const oldPassword = "old-password-123!";
+    const newPassword = "new-password-456!";
+
+    // Step 1: Simulate the existing encrypted blob on the server
+    const oldEncryptedKey = await encryptWithPassword(privateKey, oldPassword);
+
+    // Step 2: Decrypt with old password (simulates first-time login or current session)
+    const decryptedKey = await decryptWithPassword(oldEncryptedKey, oldPassword);
+    expect(decryptedKey).toBe(privateKey);
+
+    // Step 3: Re-encrypt the SAME private key with the new password
+    const newEncryptedKey = await encryptWithPassword(decryptedKey, newPassword);
+    expect(newEncryptedKey).not.toBe(oldEncryptedKey);
+
+    // Step 4: Verify the new encrypted blob is different from the old one
+    // (different salt+iv ensures ciphertext uniqueness even with same password,
+    // but here we also changed the password so it MUST be different)
+    expect(newEncryptedKey.length).toBeGreaterThan(0);
+
+    // Step 5: Decrypt with new password (simulates next login with new password)
+    const reDecrypted = await decryptWithPassword(newEncryptedKey, newPassword);
+    expect(reDecrypted).toBe(privateKey);
+  });
+
+  it("should fail to decrypt the new encrypted key with the old password", async () => {
+    // Ensures that after a password change, the old password cannot
+    // decrypt the new encrypted private key (key separation)
+    const privateKey = "another-private-key";
+    const oldPassword = "old-pass";
+    const newPassword = "new-pass";
+
+    const oldEncrypted = await encryptWithPassword(privateKey, oldPassword);
+    const plaintext = await decryptWithPassword(oldEncrypted, oldPassword);
+    const newEncrypted = await encryptWithPassword(plaintext, newPassword);
+
+    // Decrypting the new blob with the old password should fail
+    await expect(
+      decryptWithPassword(newEncrypted, oldPassword)
+    ).rejects.toThrow();
+  });
+
+  it("should fail to decrypt the old encrypted key with the new password", async () => {
+    // Ensures that after re-encryption, the old encrypted blob
+    // is no longer usable with the new password
+    const privateKey = "yet-another-key";
+    const oldPassword = "old-secret";
+    const newPassword = "new-secret";
+
+    const oldEncrypted = await encryptWithPassword(privateKey, oldPassword);
+
+    // Decrypting the old blob with the new password should fail
+    await expect(
+      decryptWithPassword(oldEncrypted, newPassword)
+    ).rejects.toThrow();
+  });
+});
+
 describe("compression stubs", () => {
   it("compress should be a pass-through for now", () => {
     const data = "test data for compression";

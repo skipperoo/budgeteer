@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -30,18 +32,20 @@ type pendingRegistration struct {
 }
 
 type AuthService struct {
-	UserRepo  *repository.UserRepository
-	OTPRepo   *repository.OTPRepository
-	EmailRepo *repository.EmailRepository
+	UserRepo           *repository.UserRepository
+	OTPRepo            *repository.OTPRepository
+	EmailRepo          *repository.EmailRepository
+	AccessSecretRepo   *repository.AccessSecretRepository
 }
 
 var Auth *AuthService
 
 func InitAuthService() {
 	Auth = &AuthService{
-		UserRepo:  &repository.UserRepository{},
-		OTPRepo:   &repository.OTPRepository{},
-		EmailRepo: &repository.EmailRepository{},
+		UserRepo:         &repository.UserRepository{},
+		OTPRepo:          &repository.OTPRepository{},
+		EmailRepo:        &repository.EmailRepository{},
+		AccessSecretRepo: &repository.AccessSecretRepository{},
 	}
 }
 
@@ -318,5 +322,95 @@ func (s *AuthService) IsBlocked(ctx context.Context, tokenString string) (bool, 
 }
 
 func (s *AuthService) ChangePassword(ctx context.Context, userID, newEncryptedKey string) error {
+	// When a password changes, all stored device secrets should be invalidated
+	// because they are bound to the old password via bcrypt(device_token + fingerprint + password).
+	if err := s.AccessSecretRepo.DeleteAllByUser(ctx, userID); err != nil {
+		logger.Error("Failed to clear access secrets after password change for user %s: %v", userID, err)
+	}
 	return s.UserRepo.UpdateEncryptedPrivateKey(ctx, userID, newEncryptedKey)
+}
+
+// ---------------------------------------------------------------------------
+// Device-based login (remember device — skip OTP)
+// ---------------------------------------------------------------------------
+
+// LoginWithDevice authenticates the user and checks if the device token
+// matches a stored access secret. If valid, it returns a JWT directly,
+// bypassing the OTP step.
+func (s *AuthService) LoginWithDevice(ctx context.Context, req *model.LoginWithDeviceRequest) (*model.User, string, error) {
+	user, err := s.UserRepo.FindByEmail(ctx, req.Email)
+	if err != nil {
+		return nil, "", fmt.Errorf("database error: %w", err)
+	}
+	if user == nil {
+		return nil, "", fmt.Errorf("invalid email or password")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		return nil, "", fmt.Errorf("invalid email or password")
+	}
+
+	if !user.IsVerified {
+		return nil, "", fmt.Errorf("email not verified")
+	}
+
+	// Find a stored access secret for this user + device fingerprint
+	secret, err := s.AccessSecretRepo.FindByUserAndFingerprint(ctx, user.ID, req.FingerprintHash)
+	if err != nil {
+		return nil, "", fmt.Errorf("database error: %w", err)
+	}
+	if secret == nil {
+		return nil, "", fmt.Errorf("device not recognized")
+	}
+
+	// Verify the device token by comparing SHA-256(device_token + fingerprint + password)
+	// with the stored secret_hash.
+	payload := req.DeviceToken + req.FingerprintHash + req.Password
+	hash := sha256.Sum256([]byte(payload))
+	expected := hex.EncodeToString(hash[:])
+	if expected != secret.SecretHash {
+		return nil, "", fmt.Errorf("device not recognized")
+	}
+
+	// Update last_used timestamp
+	if err := s.AccessSecretRepo.UpdateLastUsed(ctx, secret.ID); err != nil {
+		logger.Error("Failed to update last_used for access secret %s: %v", secret.ID, err)
+	}
+
+	token, _, err := GenerateJWT(user.ID, user.Email)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	return user, token, nil
+}
+
+// StoreAccessSecret saves a new access secret hash for a device.
+// The secret_hash should already be a bcrypt hash computed client-side as:
+//
+//	bcrypt(device_token + fingerprint_hash + password)
+//
+// This binds the device token to both the device fingerprint and the password.
+// Changing the password invalidates all device secrets since the hash no longer matches.
+func (s *AuthService) StoreAccessSecret(ctx context.Context, userID string, req *model.StoreAccessSecretRequest) error {
+	now := time.Now()
+	secret := &model.AccessSecret{
+		ID:              uuid.New().String(),
+		UserID:          userID,
+		FingerprintHash: req.FingerprintHash,
+		SecretHash:      req.SecretHash,
+		DeviceName:      req.DeviceName,
+		CreatedAt:       now,
+	}
+	return s.AccessSecretRepo.Create(ctx, secret)
+}
+
+// ListAccessSecrets returns all stored devices for the user.
+func (s *AuthService) ListAccessSecrets(ctx context.Context, userID string) ([]*model.AccessSecret, error) {
+	return s.AccessSecretRepo.ListByUserID(ctx, userID)
+}
+
+// RemoveAccessSecret deletes a stored device secret.
+func (s *AuthService) RemoveAccessSecret(ctx context.Context, userID, secretID string) error {
+	return s.AccessSecretRepo.Delete(ctx, secretID, userID)
 }

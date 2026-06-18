@@ -7,8 +7,10 @@ import { apiFetch } from "@/lib/api";
 import { API_BASE, ENDPOINTS } from "@/lib/constants";
 import { useAuthStore } from "@/stores/auth-store";
 import { decryptWithPassword, encryptWithPassword } from "@/lib/crypto";
+import PinSetupSection from "@/components/auth/PinSetupSection";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { useAccent, type ThemeKey } from "@/hooks/use-accent";
+import { isPinEnabled, storePinData, clearPinData, getPinData, clearDeviceFingerprint } from "@/lib/utils";
 import type { UserPreferences } from "@/types";
 
 const CURRENCIES = [
@@ -301,6 +303,18 @@ export default function SettingsPage() {
             {pwSuccess && <p className="text-sm text-income">{pwSuccess}</p>}
             <Button type="submit">Change Password</Button>
           </form>
+
+          <Separator />
+
+          {/* PIN Unlock Setup */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium">PIN Unlock</h3>
+            <p className="text-xs text-muted-foreground">
+              Set a 4-6 digit PIN to unlock your encryption key without typing your full password.
+              The PIN is never sent to the server and only stored locally.
+            </p>
+            <PinSetupSection />
+          </div>
 
           <Separator />
 

@@ -74,3 +74,28 @@ type UserResponse struct {
 type UpdatePreferencesRequest struct {
 	Preferences UserPreferences `json:"preferences"`
 }
+
+// --- Access secrets (remember device) ---
+
+type AccessSecret struct {
+	ID               string     `json:"id"`
+	UserID           string     `json:"user_id"`
+	FingerprintHash  string     `json:"fingerprint_hash"`
+	SecretHash       string     `json:"-"`
+	DeviceName       string     `json:"device_name,omitempty"`
+	LastUsedAt       *time.Time `json:"last_used_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+}
+
+type StoreAccessSecretRequest struct {
+	FingerprintHash string `json:"fingerprint_hash"`
+	SecretHash      string `json:"secret_hash"`      // bcrypt(token + fingerprint + password)
+	DeviceName      string `json:"device_name,omitempty"`
+}
+
+type LoginWithDeviceRequest struct {
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	FingerprintHash string `json:"fingerprint_hash"`
+	DeviceToken     string `json:"device_token"` // plaintext token sent from device storage
+}
