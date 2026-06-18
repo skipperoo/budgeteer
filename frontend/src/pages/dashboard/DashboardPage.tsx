@@ -353,6 +353,7 @@ export default function DashboardPage() {
       if (isNaN(rawAmount)) throw new Error("Invalid amount");
       const amount = data.type === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
       const commission = data.commission ? parseFloat(data.commission) : 0;
+      const interest = data.interest_amount ? parseFloat(data.interest_amount) : 0;
 
       const accountKeyBase64 = await getAccountKey(
         editTx.account_id,
@@ -364,7 +365,7 @@ export default function DashboardPage() {
       addCategory(data.type as CategoryType, category);
 
       const encryptedPayload = await encryptTransactionPayload(
-        { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined },
+        { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined, interest_amount: interest > 0 ? interest : undefined },
         accountKeyBase64
       );
 
@@ -628,6 +629,7 @@ export default function DashboardPage() {
               type: editTx.payload.amount >= 0 ? "income" : "expense",
               amount: String(Math.abs(editTx.payload.amount)),
               commission: editTx.payload.commission ? String(editTx.payload.commission) : "",
+              interest_amount: editTx.payload.interest_amount ? String(editTx.payload.interest_amount) : "",
               date: editTx.time.slice(0, 10),
               category: editTx.payload.category ?? "",
               counterparty: editTx.payload.counterparty ?? "",

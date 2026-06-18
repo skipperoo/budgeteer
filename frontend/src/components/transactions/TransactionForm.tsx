@@ -9,6 +9,7 @@ export interface TransactionFormData {
   type: "income" | "expense";
   amount: string;
   commission: string;
+  interest_amount: string;
   date: string;
   category: string;
   counterparty: string;
@@ -62,6 +63,7 @@ export function TransactionForm({
   );
   const [amount, setAmount] = useState(initialValues?.amount ?? "");
   const [commission, setCommission] = useState(initialValues?.commission ?? "");
+  const [interestAmount, setInterestAmount] = useState(initialValues?.interest_amount ?? "");
   const [date, setDate] = useState(
     initialValues?.date ?? new Date().toISOString().slice(0, 10)
   );
@@ -105,6 +107,7 @@ export function TransactionForm({
       type,
       amount,
       commission,
+      interest_amount: interestAmount,
       date,
       category,
       counterparty,
@@ -196,6 +199,21 @@ export function TransactionForm({
           placeholder="0.00"
         />
       </div>
+
+      {/* Interest (only when the transaction has interest_amount — mortgage rules) */}
+      {initialValues?.interest_amount != null && (
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Interest Paid</label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={interestAmount}
+            onChange={(e) => setInterestAmount(e.target.value)}
+            placeholder="0.00"
+          />
+        </div>
+      )}
 
       {/* Date */}
       <div className="space-y-2">

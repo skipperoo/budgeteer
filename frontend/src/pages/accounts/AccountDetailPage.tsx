@@ -22,6 +22,7 @@ import { getAccountKey } from "@/lib/decrypt-transactions";
 import { useRuleStore } from "@/stores/rule-store";
 import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
 import { TransactionDetailOverlay } from "@/components/transactions/TransactionDetailOverlay";
+import { TransactionForm, type TransactionFormData } from "@/components/transactions/TransactionForm";
 import { CURRENCIES, getCurrencySymbol, formatCurrency } from "@/lib/format";
 import type { Transaction, CreateTransactionRequest, DocumentMetadata } from "@/types";
 import {
@@ -83,21 +84,13 @@ export default function AccountDetailPage() {
   const [txCreating, setTxCreating] = useState(false);
   const [txCreateError, setTxCreateError] = useState("");
 
-  // --- Edit transaction state ---
+  // --- Edit transaction state (using shared TransactionForm) ---
   const [editTxOpen, setEditTxOpen] = useState(false);
   const [editTxId, setEditTxId] = useState<string | null>(null);
-  const [editTxType, setEditTxType] = useState<"income" | "expense">("expense");
-  const [editTxAmount, setEditTxAmount] = useState("");
-  const [editTxCommission, setEditTxCommission] = useState("");
-  const [editTxInterest, setEditTxInterest] = useState("");
-  const [editTxCategory, setEditTxCategory] = useState("");
-  const [editTxNotes, setEditTxNotes] = useState("");
-  const [editTxCounterparty, setEditTxCounterparty] = useState("");
-  const [editTxDate, setEditTxDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [editTxInitialValues, setEditTxInitialValues] = useState<Partial<TransactionFormData> | undefined>(undefined);
+  const [editTxExistingDocs, setEditTxExistingDocs] = useState<DocumentMetadata[]>([]);
   const [editTxSaving, setEditTxSaving] = useState(false);
   const [editTxError, setEditTxError] = useState("");
-  const [editTxShowCategoryInput, setEditTxShowCategoryInput] = useState(false);
-  const [editTxNewCategory, setEditTxNewCategory] = useState("");
 
   // --- Detail overlay state ---
   const [detailTx, setDetailTx] = useState<TransactionDisplay | null>(null);
@@ -113,9 +106,7 @@ export default function AccountDetailPage() {
   const [txFile, setTxFile] = useState<File | null>(null);
   const createFileRef = useRef<HTMLInputElement>(null);
 
-  // --- File upload state (edit) ---
-  const [editTxFile, setEditTxFile] = useState<File | null>(null);
-  const editFileRef = useRef<HTMLInputElement>(null);
+  // --- File upload state (edit — TransactionForm handles its own state) ---
 
   // --- File input error state (debug: show file input errors) ---
   const [fileInputError, setFileInputError] = useState("");
@@ -313,51 +304,58 @@ export default function AccountDetailPage() {
   };
 
   // --- Edit transaction ---
-  const openEditTx = (txId: string) => {
+  const openEditTx = async (txId: string) => {
     const tx = transactions.find((t) => t.id === txId);
     if (!tx || !tx.payload) return;
     setEditTxId(txId);
-    setEditTxType(tx.payload.amount >= 0 ? "income" : "expense");
-    setEditTxAmount(String(Math.abs(tx.payload.amount)));
-    setEditTxCommission(tx.payload.commission ? String(tx.payload.commission) : "");
-    setEditTxInterest(tx.payload.interest_amount ? String(tx.payload.interest_amount) : "");
-    setEditTxCategory(tx.payload.category ?? "");
-    setEditTxNotes(tx.payload.notes ?? "");
-    setEditTxCounterparty(tx.payload.counterparty ?? "");
-    setEditTxDate(new Date(tx.time).toISOString().slice(0, 10));
-    setEditTxShowCategoryInput(false);
-    setEditTxNewCategory("");
-    setEditTxError("");
+    setEditTxInitialValues({
+      type: tx.payload.amount >= 0 ? "income" : "expense",
+      amount: String(Math.abs(tx.payload.amount)),
+      commission: tx.payload.commission ? String(tx.payload.commission) : "",
+      interest_amount: tx.payload.interest_amount ? String(tx.payload.interest_amount) : "",
+      date: tx.time.slice(0, 10),
+      category: tx.payload.category ?? "",
+      counterparty: tx.payload.counterparty ?? "",
+      notes: tx.payload.notes ?? "",
+    });
+    // Fetch existing documents for the transaction
+    try {
+      const docs = await apiFetch<DocumentMetadata[]>(
+        ENDPOINTS.transactionDocuments(txId),
+      );
+      setEditTxExistingDocs(docs ?? []);
+    } catch {
+      setEditTxExistingDocs([]);
+    }
     setEditTxOpen(true);
   };
 
-  const handleUpdateTransaction = async () => {
+  const handleUpdateTransaction = async (data: TransactionFormData) => {
     if (!editTxId) return;
     if (!accountKeyBase64) {
       setEditTxError("Account key not available. Try re-encrypting the key.");
       return;
     }
+
     setEditTxError("");
     setEditTxSaving(true);
 
     try {
-      const rawAmount = parseFloat(editTxAmount);
-      if (isNaN(rawAmount)) {
-        throw new Error("Invalid amount");
-      }
-      const amount = editTxType === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
-      const commission = editTxCommission ? parseFloat(editTxCommission) : 0;
+      const rawAmount = parseFloat(data.amount);
+      if (isNaN(rawAmount)) throw new Error("Invalid amount");
+      const amount = data.type === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+      const commission = data.commission ? parseFloat(data.commission) : 0;
+      const interest = data.interest_amount ? parseFloat(data.interest_amount) : 0;
 
-      const category = editTxCategory || "general";
-      addCategory(editTxType as CategoryType, category);
+      const category = data.category || "general";
+      addCategory(data.type as CategoryType, category);
 
-      const interest = editTxInterest ? parseFloat(editTxInterest) : 0;
       const encryptedPayload = await encryptTransactionPayload(
-        { amount, category, notes: editTxNotes, counterparty: editTxCounterparty, commission: commission > 0 ? commission : undefined, interest_amount: interest > 0 ? interest : undefined },
+        { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined, interest_amount: interest > 0 ? interest : undefined },
         accountKeyBase64
       );
 
-      const time = new Date(editTxDate + "T12:00:00Z").toISOString();
+      const time = new Date(data.date + "T12:00:00Z").toISOString();
 
       await apiFetch(ENDPOINTS.transaction(editTxId), {
         method: "PUT",
@@ -367,54 +365,35 @@ export default function AccountDetailPage() {
         } as CreateTransactionRequest),
       });
 
-      // If a new file was selected, delete old documents and upload new one
-      if (editTxFile && accountKeyBase64) {
-        // First, delete any existing documents for this transaction
-        const existingDocs = await apiFetch<DocumentMetadata[]>(
-          ENDPOINTS.transactionDocuments(editTxId),
-        );
-        if (existingDocs) {
-          await Promise.all(
-            existingDocs.map((doc) =>
-              apiFetch(ENDPOINTS.transactionDocument(editTxId, doc.id), {
-                method: "DELETE",
-              }),
-            ),
-          );
+      // Handle document uploads and deletions
+      if (data.file) {
+        // Delete old documents, then upload new one
+        for (const doc of editTxExistingDocs) {
+          await apiFetch(ENDPOINTS.transactionDocument(editTxId, doc.id), {
+            method: "DELETE",
+          });
         }
-        // Upload the new file
-        const fileData = await encryptFile(editTxFile, accountKeyBase64);
+        const fileData = await encryptFile(data.file, accountKeyBase64);
         await apiFetch(ENDPOINTS.transactionDocuments(editTxId), {
           method: "POST",
           body: JSON.stringify(fileData),
         });
       }
+      for (const docId of data.documentsToDelete) {
+        await apiFetch(ENDPOINTS.transactionDocument(editTxId, docId), {
+          method: "DELETE",
+        });
+      }
 
       setEditTxOpen(false);
       setEditTxId(null);
-      setEditTxFile(null);
-      setEditTxCommission("");
+      setEditTxInitialValues(undefined);
       await fetchTransactions();
     } catch (err: any) {
       setEditTxError(err.message);
     } finally {
       setEditTxSaving(false);
     }
-  };
-
-  const handleEditSelectCategory = (cat: string) => {
-    setEditTxCategory(cat);
-    setEditTxShowCategoryInput(false);
-    setEditTxNewCategory("");
-  };
-
-  const handleEditAddNewCategory = () => {
-    const cat = editTxNewCategory.trim();
-    if (!cat) return;
-    addCategory(editTxType, cat);
-    setEditTxCategory(cat);
-    setEditTxShowCategoryInput(false);
-    setEditTxNewCategory("");
   };
 
   // --- Create transaction ---
@@ -874,183 +853,21 @@ export default function AccountDetailPage() {
               </div>
           </ResponsiveDialog>
 
-          {/* Edit Transaction Dialog */}
-          <ResponsiveDialog open={editTxOpen} onOpenChange={setEditTxOpen} title="Edit Transaction">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Amount</label>
-                  <div className="flex gap-2">
-                    <div className="flex rounded-md border border-input overflow-hidden shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setEditTxType("expense")}
-                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                          editTxType === "expense"
-                            ? "bg-expense text-expense-foreground"
-                            : "bg-transparent text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Expense
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditTxType("income")}
-                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                          editTxType === "income"
-                            ? "bg-income text-income-foreground"
-                            : "bg-transparent text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Income
-                      </button>
-                    </div>
-                    <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
-                        {editTxType === "expense" ? "-" : "+"}
-                      </span>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={editTxAmount}
-                        onChange={(e) => setEditTxAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="pl-7"
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Commission / Fee (optional)</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={editTxCommission}
-                    onChange={(e) => setEditTxCommission(e.target.value)}
-                    placeholder="0.00"
-                  />
-                </div>
-                {editTxInterest !== "" && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Interest Paid</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={editTxInterest}
-                      onChange={(e) => setEditTxInterest(e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Date</label>
-                  <Input
-                    type="date"
-                    value={editTxDate}
-                    onChange={(e) => setEditTxDate(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Category</label>
-                  {!editTxShowCategoryInput ? (
-                    <div className="flex gap-2">
-                      <select
-                        value={editTxCategory}
-                        onChange={(e) => {
-                          if (e.target.value === "__new__") {
-                            setEditTxShowCategoryInput(true);
-                          } else {
-                            setEditTxCategory(e.target.value);
-                          }
-                        }}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                      >
-                        <option value="">Select category...</option>
-                        {id &&
-                          getCategories(editTxType as CategoryType).map((cat) => (
-                            <option key={cat} value={cat}>
-                              {cat}
-                            </option>
-                          ))}
-                        <option value="__new__">+ Add new category...</option>
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Input
-                        value={editTxNewCategory}
-                        onChange={(e) => setEditTxNewCategory(e.target.value)}
-                        placeholder="New category name"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleEditAddNewCategory();
-                          }
-                        }}
-                      />
-                      <Button type="button" size="sm" onClick={handleEditAddNewCategory}>
-                        Add
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditTxShowCategoryInput(false)}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Counterparty</label>
-                  <Input
-                    value={editTxCounterparty}
-                    onChange={(e) => setEditTxCounterparty(e.target.value)}
-                    placeholder="e.g. Store name, employer"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Notes</label>
-                  <Input
-                    value={editTxNotes}
-                    onChange={(e) => setEditTxNotes(e.target.value)}
-                    placeholder="Optional notes"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Receipt / Document</label>
-                  <Input
-                    ref={editFileRef}
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) => {
-                      try {
-                        const file = e.target.files?.[0] ?? null;
-                        setEditTxFile(file);
-                        setFileInputError("");
-                      } catch (err: any) {
-                        setFileInputError(err?.message ?? String(err));
-                      }
-                    }}
-                  />
-                  {editTxFile && (
-                    <p className="text-xs text-muted-foreground">
-                      {editTxFile.name} ({(editTxFile.size / 1024).toFixed(1)} KB)
-                    </p>
-                  )}
-                  {fileInputError && (
-                    <p className="text-xs text-destructive">{fileInputError}</p>
-                  )}
-                </div>
-                {editTxError && <p className="text-sm text-destructive">{editTxError}</p>}
-                <Button onClick={handleUpdateTransaction} className="w-full" disabled={editTxSaving}>
-                  {editTxSaving ? "Saving..." : "Save"}
-                </Button>
-              </div>
+          {/* Edit Transaction Dialog (shared TransactionForm) */}
+          <ResponsiveDialog open={editTxOpen} onOpenChange={(open) => { setEditTxOpen(open); if (!open) { setEditTxId(null); setEditTxInitialValues(undefined); } }} title="Edit Transaction">
+            {editTxInitialValues && (
+              <TransactionForm
+                accountId={id}
+                initialValues={editTxInitialValues}
+                existingDocuments={editTxExistingDocs}
+                getCategories={getCategories}
+                addCategory={addCategory}
+                onSave={handleUpdateTransaction}
+                saving={editTxSaving}
+                error={editTxError}
+                submitLabel="Save"
+              />
+            )}
           </ResponsiveDialog>
 
           {/* Invite (for joint accounts) */}
