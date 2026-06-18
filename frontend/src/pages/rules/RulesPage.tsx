@@ -773,8 +773,8 @@ export default function RulesPage() {
                 )}
               </div>
 
-            {/* Counterparty (for payment) */}
-            {formType === "payment" && (
+            {/* Counterparty (for payment and mortgage) */}
+            {(formType === "payment" || formType === "mortgage") && (
               <div className="space-y-1">
                 <Label htmlFor="rule-counterparty">Counterparty (optional)</Label>
                 <Input
