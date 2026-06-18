@@ -449,6 +449,105 @@ func TestAuthServiceRemoveAccessSecret(t *testing.T) {
 	}
 }
 
+func TestChangePassword_Success(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	InitAuthService()
+
+	email := "change-pw-success@example.com"
+	password := "SecureP@ss123"
+
+	// Create a verified user
+	userRepo := &repository.UserRepository{}
+	hashedPW, _ := HashPassword(password)
+	user := &model.User{
+		ID:                  "00000000-0000-0000-0000-000000000020",
+		Email:               email,
+		PasswordHash:        hashedPW,
+		PublicKey:           "pk",
+		EncryptedPrivateKey: "original-encrypted-key",
+		IsVerified:          true,
+	}
+	if err := userRepo.Create(context.Background(), user); err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Change the encrypted private key
+	newKey := "new-encrypted-key-value"
+	err := Auth.ChangePassword(context.Background(), user.ID, newKey)
+	if err != nil {
+		t.Fatalf("ChangePassword failed: %v", err)
+	}
+
+	// Verify the key was updated in the database
+	found, err := userRepo.FindByID(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("FindByID failed: %v", err)
+	}
+	if found.EncryptedPrivateKey != newKey {
+		t.Fatalf("Expected encrypted_private_key %q, got %q", newKey, found.EncryptedPrivateKey)
+	}
+}
+
+func TestChangePassword_ClearsAccessSecrets(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	InitAuthService()
+
+	email := "change-pw-clear@example.com"
+	password := "SecureP@ss123"
+
+	userRepo := &repository.UserRepository{}
+	hashedPW, _ := HashPassword(password)
+	user := &model.User{
+		ID:                  "00000000-0000-0000-0000-000000000021",
+		Email:               email,
+		PasswordHash:        hashedPW,
+		PublicKey:           "pk",
+		EncryptedPrivateKey: "original-key",
+		IsVerified:          true,
+	}
+	if err := userRepo.Create(context.Background(), user); err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Store an access secret for this user
+	err := Auth.StoreAccessSecret(context.Background(), user.ID, &model.StoreAccessSecretRequest{
+		FingerprintHash: "fp-before-change",
+		SecretHash:      "secret-hash-before",
+		DeviceName:      "Old Device",
+	})
+	if err != nil {
+		t.Fatalf("StoreAccessSecret failed: %v", err)
+	}
+
+	// Verify the device is stored
+	secrets, err := Auth.ListAccessSecrets(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("ListAccessSecrets failed: %v", err)
+	}
+	if len(secrets) != 1 {
+		t.Fatalf("Expected 1 device before password change, got %d", len(secrets))
+	}
+
+	// Change password
+	err = Auth.ChangePassword(context.Background(), user.ID, "new-encrypted-key")
+	if err != nil {
+		t.Fatalf("ChangePassword failed: %v", err)
+	}
+
+	// Verify access secrets were cleared
+	secrets, err = Auth.ListAccessSecrets(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("ListAccessSecrets after change failed: %v", err)
+	}
+	if len(secrets) != 0 {
+		t.Fatalf("Expected 0 devices after password change, got %d", len(secrets))
+	}
+}
+
 func TestAuthServiceLoginNotVerified(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()

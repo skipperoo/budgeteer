@@ -299,6 +299,99 @@ func TestLoginHandler_WrongPassword(t *testing.T) {
 	}
 }
 
+func TestChangePasswordHandler(t *testing.T) {
+	cleanup := handlerSetupTest(t)
+	defer cleanup()
+
+	user, _, _ := createHandlerTestUser(t, "handler-change-pw@test.com")
+	password := "test-password-123!"
+
+	body := map[string]string{
+		"password":                 password,
+		"new_encrypted_private_key": "re-encrypted-key-value",
+	}
+
+	w := httptest.NewRecorder()
+	req := request("PUT", "/v1/auth/password", body)
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(authenticatedContext(t, user.ID, user.Email))
+	ChangePassword(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["message"] != "password changed successfully" {
+		t.Fatalf("Expected success message, got %q", resp["message"])
+	}
+
+	// Verify the key was actually updated in the database
+	ctx := context.Background()
+	var storedKey string
+	err := database.Pool.QueryRow(ctx, `SELECT encrypted_private_key FROM users WHERE id = $1`, user.ID).Scan(&storedKey)
+	if err != nil {
+		t.Fatalf("Failed to query user: %v", err)
+	}
+	if storedKey != "re-encrypted-key-value" {
+		t.Fatalf("Expected encrypted_private_key %q, got %q", "re-encrypted-key-value", storedKey)
+	}
+}
+
+func TestChangePasswordHandler_WrongPassword(t *testing.T) {
+	cleanup := handlerSetupTest(t)
+	defer cleanup()
+
+	user, _, _ := createHandlerTestUser(t, "handler-change-pw-wrong@test.com")
+
+	body := map[string]string{
+		"password":                 "wrong-password",
+		"new_encrypted_private_key": "some-key",
+	}
+
+	w := httptest.NewRecorder()
+	req := request("PUT", "/v1/auth/password", body)
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(authenticatedContext(t, user.ID, user.Email))
+	ChangePassword(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 Unauthorized for wrong password, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var errResp model.Error
+	json.NewDecoder(w.Body).Decode(&errResp)
+	if errResp.Error != "invalid password" {
+		t.Fatalf("Expected 'invalid password' error, got %q", errResp.Error)
+	}
+}
+
+func TestChangePasswordHandler_Unauthorized(t *testing.T) {
+	cleanup := handlerSetupTest(t)
+	defer cleanup()
+
+	body := map[string]string{
+		"password":                 "some-password",
+		"new_encrypted_private_key": "some-key",
+	}
+
+	w := httptest.NewRecorder()
+	req := request("PUT", "/v1/auth/password", body)
+	req.Header.Set("Content-Type", "application/json")
+	ChangePassword(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 Unauthorized for unauthenticated request, got %d", w.Code)
+	}
+
+	var errResp model.Error
+	json.NewDecoder(w.Body).Decode(&errResp)
+	if errResp.Error != "unauthorized" {
+		t.Fatalf("Expected 'unauthorized' error, got %q", errResp.Error)
+	}
+}
+
 func TestHealthCheck(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/health", nil)
