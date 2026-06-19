@@ -16,8 +16,9 @@ type Notification struct {
 
 // NotificationData is the typed data stored in the Notification.Data JSON field.
 type NotificationData struct {
-	InvitationID string `json:"invitation_id,omitempty"`
-	RuleID       string `json:"rule_id,omitempty"`
-	AccountID    string `json:"account_id,omitempty"`
-	InvitedBy    string `json:"invited_by,omitempty"`
+	InvitationID  string `json:"invitation_id,omitempty"`
+	RuleID        string `json:"rule_id,omitempty"`
+	AccountID     string `json:"account_id,omitempty"`
+	TransactionID string `json:"transaction_id,omitempty"`
+	InvitedBy     string `json:"invited_by,omitempty"`
 }

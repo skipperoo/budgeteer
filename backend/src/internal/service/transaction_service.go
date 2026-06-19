@@ -15,6 +15,7 @@ type TransactionService struct {
 	TransactionRepo *repository.TransactionRepository
 	AccountRepo     *repository.AccountRepository
 	AccountUserRepo *repository.AccountUserRepository
+	UserRepo        *repository.UserRepository
 }
 
 var Transactions *TransactionService
@@ -24,10 +25,13 @@ func InitTransactionService() {
 		TransactionRepo: &repository.TransactionRepository{},
 		AccountRepo:     &repository.AccountRepository{},
 		AccountUserRepo: &repository.AccountUserRepository{},
+		UserRepo:        &repository.UserRepository{},
 	}
 }
 
 // Create stores a new encrypted transaction.
+// If req.TargetEmail is set, it also creates an invitation for the
+// recipient to accept and receive the money in their chosen account.
 func (s *TransactionService) Create(ctx context.Context, req *model.CreateTransactionRequest, userID string) (*model.Transaction, error) {
 	// Verify the user has access to the account
 	au, err := s.AccountUserRepo.FindByAccountAndUser(ctx, req.AccountID, userID)
@@ -36,6 +40,24 @@ func (s *TransactionService) Create(ctx context.Context, req *model.CreateTransa
 	}
 	if au == nil {
 		return nil, fmt.Errorf("account not found or access denied")
+	}
+
+	// Pre-validate send-to-user fields before creating the transaction
+	if req.TargetEmail != "" {
+		if req.ServerEncryptedPayload == "" {
+			return nil, fmt.Errorf("server_encrypted_payload is required when target_email is set")
+		}
+		if Invitations == nil {
+			return nil, fmt.Errorf("invitation service not available")
+		}
+		// Prevent sending to yourself
+		sender, err := s.UserRepo.FindByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("lookup sender: %w", err)
+		}
+		if sender != nil && sender.Email == req.TargetEmail {
+			return nil, fmt.Errorf("cannot send a transaction to yourself")
+		}
 	}
 
 	now := time.Now()
@@ -52,6 +74,13 @@ func (s *TransactionService) Create(ctx context.Context, req *model.CreateTransa
 
 	if err := s.TransactionRepo.Create(ctx, t); err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	// If this is a "send to user" transaction, create an invitation
+	if req.TargetEmail != "" {
+		if err := Invitations.CreateTransactionInvitation(ctx, t.ID, userID, req.TargetEmail, req.ServerEncryptedPayload); err != nil {
+			return nil, fmt.Errorf("failed to create invitation: %w", err)
+		}
 	}
 
 	return t, nil

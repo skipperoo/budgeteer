@@ -60,8 +60,8 @@ export default function NotificationsPage() {
     async (inv: Invitation) => {
       setActionError(null);
 
-      // For rule invitations, require account selection first
-      if (inv.entity_type === "rule") {
+      // For rule and transaction invitations, require account selection first
+      if (inv.entity_type === "rule" || inv.entity_type === "transaction") {
         setAccountDialogInvitation(inv);
         setSelectedAccountId("");
         return;
@@ -194,7 +194,9 @@ export default function NotificationsPage() {
                           <h3 className="font-medium capitalize">
                             {inv.entity_type === "rule"
                               ? "Rule Invitation"
-                              : "Account Invitation"}
+                              : inv.entity_type === "transaction"
+                                ? "Money Transfer"
+                                : "Account Invitation"}
                           </h3>
                           <p className="text-sm text-muted-foreground mt-1">
                             From: {inv.invited_email}
@@ -277,18 +279,24 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      {/* Account selection dialog for rule invitations */}
+      {/* Account selection dialog for rule / transaction invitations */}
       <ResponsiveDialog
         open={!!accountDialogInvitation}
         onOpenChange={(open) => {
           if (!open) setAccountDialogInvitation(null);
         }}
-        title="Accept Rule Invitation"
+        title={
+          accountDialogInvitation?.entity_type === "transaction"
+            ? "Accept Money Transfer"
+            : "Accept Rule Invitation"
+        }
       >
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Choose the account where you want to receive the money.
-            The sender will NOT see your account details.
+            {accountDialogInvitation?.entity_type === "transaction"
+              ? "Choose the account where you want to receive this money."
+              : "Choose the account where you want to receive the money."}
+            {" "}The sender will NOT see your account details.
           </p>
 
           <div className="space-y-1">

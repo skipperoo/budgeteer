@@ -16,6 +16,7 @@ export interface TransactionFormData {
   notes: string;
   file: File | null;
   documentsToDelete: string[];
+  targetEmail?: string;
 }
 
 interface AccountOption {
@@ -81,6 +82,8 @@ export function TransactionForm({
   const [documentsToDelete, setDocumentsToDelete] = useState<string[]>([]);
   const [showCategoryInput, setShowCategoryInput] = useState(false);
   const [newCategory, setNewCategory] = useState("");
+  const [showSendTo, setShowSendTo] = useState(false);
+  const [sendToEmail, setSendToEmail] = useState(initialValues?.targetEmail ?? "");
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -114,6 +117,7 @@ export function TransactionForm({
       notes,
       file,
       documentsToDelete,
+      targetEmail: showSendTo && sendToEmail.trim() ? sendToEmail.trim() : undefined,
     });
   };
 
@@ -297,6 +301,40 @@ export function TransactionForm({
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Optional notes"
         />
+      </div>
+
+      {/* Send to user accordion */}
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => setShowSendTo(!showSendTo)}
+          className="flex w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm font-medium hover:bg-muted transition-colors"
+        >
+          <span>Send to</span>
+          <svg
+            className={`h-4 w-4 transition-transform ${showSendTo ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {showSendTo && (
+          <div className="space-y-2 pl-2 border-l-2 border-muted-foreground/20">
+            <label className="text-sm font-medium">Recipient Email</label>
+            <Input
+              type="email"
+              value={sendToEmail}
+              onChange={(e) => setSendToEmail(e.target.value)}
+              placeholder="user@example.com"
+            />
+            <p className="text-xs text-muted-foreground">
+              The recipient will receive an invitation to accept this transfer into their account.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Document upload */}
