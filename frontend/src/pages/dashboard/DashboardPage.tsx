@@ -13,6 +13,7 @@ import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64 } from "@/lib/crypto";
 import { encryptTransactionPayload, effectiveAmount } from "@/lib/crypto-transaction";
 import { encryptFile } from "@/lib/crypto-file";
+import { encryptForRecipient } from "@/lib/crypto-rules";
 import { fetchAndDecryptTransactions, getAccountKey } from "@/lib/decrypt-transactions";
 import { TransactionCard } from "@/components/transactions/TransactionCard";
 import { TransactionDetailOverlay } from "@/components/transactions/TransactionDetailOverlay";
@@ -319,9 +320,25 @@ export default function DashboardPage() {
 
       const time = new Date(data.date + "T12:00:00Z").toISOString();
 
+      const body: Record<string, any> = { time, encrypted_payload: encryptedPayload };
+
+      // If this is a "send to user" transaction, also encrypt with server's public key
+      if (data.targetEmail) {
+        const pubKeyResp = await apiFetch<{ public_key: string }>(ENDPOINTS.rulePublicKey);
+        if (!pubKeyResp?.public_key) throw new Error("Failed to get server public key");
+
+        const serverEncryptedPayload = await encryptForRecipient(
+          { amount, category, notes: data.notes, commission: commission > 0 ? commission : undefined },
+          pubKeyResp.public_key,
+        );
+
+        body.target_email = data.targetEmail;
+        body.server_encrypted_payload = serverEncryptedPayload;
+      }
+
       const createdTx = await apiFetch<Transaction>(ENDPOINTS.transactions(data.accountId), {
         method: "POST",
-        body: JSON.stringify({ time, encrypted_payload: encryptedPayload } as CreateTransactionRequest),
+        body: JSON.stringify(body),
       });
 
       // Upload document if provided

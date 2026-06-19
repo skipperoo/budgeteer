@@ -81,6 +81,14 @@ func AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 		acceptErr = service.Invitations.AcceptRuleInvitation(r.Context(), invitationID, claims.UserID, req.EncryptedAccount)
 	case "account":
 		acceptErr = service.Invitations.AcceptAccountInvitation(r.Context(), invitationID, claims.UserID)
+	case "transaction":
+		if req.EncryptedAccount == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(model.Error{Error: "encrypted_account is required for transaction invitations"})
+			return
+		}
+		acceptErr = service.Invitations.AcceptTransactionInvitation(r.Context(), invitationID, claims.UserID, req.EncryptedAccount)
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)

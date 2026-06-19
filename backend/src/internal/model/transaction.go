@@ -3,9 +3,11 @@ package model
 import "time"
 
 type CreateTransactionRequest struct {
-	AccountID        string    `json:"account_id"`
-	Time             time.Time `json:"time"`
-	EncryptedPayload string    `json:"encrypted_payload"`
+	AccountID            string    `json:"account_id"`
+	Time                 time.Time `json:"time"`
+	EncryptedPayload     string    `json:"encrypted_payload"`
+	TargetEmail          string    `json:"target_email,omitempty"`
+	ServerEncryptedPayload string  `json:"server_encrypted_payload,omitempty"`
 }
 
 type Transaction struct {

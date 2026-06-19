@@ -4,7 +4,7 @@ import { ENDPOINTS } from "@/lib/constants";
 
 export interface Invitation {
   id: string;
-  entity_type: "rule" | "account";
+  entity_type: "rule" | "account" | "transaction";
   entity_id: string;
   invited_by: string;
   invited_email: string;

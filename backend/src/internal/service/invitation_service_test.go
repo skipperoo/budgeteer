@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,11 @@ import (
 
 	"github.com/google/uuid"
 )
+
+// strPtr returns a pointer to the given string.
+func strPtr(s string) *string {
+	return &s
+}
 
 func setupInvitationDB(t *testing.T) context.CancelFunc {
 	t.Helper()
@@ -900,6 +907,393 @@ func TestInvitationServiceAcceptRuleInvitation_NotPending(t *testing.T) {
 	err := Invitations.AcceptRuleInvitation(ctx, inv.ID, receiver.ID, "encrypted-account")
 	if err == nil {
 		t.Fatal("Expected error when accepting non-pending invitation")
+	}
+}
+
+// ─── Transaction Invitation Tests ────────────────────────────────────────────────
+
+// setupTransactionInvitationDB extends setupInvitationDB by updating the invitations
+// table CHECK constraint to include the 'transaction' entity_type (migration 0013).
+func setupTransactionInvitationDB(t *testing.T) context.CancelFunc {
+	t.Helper()
+	cleanup := setupInvitationDB(t)
+	ctx := context.Background()
+
+	// Migration 0013: add 'transaction' to invitations entity_type CHECK
+	database.Pool.Exec(ctx, `ALTER TABLE invitations DROP CONSTRAINT IF EXISTS invitations_entity_type_check`)
+	database.Pool.Exec(ctx, `ALTER TABLE invitations ADD CONSTRAINT invitations_entity_type_check CHECK (entity_type IN ('rule', 'account', 'transaction'))`)
+
+	// Also ensure the balance column exists on accounts for the acceptance test
+	database.Pool.Exec(ctx, `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS balance BIGINT NOT NULL DEFAULT 0`)
+
+	return cleanup
+}
+
+func TestInvitationServiceCreateTransactionInvitation_ExistingUser(t *testing.T) {
+	cleanup := setupTransactionInvitationDB(t)
+	defer cleanup()
+	InitInvitationService()
+
+	ctx := context.Background()
+
+	inviter, _, _ := createTestUser(t, "txn-inv-inviter@test.com")
+	recipient, _, _ := createTestUser(t, "txn-inv-recipient@test.com")
+	transactionID := uuid.New().String()
+	serverPayload := "server-encrypted-payload-data"
+
+	err := Invitations.CreateTransactionInvitation(ctx, transactionID, inviter.ID, recipient.Email, serverPayload)
+	if err != nil {
+		t.Fatalf("CreateTransactionInvitation failed: %v", err)
+	}
+
+	// Verify invitation exists
+	invRepo := &repository.InvitationRepository{}
+	invs, err := invRepo.FindPendingByUserID(ctx, recipient.ID)
+	if err != nil {
+		t.Fatalf("FindPendingByUserID failed: %v", err)
+	}
+	if len(invs) != 1 {
+		t.Fatalf("Expected 1 pending invitation, got %d", len(invs))
+	}
+	inv := invs[0]
+	if inv.EntityType != "transaction" {
+		t.Fatalf("Expected entity_type=transaction, got %s", inv.EntityType)
+	}
+	if inv.EntityID != transactionID {
+		t.Fatalf("Expected entity_id=%s, got %s", transactionID, inv.EntityID)
+	}
+	if inv.Status != "pending" {
+		t.Fatalf("Expected status=pending, got %s", inv.Status)
+	}
+	if inv.EncryptedData == nil || *inv.EncryptedData != serverPayload {
+		t.Fatalf("Expected EncryptedData=%s, got %v", serverPayload, inv.EncryptedData)
+	}
+	if inv.InvitedUserID == nil || *inv.InvitedUserID != recipient.ID {
+		t.Fatalf("InvitedUserID not linked correctly")
+	}
+
+	// Verify notification was created for recipient
+	notifRepo := &repository.NotificationRepository{}
+	notifs, err := notifRepo.ListByUserID(ctx, recipient.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("ListByUserID failed: %v", err)
+	}
+	if len(notifs) < 1 {
+		t.Fatal("Expected at least 1 notification for recipient")
+	}
+	if notifs[0].Type != "transaction_invitation" {
+		t.Fatalf("Expected notification type=transaction_invitation, got %s", notifs[0].Type)
+	}
+
+	// Verify email was queued
+	var emailCount int
+	err = database.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM email_outbox WHERE to_address = $1`, recipient.Email).Scan(&emailCount)
+	if err != nil {
+		t.Fatalf("Count email_outbox failed: %v", err)
+	}
+	if emailCount < 1 {
+		t.Fatal("Expected at least 1 email queued for recipient")
+	}
+}
+
+func TestInvitationServiceCreateTransactionInvitation_UnknownUser(t *testing.T) {
+	cleanup := setupTransactionInvitationDB(t)
+	defer cleanup()
+	InitInvitationService()
+
+	ctx := context.Background()
+
+	inviter, _, _ := createTestUser(t, "txn-inv-unknown@test.com")
+	unknownEmail := "nonexistent-recipient@test.com"
+	transactionID := uuid.New().String()
+	serverPayload := "server-payload"
+
+	err := Invitations.CreateTransactionInvitation(ctx, transactionID, inviter.ID, unknownEmail, serverPayload)
+	if err != nil {
+		t.Fatalf("CreateTransactionInvitation for unknown user should succeed (subscription email): %v", err)
+	}
+
+	// Verify invitation was created by email
+	invRepo := &repository.InvitationRepository{}
+	invs, err := invRepo.FindPendingByEmail(ctx, unknownEmail)
+	if err != nil {
+		t.Fatalf("FindPendingByEmail failed: %v", err)
+	}
+	if len(invs) != 1 {
+		t.Fatalf("Expected 1 pending invitation by email, got %d", len(invs))
+	}
+
+	// InvitedUserID should be nil for unknown users
+	if invs[0].InvitedUserID != nil {
+		t.Fatal("Expected InvitedUserID to be nil for unknown user")
+	}
+
+	// Verify subscription email was queued (not the standard invitation email)
+	var emailCount int
+	err = database.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM email_outbox WHERE to_address = $1`, unknownEmail).Scan(&emailCount)
+	if err != nil {
+		t.Fatalf("Count email_outbox failed: %v", err)
+	}
+	if emailCount < 1 {
+		t.Fatal("Expected at least 1 subscription email queued")
+	}
+}
+
+func TestInvitationServiceAcceptTransactionInvitation_Success(t *testing.T) {
+	cleanup := setupTransactionInvitationDB(t)
+	defer cleanup()
+
+	// Generate server keypair for crypto operations
+	privKey, pubKey, err := crypto.GenerateServerKeypair()
+	if err != nil {
+		t.Fatalf("GenerateServerKeypair failed: %v", err)
+	}
+
+	InitInvitationServiceWithKeys(privKey, pubKey)
+	InitNotificationService()
+
+	ctx := context.Background()
+
+	sender, _, _ := createTestUser(t, "txn-accept-sender@test.com")
+	receiver, _, _ := createTestUser(t, "txn-accept-receiver@test.com")
+
+	// Give the receiver a valid X25519 public key (needed for re-encryption)
+	_, receiverPubKey, err := crypto.GenerateServerKeypair()
+	if err != nil {
+		t.Fatalf("Generate receiver keypair failed: %v", err)
+	}
+	receiverPubKeyB64 := base64.StdEncoding.EncodeToString(receiverPubKey)
+	_, err = database.Pool.Exec(ctx, `UPDATE users SET public_key = $1 WHERE id = $2`, receiverPubKeyB64, receiver.ID)
+	if err != nil {
+		t.Fatalf("Update receiver public key failed: %v", err)
+	}
+
+	// Create a receiver account
+	acctRepo := &repository.AccountRepository{}
+	receiverAccount := &model.Account{
+		ID:        uuid.New().String(),
+		Currency:  "USD",
+		Type:      "personal",
+		CreatedBy: receiver.ID,
+	}
+	err = acctRepo.Create(ctx, receiverAccount)
+	if err != nil {
+		t.Fatalf("Create receiver account failed: %v", err)
+	}
+
+	// Add receiver as account user
+	auRepo := &repository.AccountUserRepository{}
+	auRepo.Create(ctx, &model.AccountUser{
+		AccountID:           receiverAccount.ID,
+		UserID:              receiver.ID,
+		EncryptedAccountKey: "test-key",
+		Role:                "owner",
+		Status:              "active",
+		JoinedAt:            time.Now(),
+	})
+
+	// Create a sender account for the original transaction
+	senderAccount := &model.Account{
+		ID:        uuid.New().String(),
+		Currency:  "USD",
+		Type:      "personal",
+		CreatedBy: sender.ID,
+	}
+	acctRepo.Create(ctx, senderAccount)
+
+	// Create the original expense transaction (as the sender would)
+	txID := uuid.New().String()
+	txTime := time.Now().UTC()
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO transactions (id, time, account_id, created_by, encrypted_payload, version, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, 1, $6, $6)
+	`, txID, txTime, senderAccount.ID, sender.ID, "sender-encrypted-payload", txTime)
+	if err != nil {
+		t.Fatalf("Insert original transaction failed: %v", err)
+	}
+
+	// Encrypt the transaction payload with the server's public key
+	// This simulates what the frontend does — it encodes the payload as JSON,
+	// encrypts with server's pub key, and stores as encrypted_data on the invitation.
+	payload := map[string]interface{}{
+		"amount":       50.00,
+		"notes":        "Dinner payment",
+		"counterparty": sender.Email,
+	}
+	payloadJSON, _ := json.Marshal(payload)
+	serverEncryptedPayload, err := crypto.EncryptWithPublicKey(payloadJSON, pubKey)
+	if err != nil {
+		t.Fatalf("EncryptWithPublicKey failed: %v", err)
+	}
+
+	// Create the invitation (simulating what CreateTransactionInvitation does)
+	now := time.Now().UTC()
+	invRepo := &repository.InvitationRepository{}
+	inv := &model.Invitation{
+		ID:            uuid.New().String(),
+		EntityType:    "transaction",
+		EntityID:      txID,
+		InvitedBy:     sender.ID,
+		InvitedEmail:  receiver.Email,
+		InvitedUserID: &receiver.ID,
+		EncryptedData: &serverEncryptedPayload,
+		Status:        "pending",
+		CreatedAt:     now,
+		ExpiresAt:     now.Add(30 * 24 * time.Hour),
+	}
+	if err := invRepo.Create(ctx, inv); err != nil {
+		t.Fatalf("Create invitation failed: %v", err)
+	}
+
+	// Encrypt the receiver's chosen account ID with the server's public key
+	encryptedAccount, err := crypto.EncryptWithPublicKey([]byte(receiverAccount.ID), pubKey)
+	if err != nil {
+		t.Fatalf("EncryptWithPublicKey for account failed: %v", err)
+	}
+
+	// Accept the transaction invitation
+	err = Invitations.AcceptTransactionInvitation(ctx, inv.ID, receiver.ID, encryptedAccount)
+	if err != nil {
+		t.Fatalf("AcceptTransactionInvitation failed: %v", err)
+	}
+
+	// Verify invitation status changed
+	updatedInv, err := invRepo.FindByID(ctx, inv.ID)
+	if err != nil {
+		t.Fatalf("FindByID failed: %v", err)
+	}
+	if updatedInv.Status != "accepted" {
+		t.Fatalf("Expected invitation status=accepted, got %s", updatedInv.Status)
+	}
+
+	// Verify income transaction was created in receiver's account
+	txRepo := &repository.TransactionRepository{}
+	allTXs, err := txRepo.ListByAccountID(ctx, receiverAccount.ID, 100, 0)
+	if err != nil {
+		t.Fatalf("ListByAccountID failed: %v", err)
+	}
+	if len(allTXs) != 1 {
+		t.Fatalf("Expected 1 income transaction, got %d", len(allTXs))
+	}
+	incomeTx := allTXs[0]
+	if incomeTx.CreatedBy != receiver.ID {
+		t.Fatalf("Expected created_by=%s, got %s", receiver.ID, incomeTx.CreatedBy)
+	}
+	if incomeTx.AccountID != receiverAccount.ID {
+		t.Fatalf("Expected account_id=%s, got %s", receiverAccount.ID, incomeTx.AccountID)
+	}
+
+	// Verify the income payload was encrypted with ECIES prefix
+	if !strings.HasPrefix(incomeTx.EncryptedPayload, crypto.ECIESPrefixV1) {
+		t.Fatal("Expected encrypted payload to start with ECIES prefix")
+	}
+
+	// Verify balance was updated on the receiver's account
+	var balance int64
+	err = database.Pool.QueryRow(ctx, `SELECT balance FROM accounts WHERE id = $1`, receiverAccount.ID).Scan(&balance)
+	if err != nil {
+		t.Fatalf("Query balance failed: %v", err)
+	}
+	if balance != 5000 { // 50.00 * 100 = 5000 cents
+		t.Fatalf("Expected balance=5000, got %d", balance)
+	}
+
+	// Verify notification sent to sender
+	notifRepo := &repository.NotificationRepository{}
+	senderNotifs, err := notifRepo.ListByUserID(ctx, sender.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("ListByUserID failed: %v", err)
+	}
+	found := false
+	for _, n := range senderNotifs {
+		if n.Type == "transfer_completed" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("Expected transfer_completed notification for sender")
+	}
+}
+
+func TestInvitationServiceAcceptTransactionInvitation_NotPending(t *testing.T) {
+	cleanup := setupTransactionInvitationDB(t)
+	defer cleanup()
+
+	privKey, pubKey, err := crypto.GenerateServerKeypair()
+	if err != nil {
+		t.Fatalf("GenerateServerKeypair failed: %v", err)
+	}
+	InitInvitationServiceWithKeys(privKey, pubKey)
+
+	ctx := context.Background()
+
+	sender, _, _ := createTestUser(t, "txn-not-pending-sender@test.com")
+	receiver, _, _ := createTestUser(t, "txn-not-pending-rec@test.com")
+
+	now := time.Now().UTC()
+	invRepo := &repository.InvitationRepository{}
+	inv := &model.Invitation{
+		ID:            uuid.New().String(),
+		EntityType:    "transaction",
+		EntityID:      uuid.New().String(),
+		InvitedBy:     sender.ID,
+		InvitedEmail:  receiver.Email,
+		InvitedUserID: &receiver.ID,
+		EncryptedData: strPtr("data"),
+		Status:        "accepted", // Already accepted
+		CreatedAt:     now,
+		ExpiresAt:     now.Add(30 * 24 * time.Hour),
+	}
+	if err := invRepo.Create(ctx, inv); err != nil {
+		t.Fatalf("Create invitation failed: %v", err)
+	}
+
+	err = Invitations.AcceptTransactionInvitation(ctx, inv.ID, receiver.ID, "encrypted-account")
+	if err == nil {
+		t.Fatal("Expected error when accepting non-pending invitation")
+	}
+}
+
+func TestInvitationServiceAcceptTransactionInvitation_NotForUser(t *testing.T) {
+	cleanup := setupTransactionInvitationDB(t)
+	defer cleanup()
+
+	privKey, pubKey, err := crypto.GenerateServerKeypair()
+	if err != nil {
+		t.Fatalf("GenerateServerKeypair failed: %v", err)
+	}
+	InitInvitationServiceWithKeys(privKey, pubKey)
+
+	ctx := context.Background()
+
+	sender, _, _ := createTestUser(t, "txn-not-for-sender@test.com")
+	recipient, _, _ := createTestUser(t, "txn-not-for-rec@test.com")
+	other, _, _ := createTestUser(t, "txn-not-for-other@test.com")
+
+	now := time.Now().UTC()
+	invRepo := &repository.InvitationRepository{}
+	inv := &model.Invitation{
+		ID:            uuid.New().String(),
+		EntityType:    "transaction",
+		EntityID:      uuid.New().String(),
+		InvitedBy:     sender.ID,
+		InvitedEmail:  recipient.Email,
+		InvitedUserID: &recipient.ID,
+		EncryptedData: strPtr("data"),
+		Status:        "pending",
+		CreatedAt:     now,
+		ExpiresAt:     now.Add(30 * 24 * time.Hour),
+	}
+	if err := invRepo.Create(ctx, inv); err != nil {
+		t.Fatalf("Create invitation failed: %v", err)
+	}
+
+	err = Invitations.AcceptTransactionInvitation(ctx, inv.ID, other.ID, "encrypted-account")
+	if err == nil {
+		t.Fatal("Expected error when wrong user accepts invitation")
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 
 	"budgeteer-backend/internal/config"
 	"budgeteer-backend/internal/crypto"
+	"budgeteer-backend/internal/database"
 	"budgeteer-backend/internal/logger"
 	"budgeteer-backend/internal/model"
 	"budgeteer-backend/internal/repository"
@@ -204,6 +205,228 @@ func (s *InvitationService) AcceptRuleInvitation(ctx context.Context, invitation
 		"Rule Accepted",
 		fmt.Sprintf("Your rule invitation has been accepted."),
 		inv.ID, inv.EntityID, "")
+
+	return nil
+}
+
+// CreateTransactionInvitation creates a pending invitation for a
+// "send to user" one-time transaction. The server_encrypted_payload
+// is the transaction payload encrypted with the server's X25519
+// public key, so the server can re-encrypt it for the receiver later.
+func (s *InvitationService) CreateTransactionInvitation(ctx context.Context, transactionID, inviterID, targetEmail, serverEncryptedPayload string) error {
+	now := time.Now().UTC()
+
+	inv := &model.Invitation{
+		ID:            uuid.New().String(),
+		EntityType:    "transaction",
+		EntityID:      transactionID,
+		InvitedBy:     inviterID,
+		InvitedEmail:  targetEmail,
+		EncryptedData: &serverEncryptedPayload,
+		Status:        "pending",
+		CreatedAt:     now,
+		ExpiresAt:     now.Add(30 * 24 * time.Hour),
+	}
+
+	// Look up target user by email
+	targetUser, err := s.UserRepo.FindByEmail(ctx, targetEmail)
+	if err != nil {
+		return fmt.Errorf("lookup target user: %w", err)
+	}
+
+	if targetUser != nil {
+		inv.InvitedUserID = &targetUser.ID
+
+		// Get inviter's email for the notification message
+		inviter, err := s.UserRepo.FindByID(ctx, inviterID)
+		inviterEmail := "Someone"
+		if err == nil && inviter != nil {
+			inviterEmail = inviter.Email
+		}
+
+		// Create notification for target user
+		data, _ := json.Marshal(model.NotificationData{
+			InvitationID: inv.ID,
+			TransactionID: transactionID,
+			InvitedBy:    inviterID,
+		})
+		dataStr := string(data)
+		if err := s.NotificationRepo.CreateNotification(ctx, targetUser.ID,
+			"transaction_invitation",
+			"Money Transfer",
+			fmt.Sprintf("%s sent you money. Accept the transfer to receive it in your account.", inviterEmail),
+			&dataStr); err != nil {
+			logger.Error("Failed to create notification: %v", err)
+		}
+
+		// Send email
+		s.sendInvitationEmail(ctx, targetEmail, "transaction", transactionID, targetUser.IsVerified)
+	} else {
+		// User doesn't exist — send subscription invitation
+		s.sendSubscriptionEmail(ctx, targetEmail, "transaction", transactionID)
+	}
+
+	if err := s.InvitationRepo.Create(ctx, inv); err != nil {
+		return fmt.Errorf("create invitation: %w", err)
+	}
+
+	return nil
+}
+
+// AcceptTransactionInvitation handles accepting a "send to user"
+// transaction invitation. The receiver provides their chosen account_id
+// encrypted with the server's public key. The server decrypts the
+// transaction payload from the invitation, creates an income transaction
+// in the receiver's account, and updates both balances.
+func (s *InvitationService) AcceptTransactionInvitation(ctx context.Context, invitationID, userID, encryptedAccount string) error {
+	if s.serverPrivateKey == nil {
+		return fmt.Errorf("server encryption key not configured")
+	}
+
+	inv, err := s.InvitationRepo.FindByID(ctx, invitationID)
+	if err != nil {
+		return fmt.Errorf("find invitation: %w", err)
+	}
+	if inv == nil {
+		return fmt.Errorf("invitation not found")
+	}
+	if inv.Status != "pending" {
+		return fmt.Errorf("invitation is not pending")
+	}
+	if !s.invitationBelongsToUser(ctx, inv, userID) {
+		return fmt.Errorf("this invitation is not for you")
+	}
+
+	if inv.EncryptedData == nil {
+		return fmt.Errorf("invitation has no encrypted transaction data")
+	}
+
+	// Decrypt the receiver's chosen account
+	decryptedAccount, err := crypto.DecryptWithPrivateKey(encryptedAccount, s.serverPrivateKey)
+	if err != nil {
+		return fmt.Errorf("decrypt chosen account: %w", err)
+	}
+	// Try JSON format {"account_id":"..."} first, then raw string
+	var acctData struct {
+		AccountID string `json:"account_id"`
+	}
+	targetAccountID := ""
+	if err := json.Unmarshal(decryptedAccount, &acctData); err == nil && acctData.AccountID != "" {
+		targetAccountID = acctData.AccountID
+	} else {
+		targetAccountID = string(decryptedAccount)
+	}
+	if targetAccountID == "" {
+		return fmt.Errorf("decrypted account ID is empty")
+	}
+
+	// Decrypt the stored transaction payload (server_encrypted_payload)
+	payloadJSON, err := crypto.DecryptWithPrivateKey(*inv.EncryptedData, s.serverPrivateKey)
+	if err != nil {
+		return fmt.Errorf("decrypt transaction payload: %w", err)
+	}
+
+	// Parse the payload to get amount and details
+	var txPayload struct {
+		Amount     float64 `json:"amount"`
+		Category   string  `json:"category,omitempty"`
+		Notes      string  `json:"notes,omitempty"`
+		Commission float64 `json:"commission,omitempty"`
+	}
+	if err := json.Unmarshal(payloadJSON, &txPayload); err != nil {
+		return fmt.Errorf("parse transaction payload: %w", err)
+	}
+
+	amount := txPayload.Amount
+	if amount < 0 {
+		amount = -amount // Ensure positive amount for the income side
+	}
+
+	// Look up the sender's info
+	senderUser, err := s.UserRepo.FindByID(ctx, inv.InvitedBy)
+	if err != nil {
+		return fmt.Errorf("lookup sender: %w", err)
+	}
+	if senderUser == nil {
+		return fmt.Errorf("sender not found")
+	}
+
+	// Get receiver's public key
+	receiverPubKey, err := s.UserRepo.PublicKeyByEmail(ctx, inv.InvitedEmail)
+	if err != nil || receiverPubKey == "" {
+		return fmt.Errorf("get receiver public key: %w", err)
+	}
+	receiverPubKeyBytes, err := base64.StdEncoding.DecodeString(receiverPubKey)
+	if err != nil {
+		return fmt.Errorf("decode receiver public key: %w", err)
+	}
+
+	// Build income payload for the receiver (no category — they categorize it)
+	incomePayload := map[string]interface{}{
+		"amount":       amount,
+		"notes":        txPayload.Notes,
+		"counterparty": senderUser.Email,
+		"received_from": inv.InvitedBy,
+	}
+	incomeJSON, _ := json.Marshal(incomePayload)
+
+	encryptedIncome, err := crypto.EncryptWithPublicKey(incomeJSON, receiverPubKeyBytes)
+	if err != nil {
+		return fmt.Errorf("encrypt income transaction: %w", err)
+	}
+
+	// Look up the original expense transaction to get the time
+	originalTx, err := (&repository.TransactionRepository{}).FindByID(ctx, inv.EntityID)
+	if err != nil {
+		return fmt.Errorf("find original transaction: %w", err)
+	}
+	txTime := time.Now().UTC()
+	if originalTx != nil {
+		txTime = originalTx.Time
+	}
+
+	now := time.Now().UTC()
+	incomeTx := &model.Transaction{
+		ID:               uuid.New().String(),
+		Time:             txTime,
+		AccountID:        targetAccountID,
+		CreatedBy:        userID,
+		EncryptedPayload: encryptedIncome,
+		Version:          1,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	// Create the income transaction and update balances atomically
+	if err := database.WithTx(ctx, func(txCtx context.Context) error {
+		if err := (&repository.TransactionRepository{}).Create(txCtx, incomeTx); err != nil {
+			return fmt.Errorf("create income transaction: %w", err)
+		}
+
+		// Update receiver's account balance with the amount received
+		amountCents := int64(amount * 100)
+
+		if err := (&repository.RuleRepository{}).UpdateAccountBalances(txCtx, []repository.BalanceUpdate{
+			{AccountID: targetAccountID, Change: amountCents},
+		}); err != nil {
+			return fmt.Errorf("update balances: %w", err)
+		}
+
+		return nil
+	}); err != nil {
+		return fmt.Errorf("database transaction: %w", err)
+	}
+
+	// Mark invitation as accepted
+	if err := s.InvitationRepo.UpdateStatus(ctx, invitationID, "accepted"); err != nil {
+		return fmt.Errorf("update invitation status: %w", err)
+	}
+
+	// Notify the sender
+	s.notifyInviter(ctx, inv.InvitedBy, "transfer_completed",
+		"Transfer Completed",
+		fmt.Sprintf("Your transfer of %.2f has been accepted by the recipient.", amount),
+		inv.ID, inv.EntityID, targetAccountID)
 
 	return nil
 }
