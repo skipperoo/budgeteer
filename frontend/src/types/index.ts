@@ -33,6 +33,7 @@ export interface AccountUser {
   user_id: string;
   encrypted_account_key: string;
   role: string;
+  status: string;
   joined_at: string;
 }
 
