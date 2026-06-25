@@ -89,6 +89,11 @@ export default function RegisterPage() {
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              <strong>Important:</strong> Your password cannot be recovered. If you
+              lose your password, all your encrypted data will be permanently lost.
+              Store your password in a safe place.
+            </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Creating account..." : "Create account"}
             </Button>

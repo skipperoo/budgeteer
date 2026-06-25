@@ -85,3 +85,6 @@ This is the backlog of Budgeteer
 - [x] Add the default currency, locale and theme switcher (light/dark) to user preferences sent to the db.
 - [x] Merge the theme switcher to the accent color card
 - [x] Change the locale/language card to locale only (add a line in the card as the example with multiple date formats, numbers, and so on). Also, the locale is not enforced in all the ui, fix that.
+- [x] The change password flow is broken: the backend never updates `password_hash` so the new password doesn't work after a password change. The flow must re-encrypt the private key with the new password AND update the bcrypt hash on the server. The user should stay logged in after the change (get a fresh JWT). See `backend/src/internal/handler/auth.go:322` and `backend/src/internal/service/auth_service.go:324`.
+- [x] The OTP prompt screen (LoginPage) lacks a "Request new code" link with a 1-minute cooldown. The backend needs a `POST /api/v1/auth/resend-otp` endpoint with Redis-based rate limiting.
+- [ ] Add password recovery flow: forgot password link on login page, token via email, reset password page.

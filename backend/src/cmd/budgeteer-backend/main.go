@@ -65,6 +65,7 @@ func main() {
 		AddHandler("POST /api/v1/auth/login",             handler.Login).
 		AddHandler("POST /api/v1/auth/login-verify-otp", handler.LoginVerifyOTP).
 		AddHandler("POST /api/v1/auth/login-with-device", handler.LoginWithDevice).
+		AddHandler("POST /api/v1/auth/resend-otp",        handler.ResendOTP).
 		AddHandler("GET  /api/v1/health",                 handler.HealthCheck).
 		AddHandler("GET  /api/v1/rules/public-key",       handler.RulePublicKey)
 
