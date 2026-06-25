@@ -15,6 +15,8 @@ import (
 	"budgeteer-backend/internal/repository"
 	"budgeteer-backend/internal/service"
 	"budgeteer-backend/internal/testhelpers"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 func handlerSetupTest(t *testing.T) func() {
@@ -308,6 +310,7 @@ func TestChangePasswordHandler(t *testing.T) {
 
 	body := map[string]string{
 		"password":                 password,
+		"new_password":             "NewP@ssword456",
 		"new_encrypted_private_key": "re-encrypted-key-value",
 	}
 
@@ -326,6 +329,12 @@ func TestChangePasswordHandler(t *testing.T) {
 	if resp["message"] != "password changed successfully" {
 		t.Fatalf("Expected success message, got %q", resp["message"])
 	}
+	if resp["token"] == "" {
+		t.Fatal("Expected a new JWT token in response")
+	}
+	if resp["encrypted_private_key"] != "re-encrypted-key-value" {
+		t.Fatalf("Expected encrypted_private_key in response")
+	}
 
 	// Verify the key was actually updated in the database
 	ctx := context.Background()
@@ -337,6 +346,13 @@ func TestChangePasswordHandler(t *testing.T) {
 	if storedKey != "re-encrypted-key-value" {
 		t.Fatalf("Expected encrypted_private_key %q, got %q", "re-encrypted-key-value", storedKey)
 	}
+
+	// Verify password hash was updated — old password should fail, new should work
+	var storedHash string
+	database.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, user.ID).Scan(&storedHash)
+	if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte("NewP@ssword456")); err != nil {
+		t.Fatal("New password hash should match new_password")
+	}
 }
 
 func TestChangePasswordHandler_WrongPassword(t *testing.T) {
@@ -347,6 +363,7 @@ func TestChangePasswordHandler_WrongPassword(t *testing.T) {
 
 	body := map[string]string{
 		"password":                 "wrong-password",
+		"new_password":             "NewP@ssword456",
 		"new_encrypted_private_key": "some-key",
 	}
 
@@ -373,6 +390,7 @@ func TestChangePasswordHandler_Unauthorized(t *testing.T) {
 
 	body := map[string]string{
 		"password":                 "some-password",
+		"new_password":             "NewP@ssword456",
 		"new_encrypted_private_key": "some-key",
 	}
 

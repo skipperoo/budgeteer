@@ -64,6 +64,12 @@ func (r *UserRepository) UpdateEncryptedPrivateKey(ctx context.Context, userID, 
 	return err
 }
 
+func (r *UserRepository) UpdatePasswordAndKey(ctx context.Context, userID, passwordHash, encryptedKey string) error {
+	query := `UPDATE users SET password_hash = $1, encrypted_private_key = $2, updated_at = $3 WHERE id = $4`
+	_, err := database.Pool.Exec(ctx, query, passwordHash, encryptedKey, time.Now(), userID)
+	return err
+}
+
 func (r *UserRepository) PublicKeyByEmail(ctx context.Context, email string) (string, error) {
 	query := `SELECT public_key FROM users WHERE email = $1`
 	var publicKey string

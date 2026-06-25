@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"budgeteer-backend/internal/database"
 	"budgeteer-backend/internal/logger"
 	"budgeteer-backend/internal/middleware"
 	"budgeteer-backend/internal/model"
@@ -330,6 +331,7 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Password               string `json:"password"`
+		NewPassword            string `json:"new_password"`
 		NewEncryptedPrivateKey string `json:"new_encrypted_private_key"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -339,6 +341,13 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
+
+	if req.NewPassword == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "new_password is required"})
+		return
+	}
 
 	user, err := service.Auth.UserRepo.FindByID(r.Context(), claims.UserID)
 	if err != nil || user == nil {
@@ -355,13 +364,90 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := service.Auth.ChangePassword(r.Context(), claims.UserID, req.NewEncryptedPrivateKey); err != nil {
+	newPasswordHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(model.Error{Error: "failed to update key"})
+		json.NewEncoder(w).Encode(model.Error{Error: "failed to hash new password"})
+		return
+	}
+
+	if err := service.Auth.ChangePassword(r.Context(), claims.UserID, string(newPasswordHash), req.NewEncryptedPrivateKey); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(model.Error{Error: "failed to update password"})
+		return
+	}
+
+	// Issue a fresh JWT so the user stays logged in
+	newToken, _, err := service.GenerateJWT(user.ID, user.Email)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(model.Error{Error: "password updated but failed to generate token"})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "password changed successfully"})
+	json.NewEncoder(w).Encode(map[string]string{
+		"message":                "password changed successfully",
+		"token":                  newToken,
+		"encrypted_private_key":  req.NewEncryptedPrivateKey,
+	})
+}
+
+// ResendOTP generates a new OTP for an existing login session.
+// Rate-limited to 1 request per minute per session (Redis-based).
+// POST /api/v1/auth/resend-otp
+func ResendOTP(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body"})
+		return
+	}
+	defer r.Body.Close()
+
+	if req.SessionID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "session_id is required"})
+		return
+	}
+
+	// Redis rate limit: 1 request per minute per session
+	rateLimitKey := "otp_resend:" + req.SessionID
+	exists, err := database.Redis.Exists(r.Context(), rateLimitKey).Result()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(model.Error{Error: "rate limit check failed"})
+		return
+	}
+	if exists > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		json.NewEncoder(w).Encode(model.Error{Error: "please wait before requesting a new code"})
+		return
+	}
+
+	if err := service.Auth.ResendLoginOTP(r.Context(), req.SessionID); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		code := http.StatusBadRequest
+		if err.Error() == "OTP has expired, please log in again" {
+			code = http.StatusGone
+		}
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(model.Error{Error: err.Error()})
+		return
+	}
+
+	// Set rate limit key with 60s TTL
+	database.Redis.Set(r.Context(), rateLimitKey, "1", time.Minute)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "new code sent"})
 }

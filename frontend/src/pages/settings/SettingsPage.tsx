@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, setToken } from "@/lib/api";
 import { API_BASE, ENDPOINTS } from "@/lib/constants";
 import { useAuthStore } from "@/stores/auth-store";
 import { decryptWithPassword, encryptWithPassword } from "@/lib/crypto";
@@ -178,7 +178,7 @@ export default function SettingsPage() {
     };
   }, [defaultCommission, saveCommission]);
 
-  // --- Password change (P0.2 fix) ---
+  // --- Password change ---
   // Per AGENTS.md: re-encrypt the EXISTING private key with the new password,
   // rather than generating a new keypair (which would destroy access to past data).
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -209,17 +209,28 @@ export default function SettingsPage() {
         newPassword
       );
 
-      // 3. Send the re-encrypted key to the backend
-      await apiFetch(ENDPOINTS.changePassword, {
+      // 3. Send the re-encrypted key and new password to the backend
+      const resp = await apiFetch<{ message: string; token: string; encrypted_private_key: string }>(ENDPOINTS.changePassword, {
         method: "PUT",
         body: JSON.stringify({
           password: currentPassword,
+          new_password: newPassword,
           new_encrypted_private_key: newEncryptedKey,
         }),
       });
 
-      setPwSuccess("Password changed successfully. Please log in again.");
-      setTimeout(() => logout(), 2000);
+      // 4. Update auth state with new token and key — user stays logged in
+      setToken(resp.token);
+      setPwSuccess("Password changed successfully.");
+
+      // Refresh user data with new token (apiFetch picks up the new token automatically)
+      try {
+        const userData = await apiFetch<any>(ENDPOINTS.me);
+        useAuthStore.getState().setAuth(resp.token, userData, resp.encrypted_private_key);
+      } catch {
+        // If refreshing fails, force re-login
+        logout();
+      }
     } catch (err: any) {
       setPwError(err.message);
     }
@@ -302,6 +313,10 @@ export default function SettingsPage() {
             </div>
             {pwError && <p className="text-sm text-destructive">{pwError}</p>}
             {pwSuccess && <p className="text-sm text-income">{pwSuccess}</p>}
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              <strong>Warning:</strong> Your password cannot be recovered. If you
+              lose your new password, all your encrypted data will be permanently lost.
+            </div>
             <Button type="submit">Change Password</Button>
           </form>
 

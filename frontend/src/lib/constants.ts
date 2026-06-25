@@ -46,6 +46,7 @@ export const ENDPOINTS = {
   budget: (id: string) => `${API_BASE}/budgets/${id}`,
   budgetNotify: (id: string) => `${API_BASE}/budgets/${id}/notify`,
   loginWithDevice: `${API_BASE}/auth/login-with-device`,
+  resendOTP: `${API_BASE}/auth/resend-otp`,
   devices: `${API_BASE}/auth/devices`,
   device: (id: string) => `${API_BASE}/auth/devices/${id}`,
   userDump: `${API_BASE}/user/dump`,

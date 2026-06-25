@@ -321,13 +321,70 @@ func (s *AuthService) IsBlocked(ctx context.Context, tokenString string) (bool, 
 	return val > 0, nil
 }
 
-func (s *AuthService) ChangePassword(ctx context.Context, userID, newEncryptedKey string) error {
+func (s *AuthService) ChangePassword(ctx context.Context, userID, newPasswordHash, newEncryptedKey string) error {
 	// When a password changes, all stored device secrets should be invalidated
 	// because they are bound to the old password via bcrypt(device_token + fingerprint + password).
 	if err := s.AccessSecretRepo.DeleteAllByUser(ctx, userID); err != nil {
 		logger.Error("Failed to clear access secrets after password change for user %s: %v", userID, err)
 	}
-	return s.UserRepo.UpdateEncryptedPrivateKey(ctx, userID, newEncryptedKey)
+	return s.UserRepo.UpdatePasswordAndKey(ctx, userID, newPasswordHash, newEncryptedKey)
+}
+
+// ResendLoginOTP generates a new OTP for an existing login session and
+// queues a new email. It returns an error if the session is expired or invalid.
+// Rate limiting (1 request per minute per session) is handled by the caller.
+func (s *AuthService) ResendLoginOTP(ctx context.Context, sessionID string) error {
+	key := "login_otp:" + sessionID
+	data, err := database.Redis.Get(ctx, key).Bytes()
+	if err != nil {
+		return fmt.Errorf("invalid or expired login session")
+	}
+
+	var session loginOTPSession
+	if err := json.Unmarshal(data, &session); err != nil {
+		return fmt.Errorf("failed to parse login session: %w", err)
+	}
+
+	// Check expiry
+	if time.Now().Unix() > session.ExpiresAt {
+		database.Redis.Del(ctx, key)
+		return fmt.Errorf("OTP has expired, please log in again")
+	}
+
+	// Generate new OTP
+	otpCode := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	otpHash, err := HashPassword(otpCode)
+	if err != nil {
+		return fmt.Errorf("failed to hash OTP: %w", err)
+	}
+
+	// Update session with new OTP
+	session.OTPCodeHash = otpHash
+	updatedData, err := json.Marshal(session)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated session: %w", err)
+	}
+
+	ttl := time.Until(time.Unix(session.ExpiresAt, 0))
+	if err := database.Redis.Set(ctx, key, updatedData, ttl).Err(); err != nil {
+		return fmt.Errorf("failed to update login session: %w", err)
+	}
+
+	// Queue new OTP email
+	emailMsg := &model.EmailOutbox{
+		ID:           uuid.New().String(),
+		ToAddress:    session.Email,
+		Subject:      "Your new Budgeteer login code",
+		Body:         fmt.Sprintf("Your new login verification code is: %s\n\nThis code expires in %d minutes.", otpCode, int(ttl.Minutes())),
+		Status:       "pending",
+		ScheduledFor: time.Now(),
+		CreatedAt:    time.Now(),
+	}
+	if err := s.EmailRepo.Create(ctx, emailMsg); err != nil {
+		return fmt.Errorf("failed to queue login email: %w", err)
+	}
+
+	return nil
 }
 
 // ---------------------------------------------------------------------------

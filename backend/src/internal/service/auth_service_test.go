@@ -475,7 +475,8 @@ func TestChangePassword_Success(t *testing.T) {
 
 	// Change the encrypted private key
 	newKey := "new-encrypted-key-value"
-	err := Auth.ChangePassword(context.Background(), user.ID, newKey)
+	newHash, _ := HashPassword("NewP@ss123")
+	err := Auth.ChangePassword(context.Background(), user.ID, newHash, newKey)
 	if err != nil {
 		t.Fatalf("ChangePassword failed: %v", err)
 	}
@@ -487,6 +488,11 @@ func TestChangePassword_Success(t *testing.T) {
 	}
 	if found.EncryptedPrivateKey != newKey {
 		t.Fatalf("Expected encrypted_private_key %q, got %q", newKey, found.EncryptedPrivateKey)
+	}
+
+	// Verify the password hash was updated
+	if !CheckPasswordHash("NewP@ss123", found.PasswordHash) {
+		t.Fatal("New password should work")
 	}
 }
 
@@ -533,7 +539,8 @@ func TestChangePassword_ClearsAccessSecrets(t *testing.T) {
 	}
 
 	// Change password
-	err = Auth.ChangePassword(context.Background(), user.ID, "new-encrypted-key")
+	newHash, _ := HashPassword("NewP@ss456")
+	err = Auth.ChangePassword(context.Background(), user.ID, newHash, "new-encrypted-key")
 	if err != nil {
 		t.Fatalf("ChangePassword failed: %v", err)
 	}
