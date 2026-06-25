@@ -396,12 +396,14 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ResendOTP generates a new OTP for an existing login session.
-// Rate-limited to 1 request per minute per session (Redis-based).
+// ResendOTP generates a new OTP for an existing login session or pending
+// registration. Accepts either session_id (login) or email (registration).
+// Rate-limited to 1 request per minute per session/email (Redis-based).
 // POST /api/v1/auth/resend-otp
 func ResendOTP(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SessionID string `json:"session_id"`
+		Email     string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -411,15 +413,22 @@ func ResendOTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	if req.SessionID == "" {
+	if req.SessionID == "" && req.Email == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(model.Error{Error: "session_id is required"})
+		json.NewEncoder(w).Encode(model.Error{Error: "either session_id or email is required"})
 		return
 	}
 
-	// Redis rate limit: 1 request per minute per session
-	rateLimitKey := "otp_resend:" + req.SessionID
+	// Build rate limit key based on what was provided
+	var rateLimitKey string
+	if req.SessionID != "" {
+		rateLimitKey = "otp_resend:" + req.SessionID
+	} else {
+		rateLimitKey = "otp_resend:reg:" + req.Email
+	}
+
+	// Redis rate limit: 1 request per minute
 	exists, err := database.Redis.Exists(r.Context(), rateLimitKey).Result()
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -434,14 +443,22 @@ func ResendOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := service.Auth.ResendLoginOTP(r.Context(), req.SessionID); err != nil {
+	var svcErr error
+	if req.SessionID != "" {
+		svcErr = service.Auth.ResendLoginOTP(r.Context(), req.SessionID)
+	} else {
+		svcErr = service.Auth.ResendRegistrationOTP(r.Context(), req.Email)
+	}
+
+	if svcErr != nil {
 		w.Header().Set("Content-Type", "application/json")
 		code := http.StatusBadRequest
-		if err.Error() == "OTP has expired, please log in again" {
+		errMsg := svcErr.Error()
+		if errMsg == "OTP has expired, please log in again" || errMsg == "OTP has expired, please register again" {
 			code = http.StatusGone
 		}
 		w.WriteHeader(code)
-		json.NewEncoder(w).Encode(model.Error{Error: err.Error()})
+		json.NewEncoder(w).Encode(model.Error{Error: errMsg})
 		return
 	}
 
