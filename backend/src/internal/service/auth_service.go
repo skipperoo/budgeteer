@@ -387,6 +387,61 @@ func (s *AuthService) ResendLoginOTP(ctx context.Context, sessionID string) erro
 	return nil
 }
 
+// ResendRegistrationOTP generates a new OTP for an existing pending registration.
+func (s *AuthService) ResendRegistrationOTP(ctx context.Context, email string) error {
+	pendingKey := "pending_reg:" + email
+	data, err := database.Redis.Get(ctx, pendingKey).Bytes()
+	if err != nil {
+		return fmt.Errorf("no pending registration found for this email")
+	}
+
+	var pending pendingRegistration
+	if err := json.Unmarshal(data, &pending); err != nil {
+		return fmt.Errorf("failed to parse pending registration: %w", err)
+	}
+
+	// Check expiry
+	if time.Now().Unix() > pending.OTPExpiresAt {
+		database.Redis.Del(ctx, pendingKey)
+		return fmt.Errorf("OTP has expired, please register again")
+	}
+
+	// Generate new OTP
+	otpCode := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	otpHash, err := HashPassword(otpCode)
+	if err != nil {
+		return fmt.Errorf("failed to hash OTP: %w", err)
+	}
+
+	// Update pending registration with new OTP
+	pending.OTPCodeHash = otpHash
+	updatedData, err := json.Marshal(pending)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated registration: %w", err)
+	}
+
+	ttl := time.Until(time.Unix(pending.OTPExpiresAt, 0))
+	if err := database.Redis.Set(ctx, pendingKey, updatedData, ttl).Err(); err != nil {
+		return fmt.Errorf("failed to update pending registration: %w", err)
+	}
+
+	// Queue new OTP email
+	emailMsg := &model.EmailOutbox{
+		ID:           uuid.New().String(),
+		ToAddress:    email,
+		Subject:      "Verify your Budgeteer account",
+		Body:         fmt.Sprintf("Your new verification code is: %s\n\nThis code expires in %d minutes.", otpCode, int(ttl.Minutes())),
+		Status:       "pending",
+		ScheduledFor: time.Now(),
+		CreatedAt:    time.Now(),
+	}
+	if err := s.EmailRepo.Create(ctx, emailMsg); err != nil {
+		return fmt.Errorf("failed to queue verification email: %w", err)
+	}
+
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // Device-based login (remember device — skip OTP)
 // ---------------------------------------------------------------------------
