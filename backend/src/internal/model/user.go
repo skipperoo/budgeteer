@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // UserPreferences stores per-user UI/UX settings persisted to the DB.
 type UserPreferences struct {
@@ -9,6 +12,13 @@ type UserPreferences struct {
 	DefaultCurrency   string  `json:"default_currency,omitempty"`
 	Locale            string  `json:"locale,omitempty"`
 	Theme             string  `json:"theme,omitempty"` // "light" or "dark"
+}
+
+// FromJSON unmarshals a JSON byte slice into the preferences.
+func (p *UserPreferences) FromJSON(data []byte) {
+	if len(data) > 0 {
+		_ = json.Unmarshal(data, p)
+	}
 }
 
 type User struct {

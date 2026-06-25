@@ -3,6 +3,7 @@ secrets/
 .env
 # Local data volumes
 pg_data/
+pgadmin_data/
 redis_data/
 # Node
 node_modules/

@@ -122,7 +122,11 @@ func main() {
 		// Invitations
 		AddHandler("GET    /v1/invitations",              handler.ListPendingInvitations).
 		AddHandler("POST   /v1/invitations/{id}/accept",  handler.AcceptInvitation).
-		AddHandler("POST   /v1/invitations/{id}/decline", handler.DeclineInvitation)
+		AddHandler("POST   /v1/invitations/{id}/decline", handler.DeclineInvitation).
+		// User data management (dump, clear for restore, delete)
+		AddHandler("GET    /v1/user/dump",   handler.DumpUserData).
+		AddHandler("POST   /v1/user/clear",  handler.ClearUserData).
+		AddHandler("DELETE /v1/user",        handler.DeleteUserAccount)
 
 	router.AddSubroute("/api/", protected.Finalize())
 	final := router.Finalize()

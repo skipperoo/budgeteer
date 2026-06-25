@@ -48,4 +48,7 @@ export const ENDPOINTS = {
   loginWithDevice: `${API_BASE}/auth/login-with-device`,
   devices: `${API_BASE}/auth/devices`,
   device: (id: string) => `${API_BASE}/auth/devices/${id}`,
+  userDump: `${API_BASE}/user/dump`,
+  userClear: `${API_BASE}/user/clear`,
+  userDelete: `${API_BASE}/user`,
 } as const;
