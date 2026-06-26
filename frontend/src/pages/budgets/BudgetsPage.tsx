@@ -374,7 +374,7 @@ export default function BudgetsPage() {
                   id="budget-category"
                   value={formCategory}
                   onChange={(e) => handleSelectCategory(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                 >
                   <option value="">All Categories</option>
                   {getCategories("expense").map((cat) => (
@@ -423,7 +423,7 @@ export default function BudgetsPage() {
               id="budget-account"
               value={formAccountId}
               onChange={(e) => setFormAccountId(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
             >
               <option value="">All Accounts</option>
               {accounts.map((a) => (
@@ -440,7 +440,7 @@ export default function BudgetsPage() {
               id="budget-period"
               value={formPeriod}
               onChange={(e) => setFormPeriod(e.target.value as "monthly" | "yearly")}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
             >
               <option value="monthly">Monthly</option>
               <option value="yearly">Yearly</option>

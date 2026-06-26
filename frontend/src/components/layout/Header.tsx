@@ -8,7 +8,7 @@ export function Header() {
   const unreadCount = useNotificationStore((s) => s.unreadCount);
 
   return (
-    <header className="border-b bg-card px-4 md:px-6 py-2.5 flex items-center justify-between">
+    <header className="bg-card px-4 md:px-6 py-2.5 flex items-center justify-between shadow-[0_1px_3px_-2px_rgba(0,0,0,0.08)]">
       <div className="flex items-center">
         <span className="font-bold text-lg md:hidden tracking-tight text-foreground">
           Budgeteer
@@ -17,7 +17,7 @@ export function Header() {
       <div className="flex items-center gap-2">
         <button
           onClick={() => navigate("/notifications")}
-          className="relative p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-secondary-foreground transition-colors cursor-pointer"
+          className="relative p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-secondary-foreground transition-all cursor-pointer"
           aria-label="Notifications"
         >
           <Bell className="h-5 w-5" />

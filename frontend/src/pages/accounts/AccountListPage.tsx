@@ -136,7 +136,7 @@ export default function AccountListPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="My Account"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -145,7 +145,7 @@ export default function AccountListPage() {
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                   >
                     {CURRENCIES.map((c) => (
                       <option key={c.code} value={c.code}>
@@ -159,7 +159,7 @@ export default function AccountListPage() {
                   <select
                     value={type}
                     onChange={(e) => setType(e.target.value as AccountType)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                   >
                     <option value="personal">Personal</option>
                     <option value="joint">Joint</option>
@@ -197,7 +197,7 @@ export default function AccountListPage() {
         {accounts.map((account) => (
           <Card
             key={account.id}
-            className="cursor-pointer hover:shadow-md transition-shadow"
+            className="cursor-pointer hover:elevated transition-all"
             onClick={() => navigate(`/accounts/${account.id}`)}
           >
             <CardHeader className="pb-2">

@@ -95,7 +95,7 @@ export const DataManagementSection: React.FC = () => {
       )}
 
       {/* Download Section */}
-      <div className="rounded-lg border border-border bg-card p-4">
+      <div className="rounded-lg bg-card raised p-4">
         <h3 className="mb-1 font-medium">Download Data</h3>
         <p className="mb-3 text-sm text-muted-foreground">
           Export all your data as a zip archive. The archive contains your
@@ -111,7 +111,7 @@ export const DataManagementSection: React.FC = () => {
       </div>
 
       {/* Restore Section */}
-      <div className="rounded-lg border border-border bg-card p-4">
+      <div className="rounded-lg bg-card raised p-4">
         <h3 className="mb-1 font-medium">Restore Data</h3>
         <p className="mb-3 text-sm text-muted-foreground">
           Upload a previously downloaded archive to restore your data.
@@ -134,7 +134,7 @@ export const DataManagementSection: React.FC = () => {
       </div>
 
       {/* Delete Account Section */}
-      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+      <div className="rounded-lg bg-destructive/5 raised p-4">
         <h3 className="mb-1 font-medium text-destructive">Delete Account</h3>
         <p className="mb-3 text-sm text-muted-foreground">
           Permanently delete your account and all associated data. Transactions
@@ -162,7 +162,7 @@ export const DataManagementSection: React.FC = () => {
       {/* Restore Confirmation Dialog */}
       {restoreConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="mx-4 w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-lg">
+          <div className="mx-4 w-full max-w-md rounded-lg bg-card p-6 elevated">
             <h3 className="mb-2 text-lg font-semibold">Restore Data</h3>
             <p className="mb-4 text-sm text-muted-foreground">
               This will replace ALL your current data with the data from the
@@ -178,7 +178,7 @@ export const DataManagementSection: React.FC = () => {
               value={restoreConfirmText}
               onChange={(e) => setRestoreConfirmText(e.target.value)}
               placeholder='Type "Guacamole" to confirm'
-              className="mb-4 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mb-4 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               autoFocus
             />
             <div className="flex justify-end gap-3">
@@ -187,7 +187,7 @@ export const DataManagementSection: React.FC = () => {
                   setRestoreConfirmOpen(false);
                   setRestoreFile(null);
                 }}
-                className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+                className="rounded-md bg-card px-4 py-2 text-sm font-medium border border-input bg-card hover:bg-secondary"
               >
                 Cancel
               </button>
@@ -206,7 +206,7 @@ export const DataManagementSection: React.FC = () => {
       {/* Delete Confirmation Dialog */}
       {deleteConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="mx-4 w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-lg">
+          <div className="mx-4 w-full max-w-md rounded-lg bg-card p-6 elevated">
             <h3 className="mb-2 text-lg font-semibold text-destructive">
               Delete Account
             </h3>
@@ -224,13 +224,13 @@ export const DataManagementSection: React.FC = () => {
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder='Type "DELETE" to confirm'
-              className="mb-4 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mb-4 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               autoFocus
             />
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setDeleteConfirmOpen(false)}
-                className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+                className="rounded-md bg-card px-4 py-2 text-sm font-medium border border-input bg-card hover:bg-secondary"
               >
                 Cancel
               </button>

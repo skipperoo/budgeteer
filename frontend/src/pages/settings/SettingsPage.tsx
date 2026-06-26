@@ -378,7 +378,7 @@ export default function SettingsPage() {
               <select
                 value={defaultCurrency}
                 onChange={(e) => setDefaultCurrency(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
               >
                 {CURRENCIES.map((c) => (
                   <option key={c.code} value={c.code}>
@@ -401,7 +401,7 @@ export default function SettingsPage() {
               <select
                 value={locale}
                 onChange={(e) => setLocale(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
               >
                 {LOCALES.map((l) => (
                   <option key={l.code} value={l.code}>

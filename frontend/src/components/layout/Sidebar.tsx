@@ -37,7 +37,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="hidden md:flex w-64 border-r bg-card flex-col">
+    <aside className="hidden md:flex w-64 border-r border-border/30 bg-card flex-col">
       <div className="p-6">
         <h1 className="text-xl font-bold">Budgeteer</h1>
       </div>
@@ -48,7 +48,7 @@ export function Sidebar() {
             to={item.to}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all",
                 isActive
                   ? "bg-secondary text-secondary-foreground"
                   : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground"
@@ -60,17 +60,17 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="p-4 border-t flex items-center justify-between">
+      <div className="p-4 border-t border-border/30 flex items-center justify-between">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-secondary-foreground transition-colors cursor-pointer"
+          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-secondary-foreground transition-all cursor-pointer"
         >
           <LogOut className="h-4 w-4" />
           Logout
         </button>
         <button
           onClick={toggleTheme}
-          className="p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-secondary-foreground transition-colors cursor-pointer"
+          className="p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-secondary-foreground transition-all cursor-pointer"
           aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
         >
           {theme === "dark" ? (

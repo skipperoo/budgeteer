@@ -106,7 +106,7 @@ export function DateRangePicker() {
 
       {/* Custom date panel */}
       {open && (
-        <div className="absolute top-full right-0 mt-1.5 z-50 bg-card border border-border rounded-lg shadow-lg p-3 w-[260px]">
+        <div className="absolute top-full right-0 mt-1.5 z-50 bg-card border border-border/50 shadow-sm rounded-lg p-3 w-[260px]">
           <div className="flex flex-col gap-2.5">
             <label className="flex flex-col gap-1">
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">From</span>
@@ -136,7 +136,7 @@ export function DateRangePicker() {
                 <button
                   key={p.days}
                   onClick={() => handlePreset(p.days)}
-                  className="flex-1 py-1.5 text-[10px] font-medium rounded-md bg-secondary text-secondary-foreground hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+                  className="flex-1 py-1.5 text-[10px] font-medium rounded-md bg-secondary text-secondary-foreground hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer"
                 >
                   {p.label}
                 </button>

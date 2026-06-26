@@ -20,6 +20,8 @@ describe("Button", () => {
   it("should render with outline variant", () => {
     render(<Button variant="outline">Outline</Button>);
     const button = screen.getByRole("button", { name: /outline/i });
+    // Flat outline: border + no shadow
+    expect(button).toHaveClass("border");
     expect(button).toHaveClass("border-input");
   });
 

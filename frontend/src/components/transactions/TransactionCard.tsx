@@ -50,9 +50,9 @@ export function TransactionCard({
   return (
     <div
       className={`
-        group relative flex items-center justify-between rounded-xl border border-border bg-card 
+        group relative flex items-center justify-between rounded-xl bg-card border border-border/50
         ${compact ? "p-3" : "p-4"}
-        ${onClick ? "cursor-pointer hover:bg-accent/40 transition-all duration-200" : ""}
+        ${onClick ? "cursor-pointer hover:border-border transition-colors duration-200" : ""}
       `}
       onClick={onClick}
       role={onClick ? "button" : undefined}
@@ -152,7 +152,7 @@ export function TransactionCard({
         {(onEdit || onDelete) && (
           <div className={`
             flex items-center gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-200
-            ${compact ? "absolute -right-2 top-1/2 -translate-y-1/2 bg-card p-1 shadow-lg rounded-lg border border-border" : ""}
+            ${compact ? "absolute -right-2 top-1/2 -translate-y-1/2 bg-card p-1 border border-border/50 rounded-lg" : ""}
           `}>
             {onEdit && (
               <Button

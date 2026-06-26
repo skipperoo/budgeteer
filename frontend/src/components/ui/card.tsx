@@ -1,11 +1,14 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+/* Card — neumorphic elevated surface.
+   No border: depth comes from the dual shadow (light highlight top-left,
+   dark shadow bottom-right) against the shared background colour. */
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("rounded-xl border bg-card text-card-foreground shadow", className)}
+      className={cn("rounded-xl bg-card text-card-foreground raised", className)}
       {...props}
     />
   )

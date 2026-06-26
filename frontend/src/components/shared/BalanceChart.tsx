@@ -76,7 +76,7 @@ export function BalanceChart({ data, currency = "EUR", gradientId }: BalanceChar
               if (active && payload && payload.length) {
                 const datum = payload[0].payload as BalanceChartDatum;
                 return (
-                  <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                  <div className="bg-card text-card-foreground p-3 rounded-lg raised text-xs">
                     <p className="font-semibold mb-1">{datum.displayDate}</p>
                     <p className="font-mono text-foreground font-bold">
                       {symbol}

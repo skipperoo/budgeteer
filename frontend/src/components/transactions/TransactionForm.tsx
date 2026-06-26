@@ -133,7 +133,7 @@ export function TransactionForm({
               setAccountId(e.target.value);
               setShowCategoryInput(false);
             }}
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
             required
           >
             <option value="">Select account...</option>
@@ -244,7 +244,7 @@ export function TransactionForm({
                   setCategory(e.target.value);
                 }
               }}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
             >
               <option value="">Select category...</option>
               {getCategories(type as CategoryType).map((cat) => (

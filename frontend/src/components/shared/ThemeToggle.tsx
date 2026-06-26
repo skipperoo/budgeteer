@@ -7,7 +7,7 @@ export function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className="group relative flex items-center w-14 h-7 rounded-full bg-secondary/80 hover:bg-secondary cursor-pointer transition-all duration-500 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 overflow-hidden border border-border"
+      className="group relative flex items-center w-14 h-7 rounded-full bg-secondary cursor-pointer transition-all duration-500 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 overflow-hidden"
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
     >
       {/* Background liquid effect */}
@@ -19,7 +19,7 @@ export function ThemeToggle() {
       
       {/* Snap/Liquid Thumb */}
       <div
-        className={`absolute left-1 w-5 h-5 rounded-full bg-primary shadow-lg transform transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] flex items-center justify-center z-10 ${
+        className={`absolute left-1 w-5 h-5 rounded-full bg-primary shadow-sm transform transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] flex items-center justify-center z-10 ${
           theme === "dark" ? "translate-x-7 scale-110" : "translate-x-0 scale-100"
         }`}
       >

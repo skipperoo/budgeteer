@@ -766,7 +766,7 @@ export default function AccountDetailPage() {
                             setTxCategory(e.target.value);
                           }
                         }}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
                       >
                         <option value="">Select category...</option>
                         {id &&
@@ -909,7 +909,7 @@ export default function AccountDetailPage() {
               <select
                 value={editCurrency}
                 onChange={(e) => setEditCurrency(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
               >
                 {CURRENCIES.map((c) => (
                   <option key={c.code} value={c.code}>
@@ -923,7 +923,7 @@ export default function AccountDetailPage() {
               <select
                 value={editType}
                 onChange={(e) => setEditType(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
               >
                 {ACCOUNT_TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -1232,7 +1232,7 @@ export default function AccountDetailPage() {
                             if (active && payload && payload.length) {
                               const data = payload[0].payload;
                               return (
-                                <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                                <div className="bg-card text-card-foreground p-3 rounded-lg raised text-xs">
                                   <p className="font-semibold mb-1">{data.name}</p>
                                   <p className="font-mono text-destructive font-bold">
                                     {getCurrencySymbol(account.currency)}
@@ -1322,7 +1322,7 @@ export default function AccountDetailPage() {
                             if (active && payload && payload.length) {
                               const data = payload[0].payload;
                               return (
-                                <div className="bg-card text-card-foreground border border-border p-3 rounded-lg shadow-md text-xs">
+                                <div className="bg-card text-card-foreground p-3 rounded-lg raised text-xs">
                                   <p className="font-semibold mb-1">{data.name}</p>
                                   <p className="font-mono text-income font-bold">
                                     {getCurrencySymbol(account.currency)}

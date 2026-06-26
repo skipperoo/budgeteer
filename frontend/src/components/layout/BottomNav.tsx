@@ -33,7 +33,7 @@ export function BottomNav() {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card md:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card md:hidden shadow-[0_-1px_3px_-2px_rgba(0,0,0,0.08)]" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
       <div className="flex items-center justify-around h-20 px-2">
         {navItems.map((item) => (
           <NavLink
@@ -41,7 +41,7 @@ export function BottomNav() {
             to={item.to}
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-md text-xs font-medium transition-colors min-w-0 flex-1 relative",
+                "flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-md text-xs font-medium transition-all min-w-0 flex-1 relative",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:text-primary"
@@ -56,7 +56,7 @@ export function BottomNav() {
         {/* Logout */}
         <button
           onClick={handleLogout}
-          className="flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-destructive transition-colors min-w-0 flex-1"
+          className="flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-destructive transition-all min-w-0 flex-1"
         >
           <LogOut className="h-6 w-6" />
           <span className="truncate text-[11px]">Logout</span>

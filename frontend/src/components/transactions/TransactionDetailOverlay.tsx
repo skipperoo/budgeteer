@@ -318,7 +318,7 @@ export function TransactionDetailOverlay({
                 {documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="rounded-lg border border-border bg-muted/30 p-3"
+                    className="rounded-lg bg-card border border-border/50 p-3"
                   >
                     {/* File info row */}
                     <div className="flex items-center justify-between mb-2">
@@ -373,12 +373,12 @@ export function TransactionDetailOverlay({
                             <img
                               src={docUrls[doc.id]}
                               alt={doc.file_name}
-                              className="w-full max-h-64 object-contain rounded-md border border-border bg-white dark:bg-black"
+                              className="w-full max-h-64 object-contain rounded-md bg-card border border-border/50"
                             />
                             <Button
                               variant="outline"
                               size="sm"
-                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-7 text-[10px] bg-background/80 backdrop-blur-sm"
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-7 text-[10px]"
                               onClick={() => window.open(docUrls[doc.id], "_blank")}
                             >
                               <FileText className="h-3 w-3 mr-1" />
