@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,6 +96,12 @@ export default function AccountDetailPage() {
   // --- Detail overlay state ---
   const [detailTx, setDetailTx] = useState<TransactionDisplay | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  // --- Show All transactions overlay state ---
+  const [showAllOpen, setShowAllOpen] = useState(false);
+  const [showAllTxs, setShowAllTxs] = useState<TransactionDisplay[]>([]);
+  const [showAllLoading, setShowAllLoading] = useState(false);
+  const [hasMoreTxs, setHasMoreTxs] = useState(true);
 
   // --- Opening balance edit state ---
   const [openingBalanceEditOpen, setOpeningBalanceEditOpen] = useState(false);
@@ -891,6 +897,65 @@ export default function AccountDetailPage() {
   );
   const recentAccountTxs = displayAccountTxs.slice(0, 10);
 
+  // --- Show All transactions callbacks ---
+  const openShowAll = useCallback(() => {
+    setShowAllTxs(displayAccountTxs);
+    setHasMoreTxs(transactions.length >= 50);
+    setShowAllOpen(true);
+  }, [displayAccountTxs, transactions]);
+
+  const loadMoreTransactions = useCallback(async () => {
+    if (!id || showAllLoading) return;
+    setShowAllLoading(true);
+    try {
+      const offset = showAllTxs.length;
+      const data = await apiFetch<Transaction[]>(`${ENDPOINTS.transactions(id)}?limit=50&offset=${offset}`);
+      const raw = data ?? [];
+
+      if (raw.length < 50) {
+        setHasMoreTxs(false);
+      }
+
+      const keyToUse = accountKeyBase64;
+      const newDecrypted: TransactionDisplay[] = await Promise.all(
+        raw.map(async (tx) => {
+          if (tx.encrypted_payload.startsWith("1|")) {
+            if (privKeyBase64) {
+              try {
+                const payload = await decryptECIESPayload<TransactionPayload>(
+                  tx.encrypted_payload,
+                  privKeyBase64,
+                );
+                return { id: tx.id, time: tx.time, account_id: tx.account_id, payload };
+              } catch { /* fall through */ }
+            }
+            return { id: tx.id, time: tx.time, account_id: tx.account_id, payload: null, decryptError: privKeyBase64 ? "Decryption failed" : "Key unavailable" };
+          }
+          if (keyToUse) {
+            try {
+              const payload = await decryptTransactionPayload(tx.encrypted_payload, keyToUse);
+              return { id: tx.id, time: tx.time, account_id: tx.account_id, payload };
+            } catch { /* fall through */ }
+          }
+          return { id: tx.id, time: tx.time, account_id: tx.account_id, payload: null, decryptError: keyToUse ? "Decryption failed" : "Key unavailable" };
+        })
+      );
+
+      const filteredNew = newDecrypted.filter((tx) => {
+        if (!tx.payload) return true;
+        if (tx.payload.category === "Opening Balance") return false;
+        const d = tx.time.slice(0, 10);
+        return d >= dateRange.start && d <= dateRange.end;
+      });
+
+      setShowAllTxs((prev) => [...prev, ...filteredNew]);
+    } catch {
+      setHasMoreTxs(false);
+    } finally {
+      setShowAllLoading(false);
+    }
+  }, [id, showAllLoading, showAllTxs, accountKeyBase64, privKeyBase64, dateRange]);
+
   return (
     <div className="space-y-3">
       {/* Header */}
@@ -1222,7 +1287,14 @@ export default function AccountDetailPage() {
         <div>
           <Card className="flex flex-col h-[400px]">
             <CardHeader className="shrink-0">
-              <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
+                {displayAccountTxs.length > 0 && (
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={openShowAll}>
+                    Show All
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 overflow-y-auto">
               {txLoading ? (
@@ -1490,6 +1562,53 @@ export default function AccountDetailPage() {
           </Card>
         </div>
       )}
+
+      {/* Show All Transactions overlay */}
+      <ResponsiveDialog open={showAllOpen} onOpenChange={setShowAllOpen} title="All Transactions">
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+          {showAllTxs.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No transactions in the selected range.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground mb-2">
+                Showing {showAllTxs.length} transaction{showAllTxs.length !== 1 ? "s" : ""}
+                {hasMoreTxs ? " (load more below)" : ""}
+              </p>
+              {showAllTxs.map((tx) => (
+                <TransactionCard
+                  key={tx.id}
+                  transaction={tx}
+                  currency={account.currency}
+                  onClick={
+                    tx.payload
+                      ? () => {
+                          setShowAllOpen(false);
+                          setDetailTx(tx);
+                          setDetailOpen(true);
+                        }
+                      : undefined
+                  }
+                  compact
+                />
+              ))}
+              {hasMoreTxs && (
+                <div className="flex justify-center pt-2 pb-1">
+                  <button
+                    type="button"
+                    onClick={loadMoreTransactions}
+                    disabled={showAllLoading}
+                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {showAllLoading ? "Loading..." : "Load more transactions"}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </ResponsiveDialog>
 
       </div>
   );
