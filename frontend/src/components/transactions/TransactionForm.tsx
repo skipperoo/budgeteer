@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CategoryType } from "@/stores/category-store";
@@ -17,15 +17,19 @@ export interface TransactionFormData {
   file: File | null;
   documentsToDelete: string[];
   targetEmail?: string;
+  /** When true, this is an account-to-account transfer. */
+  isTransfer?: boolean;
+  /** The target account ID for an account-to-account transfer. */
+  targetAccountId?: string;
 }
 
-interface AccountOption {
+export interface AccountOption {
   id: string;
   label: string;
 }
 
 interface TransactionFormProps {
-  /** If set to a non-empty array, shows an account selector at the top */
+  /** All accounts for the user (used for account selector AND target account dropdown). */
   accounts?: AccountOption[];
   /** Pre-selected account ID (when accounts are given) or fixed account ID */
   accountId?: string;
@@ -84,16 +88,66 @@ export function TransactionForm({
   const [newCategory, setNewCategory] = useState("");
   const [showSendTo, setShowSendTo] = useState(false);
   const [sendToEmail, setSendToEmail] = useState(initialValues?.targetEmail ?? "");
+  // Transfer state
+  const [isTransfer, setIsTransfer] = useState(initialValues?.isTransfer ?? false);
+  const [targetAccountId, setTargetAccountId] = useState(initialValues?.targetAccountId ?? "");
 
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Build a lookup from account ID -> label
+  const accountLabelMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (accounts) {
+      for (const a of accounts) {
+        map[a.id] = a.label;
+      }
+    }
+    return map;
+  }, [accounts]);
+
+  // Target account options: all accounts except the current one
+  const targetAccountOptions = useMemo(() => {
+    if (!accounts) return [];
+    return accounts.filter((a) => a.id !== accountId);
+  }, [accounts, accountId]);
+
+  // When transfer is toggled ON, set type to "expense" and clear category
+  useEffect(() => {
+    if (isTransfer) {
+      setType("expense");
+      setCategory("Transfer");
+      setShowCategoryInput(false);
+    }
+  }, [isTransfer]);
+
+  // When accountId changes in transfer mode, update counterparty if both accounts selected
+  useEffect(() => {
+    if (isTransfer && accountId && targetAccountId) {
+      const fromName = accountLabelMap[accountId] || accountId;
+      const toName = accountLabelMap[targetAccountId] || targetAccountId;
+      setCounterparty(`${fromName} → ${toName}`);
+    }
+  }, [isTransfer, accountId, targetAccountId, accountLabelMap]);
+
+  // When target account changes, auto-fill counterparty
+  const handleTargetAccountChange = (value: string) => {
+    setTargetAccountId(value);
+    if (value && accountId) {
+      const fromName = accountLabelMap[accountId] || accountId;
+      const toName = accountLabelMap[value] || value;
+      setCounterparty(`${fromName} → ${toName}`);
+    } else {
+      setCounterparty("");
+    }
+  };
+
   // Reset category when type changes (different categories per type)
   useEffect(() => {
-    if (!initialValues) {
+    if (!initialValues && !isTransfer) {
       setCategory("");
       setShowCategoryInput(false);
     }
-  }, [type, initialValues]);
+  }, [type, initialValues, isTransfer]);
 
   const handleAddNewCategory = async () => {
     const trimmed = newCategory.trim();
@@ -112,12 +166,14 @@ export function TransactionForm({
       commission,
       interest_amount: interestAmount,
       date,
-      category,
+      category: isTransfer ? "Transfer" : category,
       counterparty,
       notes,
       file,
       documentsToDelete,
       targetEmail: showSendTo && sendToEmail.trim() ? sendToEmail.trim() : undefined,
+      isTransfer,
+      targetAccountId: isTransfer ? targetAccountId : undefined,
     });
   };
 
@@ -150,30 +206,33 @@ export function TransactionForm({
       <div className="space-y-2">
         <label className="text-sm font-medium">Amount</label>
         <div className="flex gap-2">
-          <div className="flex rounded-md border border-input overflow-hidden shrink-0">
-            <button
-              type="button"
-              onClick={() => { setType("expense"); if (!initialValues) { setCategory(""); setShowCategoryInput(false); } }}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                type === "expense"
-                  ? "bg-expense text-expense-foreground"
-                  : "bg-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Expense
-            </button>
-            <button
-              type="button"
-              onClick={() => { setType("income"); if (!initialValues) { setCategory(""); setShowCategoryInput(false); } }}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                type === "income"
-                  ? "bg-income text-income-foreground"
-                  : "bg-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Income
-            </button>
-          </div>
+          {/* Expense / Income toggle — hidden when in transfer mode */}
+          {!isTransfer && (
+            <div className="flex rounded-md border border-input overflow-hidden shrink-0">
+              <button
+                type="button"
+                onClick={() => { setType("expense"); if (!initialValues && !isTransfer) { setCategory(""); setShowCategoryInput(false); } }}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  type === "expense"
+                    ? "bg-expense text-expense-foreground"
+                    : "bg-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Expense
+              </button>
+              <button
+                type="button"
+                onClick={() => { setType("income"); if (!initialValues && !isTransfer) { setCategory(""); setShowCategoryInput(false); } }}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  type === "income"
+                    ? "bg-income text-income-foreground"
+                    : "bg-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Income
+              </button>
+            </div>
+          )}
           <div className="relative flex-1">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
               {type === "expense" ? "-" : "+"}
@@ -189,6 +248,11 @@ export function TransactionForm({
             />
           </div>
         </div>
+        {isTransfer && (
+          <p className="text-xs text-muted-foreground">
+            This amount will be deducted from the source account and credited to the target account.
+          </p>
+        )}
       </div>
 
       {/* Commission */}
@@ -230,58 +294,118 @@ export function TransactionForm({
         />
       </div>
 
-      {/* Category */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Category</label>
-        {!showCategoryInput ? (
-          <div className="flex gap-2">
-            <select
-              value={category}
-              onChange={(e) => {
-                if (e.target.value === "__new__") {
-                  setShowCategoryInput(true);
-                } else {
-                  setCategory(e.target.value);
-                }
-              }}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-            >
-              <option value="">Select category...</option>
-              {getCategories(type as CategoryType).map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-              <option value="__new__">+ Add new category...</option>
-            </select>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <Input
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
-              placeholder="New category name"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleAddNewCategory();
-                }
-              }}
-            />
-            <Button type="button" size="sm" onClick={handleAddNewCategory}>
-              Add
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setShowCategoryInput(false)}
-            >
-              Cancel
-            </Button>
-          </div>
-        )}
+      {/* Account Transfer toggle (shown below date) */}
+      <div className="flex items-center justify-between rounded-md border border-input px-3 py-2">
+        <span className="text-sm font-medium">Account Transfer</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={isTransfer}
+          onClick={() => {
+            setIsTransfer(!isTransfer);
+            if (!isTransfer) {
+              // Turning transfer ON: hide send-to accordion
+              setShowSendTo(false);
+              setTargetAccountId("");
+            } else {
+              // Turning transfer OFF: restore counterparty if it was auto-filled
+              if (targetAccountId) {
+                setCounterparty("");
+              }
+              setTargetAccountId("");
+            }
+          }}
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+            isTransfer ? "bg-primary" : "bg-input"
+          }`}
+        >
+          <span
+            className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow transform ring-0 transition duration-200 ease-in-out ${
+              isTransfer ? "translate-x-4" : "translate-x-0"
+            }`}
+          />
+        </button>
       </div>
+
+      {/* Target Account dropdown (shown only when transfer is ON) */}
+      {isTransfer && (
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Target Account</label>
+          <select
+            value={targetAccountId}
+            onChange={(e) => handleTargetAccountChange(e.target.value)}
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            required={isTransfer}
+          >
+            <option value="">Select target account...</option>
+            {targetAccountOptions.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label}
+              </option>
+            ))}
+          </select>
+          {targetAccountOptions.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              No other accounts available. Create another account first.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Category — hidden when in transfer mode */}
+      {!isTransfer && (
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Category</label>
+          {!showCategoryInput ? (
+            <div className="flex gap-2">
+              <select
+                value={category}
+                onChange={(e) => {
+                  if (e.target.value === "__new__") {
+                    setShowCategoryInput(true);
+                  } else {
+                    setCategory(e.target.value);
+                  }
+                }}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+              >
+                <option value="">Select category...</option>
+                {getCategories(type as CategoryType).map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+                <option value="__new__">+ Add new category...</option>
+              </select>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Input
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                placeholder="New category name"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddNewCategory();
+                  }
+                }}
+              />
+              <Button type="button" size="sm" onClick={handleAddNewCategory}>
+                Add
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setShowCategoryInput(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Counterparty */}
       <div className="space-y-2">
@@ -289,7 +413,9 @@ export function TransactionForm({
         <Input
           value={counterparty}
           onChange={(e) => setCounterparty(e.target.value)}
-          placeholder="e.g. Store name, employer"
+          placeholder={isTransfer ? "Auto-filled from account names" : "e.g. Store name, employer"}
+          readOnly={isTransfer}
+          className={isTransfer ? "bg-muted/50" : ""}
         />
       </div>
 
@@ -303,39 +429,41 @@ export function TransactionForm({
         />
       </div>
 
-      {/* Send to user accordion */}
-      <div className="space-y-2">
-        <button
-          type="button"
-          onClick={() => setShowSendTo(!showSendTo)}
-          className="flex w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm font-medium hover:bg-muted transition-colors"
-        >
-          <span>Send to</span>
-          <svg
-            className={`h-4 w-4 transition-transform ${showSendTo ? "rotate-180" : ""}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+      {/* Send to user accordion — hidden when transfer is ON */}
+      {!isTransfer && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setShowSendTo(!showSendTo)}
+            className="flex w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm font-medium hover:bg-muted transition-colors"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        {showSendTo && (
-          <div className="space-y-2 pl-2 border-l-2 border-muted-foreground/20">
-            <label className="text-sm font-medium">Recipient Email</label>
-            <Input
-              type="email"
-              value={sendToEmail}
-              onChange={(e) => setSendToEmail(e.target.value)}
-              placeholder="user@example.com"
-            />
-            <p className="text-xs text-muted-foreground">
-              The recipient will receive an invitation to accept this transfer into their account.
-            </p>
-          </div>
-        )}
-      </div>
+            <span>Send to</span>
+            <svg
+              className={`h-4 w-4 transition-transform ${showSendTo ? "rotate-180" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showSendTo && (
+            <div className="space-y-2 pl-2 border-l-2 border-muted-foreground/20">
+              <label className="text-sm font-medium">Recipient Email</label>
+              <Input
+                type="email"
+                value={sendToEmail}
+                onChange={(e) => setSendToEmail(e.target.value)}
+                placeholder="user@example.com"
+              />
+              <p className="text-xs text-muted-foreground">
+                The recipient will receive an invitation to accept this transfer into their account.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Document upload */}
       <div className="space-y-2">
@@ -399,7 +527,13 @@ export function TransactionForm({
       <Button
         onClick={handleSubmit}
         className="w-full"
-        disabled={saving || !accountId || !amount || !date}
+        disabled={
+          saving ||
+          !accountId ||
+          !amount ||
+          !date ||
+          (isTransfer && !targetAccountId)
+        }
       >
         {saving ? "Saving..." : submitLabel}
       </Button>

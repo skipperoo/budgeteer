@@ -15,7 +15,7 @@ import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64 } from "@/lib/crypto";
 import { encryptForRecipient, decryptECIESPayload } from "@/lib/crypto-rules";
-import { encryptTransactionPayload, decryptTransactionPayload, effectiveAmount } from "@/lib/crypto-transaction";
+import { encryptTransactionPayload, decryptTransactionPayload, effectiveAmount, isTransferPayload } from "@/lib/crypto-transaction";
 import type { TransactionPayload } from "@/lib/crypto-transaction";
 import { encryptFile } from "@/lib/crypto-file";
 import { getAccountKey } from "@/lib/decrypt-transactions";
@@ -53,6 +53,7 @@ export default function AccountDetailPage() {
   const [editName, setEditName] = useState("");
   const [editCurrency, setEditCurrency] = useState("");
   const [editType, setEditType] = useState("");
+  const [editOpeningBalance, setEditOpeningBalance] = useState("");
   const [editError, setEditError] = useState("");
   const [editing, setEditing] = useState(false);
 
@@ -222,6 +223,7 @@ export default function AccountDetailPage() {
     setEditName(account.name);
     setEditCurrency(account.currency);
     setEditType(account.type);
+    setEditOpeningBalance(String(Math.abs(openingBalance)));
     setEditError("");
     setEditOpen(true);
   };
@@ -232,7 +234,57 @@ export default function AccountDetailPage() {
     setEditing(true);
     try {
       await updateAccount(id, editName, editCurrency, editType);
+
+      // Handle opening balance change — edit the existing OB transaction or create one
+      const rawOB = parseFloat(editOpeningBalance);
+      if (!isNaN(rawOB) && rawOB >= 0) {
+        const desiredOB = rawOB;
+        const currentOB = openingBalance;
+        if (Math.abs(desiredOB - currentOB) >= 0.001 || (currentOB === 0 && desiredOB > 0)) {
+          const accountKeyBase64Val = accountKeyBase64;
+          if (accountKeyBase64Val) {
+            // Find existing Opening Balance transactions in this account
+            const obTxs = transactions.filter(
+              (tx) => tx.payload && tx.payload.category === "Opening Balance"
+            );
+
+            const obPayload = {
+              amount: desiredOB,
+              category: "Opening Balance",
+              notes: obTxs.length > 0 ? "Opening balance" : "Initial balance",
+              counterparty: "Opening Balance",
+            };
+            const encryptedPayload = await encryptTransactionPayload(obPayload, accountKeyBase64Val);
+
+            if (obTxs.length > 0) {
+              // Update the primary opening balance transaction with the new amount
+              await apiFetch(ENDPOINTS.transaction(obTxs[0].id), {
+                method: "PUT",
+                body: JSON.stringify({
+                  time: "1970-01-01T00:00:00.000Z",
+                  encrypted_payload: encryptedPayload,
+                } as CreateTransactionRequest),
+              });
+              // Delete any additional adjustment transactions
+              for (let i = 1; i < obTxs.length; i++) {
+                await apiFetch(ENDPOINTS.transaction(obTxs[i].id), { method: "DELETE" });
+              }
+            } else {
+              // No existing opening balance — create a new one
+              await apiFetch(ENDPOINTS.transactions(id), {
+                method: "POST",
+                body: JSON.stringify({
+                  time: "1970-01-01T00:00:00.000Z",
+                  encrypted_payload: encryptedPayload,
+                } as CreateTransactionRequest),
+              });
+            }
+          }
+        }
+      }
+
       setEditOpen(false);
+      await fetchTransactions();
     } catch (err: any) {
       setEditError(err.message);
     } finally {
@@ -317,6 +369,10 @@ export default function AccountDetailPage() {
       category: tx.payload.category ?? "",
       counterparty: tx.payload.counterparty ?? "",
       notes: tx.payload.notes ?? "",
+      isTransfer: isTransferPayload(tx.payload),
+      targetAccountId: tx.payload.transfer_target_account_id
+        ?? tx.payload.transfer_source_account_id
+        ?? undefined,
     });
     // Fetch existing documents for the transaction
     try {
@@ -343,27 +399,143 @@ export default function AccountDetailPage() {
     try {
       const rawAmount = parseFloat(data.amount);
       if (isNaN(rawAmount)) throw new Error("Invalid amount");
-      const amount = data.type === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+      const absAmount = Math.abs(rawAmount);
       const commission = data.commission ? parseFloat(data.commission) : 0;
       const interest = data.interest_amount ? parseFloat(data.interest_amount) : 0;
-
-      const category = data.category || "general";
-      addCategory(data.type as CategoryType, category);
-
-      const encryptedPayload = await encryptTransactionPayload(
-        { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined, interest_amount: interest > 0 ? interest : undefined },
-        accountKeyBase64
-      );
-
       const time = new Date(data.date + "T12:00:00Z").toISOString();
 
-      await apiFetch(ENDPOINTS.transaction(editTxId), {
-        method: "PUT",
-        body: JSON.stringify({
-          time,
-          encrypted_payload: encryptedPayload,
-        } as CreateTransactionRequest),
-      });
+      // Find the existing transaction being edited
+      const existingTx = transactions.find((t) => t.id === editTxId);
+      const existingPayload = existingTx?.payload;
+      const wasTransfer = existingPayload ? isTransferPayload(existingPayload) : false;
+      const existingPairId = existingPayload?.transfer_pair_id;
+
+      if (data.isTransfer && data.targetAccountId) {
+        // ---- Updating as a transfer ----
+        const transferPairId = existingPairId || crypto.randomUUID();
+        const currentIsSource = !existingPayload || existingPayload.amount < 0;
+
+        const sourceAccountId = currentIsSource ? id! : data.targetAccountId;
+        const targetAccountId = currentIsSource ? data.targetAccountId : id!;
+
+        const sourceAccount = accounts.find((a) => a.id === sourceAccountId);
+        const targetAccount = accounts.find((a) => a.id === targetAccountId);
+        const sourceName = sourceAccount?.name || sourceAccount?.currency || sourceAccountId;
+        const targetName = targetAccount?.name || targetAccount?.currency || targetAccountId;
+        const counterpartyText = `${sourceName} → ${targetName}`;
+
+        const sourcePayload = {
+          amount: -absAmount,
+          category: "Transfer",
+          notes: data.notes,
+          counterparty: counterpartyText,
+          commission: commission > 0 ? commission : undefined,
+          is_transfer: true,
+          transfer_pair_id: transferPairId,
+          transfer_source_account_id: sourceAccountId,
+          transfer_target_account_id: targetAccountId,
+          transfer_source_account_name: sourceName,
+          transfer_target_account_name: targetName,
+        };
+
+        const targetPayload = {
+          amount: absAmount,
+          category: "Transfer",
+          notes: data.notes,
+          counterparty: counterpartyText,
+          commission: commission > 0 ? commission : undefined,
+          is_transfer: true,
+          transfer_pair_id: transferPairId,
+          transfer_source_account_id: sourceAccountId,
+          transfer_target_account_id: targetAccountId,
+          transfer_source_account_name: sourceName,
+          transfer_target_account_name: targetName,
+        };
+
+        // Encrypt and update current side
+        const currentEncrypted = await encryptTransactionPayload(
+          currentIsSource ? sourcePayload : targetPayload,
+          accountKeyBase64
+        );
+        await apiFetch(ENDPOINTS.transaction(editTxId), {
+          method: "PUT",
+          body: JSON.stringify({ time, encrypted_payload: currentEncrypted } as CreateTransactionRequest),
+        });
+
+        // Find and update/create paired side
+        const pairedAccountId = currentIsSource ? targetAccountId : sourceAccountId;
+        const pairedKey = await getAccountKey(pairedAccountId, privKeyBase64 ?? undefined, currentUser?.public_key);
+
+        if (existingPairId && wasTransfer) {
+          const pairedTx = transactions.find(
+            (t) => t.id !== editTxId && t.payload?.transfer_pair_id === existingPairId
+          );
+          if (pairedTx) {
+            const pairedEncrypted = await encryptTransactionPayload(
+              currentIsSource ? targetPayload : sourcePayload,
+              pairedKey
+            );
+            await apiFetch(ENDPOINTS.transaction(pairedTx.id), {
+              method: "PUT",
+              body: JSON.stringify({ time, encrypted_payload: pairedEncrypted } as CreateTransactionRequest),
+            });
+          } else {
+            const pairedEncrypted = await encryptTransactionPayload(
+              currentIsSource ? targetPayload : sourcePayload,
+              pairedKey
+            );
+            await apiFetch(ENDPOINTS.transactions(pairedAccountId), {
+              method: "POST",
+              body: JSON.stringify({ time, encrypted_payload: pairedEncrypted }),
+            });
+          }
+        } else {
+          const pairedEncrypted = await encryptTransactionPayload(
+            currentIsSource ? targetPayload : sourcePayload,
+            pairedKey
+          );
+          await apiFetch(ENDPOINTS.transactions(pairedAccountId), {
+            method: "POST",
+            body: JSON.stringify({ time, encrypted_payload: pairedEncrypted }),
+          });
+        }
+      } else if (wasTransfer && existingPairId) {
+        // ---- Was a transfer, now becoming a regular transaction ----
+        const pairedTx = transactions.find(
+          (t) => t.id !== editTxId && t.payload?.transfer_pair_id === existingPairId
+        );
+        if (pairedTx) {
+          await apiFetch(ENDPOINTS.transaction(pairedTx.id), { method: "DELETE" });
+        }
+
+        // Fall through to regular update
+        const amount = data.type === "expense" ? -absAmount : absAmount;
+        const category = data.category || "general";
+        addCategory(data.type as CategoryType, category);
+        const encryptedPayload = await encryptTransactionPayload(
+          { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined, interest_amount: interest > 0 ? interest : undefined },
+          accountKeyBase64
+        );
+        await apiFetch(ENDPOINTS.transaction(editTxId), {
+          method: "PUT",
+          body: JSON.stringify({ time, encrypted_payload: encryptedPayload } as CreateTransactionRequest),
+        });
+      } else {
+        // ---- Regular transaction update ----
+        const amount = data.type === "expense" ? -absAmount : absAmount;
+        const category = data.category || "general";
+        addCategory(data.type as CategoryType, category);
+
+        const encryptedPayload = await encryptTransactionPayload(
+          { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined, interest_amount: interest > 0 ? interest : undefined },
+          accountKeyBase64
+        );
+
+        await apiFetch(ENDPOINTS.transaction(editTxId), {
+          method: "PUT",
+          body: JSON.stringify({ time, encrypted_payload: encryptedPayload } as CreateTransactionRequest),
+        });
+      }
 
       // Handle document uploads and deletions
       if (data.file) {
@@ -397,46 +569,95 @@ export default function AccountDetailPage() {
   };
 
   // --- Create transaction ---
-  const handleCreateTransaction = async () => {
+  const handleCreateTransaction = async (data: TransactionFormData) => {
     if (!id) return;
-    if (!accountKeyBase64) {
-      setTxCreateError("Account key not available. Try re-encrypting the key.");
-      return;
-    }
     setTxCreateError("");
     setTxCreating(true);
 
     try {
-      const rawAmount = parseFloat(txAmount);
-      if (isNaN(rawAmount)) {
-        throw new Error("Invalid amount");
-      }
-      // Apply sign based on income/expense toggle
-      const amount = txType === "expense" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
-      const commission = txCommission ? parseFloat(txCommission) : 0;
+      const rawAmount = parseFloat(data.amount);
+      if (isNaN(rawAmount)) throw new Error("Invalid amount");
+      const absAmount = Math.abs(rawAmount);
+      const commission = data.commission ? parseFloat(data.commission) : 0;
+      const time = new Date(data.date + "T12:00:00Z").toISOString();
 
-      const category = txCategory || "general";
-      addCategory(txType as CategoryType, category);
+      if (data.isTransfer && data.targetAccountId) {
+        // ---- Account-to-account transfer ----
+        const transferPairId = crypto.randomUUID();
+
+        // Source account: expense (the current account)
+        const sourceKey = await getAccountKey(id, privKeyBase64 ?? undefined, currentUser?.public_key);
+        const sourceAccount = accounts.find((a) => a.id === id);
+        const targetAccount = accounts.find((a) => a.id === data.targetAccountId);
+        const sourceName = sourceAccount?.name || sourceAccount?.currency || id;
+        const targetName = targetAccount?.name || targetAccount?.currency || data.targetAccountId;
+        const counterpartyText = `${sourceName} → ${targetName}`;
+
+        const sourcePayload = {
+          amount: -absAmount,
+          category: "Transfer",
+          notes: data.notes,
+          counterparty: counterpartyText,
+          commission: commission > 0 ? commission : undefined,
+          is_transfer: true,
+          transfer_pair_id: transferPairId,
+          transfer_source_account_id: id,
+          transfer_target_account_id: data.targetAccountId,
+          transfer_source_account_name: sourceName,
+          transfer_target_account_name: targetName,
+        };
+        const sourceEncrypted = await encryptTransactionPayload(sourcePayload, sourceKey);
+        await apiFetch<Transaction>(ENDPOINTS.transactions(id), {
+          method: "POST",
+          body: JSON.stringify({ time, encrypted_payload: sourceEncrypted }),
+        });
+
+        // Target account: income
+        const targetKey = await getAccountKey(data.targetAccountId, privKeyBase64 ?? undefined, currentUser?.public_key);
+        const targetPayload = {
+          amount: absAmount,
+          category: "Transfer",
+          notes: data.notes,
+          counterparty: counterpartyText,
+          commission: commission > 0 ? commission : undefined,
+          is_transfer: true,
+          transfer_pair_id: transferPairId,
+          transfer_source_account_id: id,
+          transfer_target_account_id: data.targetAccountId,
+          transfer_source_account_name: sourceName,
+          transfer_target_account_name: targetName,
+        };
+        const targetEncrypted = await encryptTransactionPayload(targetPayload, targetKey);
+        await apiFetch<Transaction>(ENDPOINTS.transactions(data.targetAccountId), {
+          method: "POST",
+          body: JSON.stringify({ time, encrypted_payload: targetEncrypted }),
+        });
+
+        setCreateOpen(false);
+        await fetchTransactions();
+        return;
+      }
+
+      // ---- Regular transaction ----
+      const amount = data.type === "expense" ? -absAmount : absAmount;
+      const accountKeyBase64 = await getAccountKey(id, privKeyBase64 ?? undefined, currentUser?.public_key);
+
+      const category = data.category || "general";
+      addCategory(data.type as CategoryType, category);
 
       const encryptedPayload = await encryptTransactionPayload(
-        { amount, category, notes: txNotes, counterparty: txCounterparty, commission: commission > 0 ? commission : undefined },
+        { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined },
         accountKeyBase64
       );
 
-      const time = new Date(txDate + "T12:00:00Z").toISOString();
-
-      // Create the transaction first
       const createdTx = await apiFetch<Transaction>(ENDPOINTS.transactions(id), {
         method: "POST",
-        body: JSON.stringify({
-          time,
-          encrypted_payload: encryptedPayload,
-        } as CreateTransactionRequest),
+        body: JSON.stringify({ time, encrypted_payload: encryptedPayload } as CreateTransactionRequest),
       });
 
       // If there's a file, encrypt and upload as a document
-      if (txFile && createdTx?.id) {
-        const fileData = await encryptFile(txFile, accountKeyBase64);
+      if (data.file && createdTx?.id) {
+        const fileData = await encryptFile(data.file, accountKeyBase64);
         await apiFetch(ENDPOINTS.transactionDocuments(createdTx.id), {
           method: "POST",
           body: JSON.stringify(fileData),
@@ -444,15 +665,6 @@ export default function AccountDetailPage() {
       }
 
       setCreateOpen(false);
-      setTxType("expense");
-      setTxAmount("");
-      setTxCommission("");
-      setTxCategory("");
-      setTxNotes("");
-      setTxCounterparty("");
-      setTxDate(new Date().toISOString().slice(0, 10));
-      setTxFile(null);
-      setShowCategoryInput(false);
       await fetchTransactions();
     } catch (err: any) {
       setTxCreateError(err.message);
@@ -469,10 +681,9 @@ export default function AccountDetailPage() {
       return;
     }
 
-    // Desired opening balance (always positive/income style in the UI)
-    const desiredOpeningBalance = raw;
-    const diff = desiredOpeningBalance - openingBalance;
-    if (Math.abs(diff) < 0.001) {
+    const desiredOB = raw;
+    const currentOB = openingBalance;
+    if (Math.abs(desiredOB - currentOB) < 0.001) {
       setOpeningBalanceEditOpen(false);
       return;
     }
@@ -481,23 +692,44 @@ export default function AccountDetailPage() {
     try {
       const accountKeyBase64Val = accountKeyBase64;
       if (!accountKeyBase64Val) throw new Error("Account key not available");
+      if (!account) throw new Error("Account not found");
 
-      const encryptedPayload = await encryptTransactionPayload(
-        {
-          amount: diff,
-          category: "Opening Balance",
-          notes: "Opening balance adjustment",
-          counterparty: "Opening Balance",
-        },
-        accountKeyBase64Val
+      // Find existing Opening Balance transactions
+      const obTxs = transactions.filter(
+        (tx) => tx.payload && tx.payload.category === "Opening Balance"
       );
 
-      if (!account) throw new Error("Account not found");
-      const time = "1970-01-01T00:00:00.000Z";
-      await apiFetch(ENDPOINTS.transactions(account.id), {
-        method: "POST",
-        body: JSON.stringify({ time, encrypted_payload: encryptedPayload } as CreateTransactionRequest),
-      });
+      const obPayload = {
+        amount: desiredOB,
+        category: "Opening Balance",
+        notes: obTxs.length > 0 ? "Opening balance" : "Initial balance",
+        counterparty: "Opening Balance",
+      };
+      const encryptedPayload = await encryptTransactionPayload(obPayload, accountKeyBase64Val);
+
+      if (obTxs.length > 0) {
+        // Update the primary opening balance transaction
+        await apiFetch(ENDPOINTS.transaction(obTxs[0].id), {
+          method: "PUT",
+          body: JSON.stringify({
+            time: "1970-01-01T00:00:00.000Z",
+            encrypted_payload: encryptedPayload,
+          } as CreateTransactionRequest),
+        });
+        // Delete any additional adjustment transactions
+        for (let i = 1; i < obTxs.length; i++) {
+          await apiFetch(ENDPOINTS.transaction(obTxs[i].id), { method: "DELETE" });
+        }
+      } else {
+        // No existing opening balance — create a new one
+        await apiFetch(ENDPOINTS.transactions(account.id), {
+          method: "POST",
+          body: JSON.stringify({
+            time: "1970-01-01T00:00:00.000Z",
+            encrypted_payload: encryptedPayload,
+          } as CreateTransactionRequest),
+        });
+      }
 
       setOpeningBalanceEditOpen(false);
       await fetchTransactions();
@@ -555,11 +787,11 @@ export default function AccountDetailPage() {
     "oklch(0.76 0.11 10)",
   ];
 
-  // Expenses by category for this account (within date range)
+  // Expenses by category — excludes "Opening Balance" and transfers
   const expenseChartData = (() => {
     const categories: Record<string, number> = {};
     filteredTxs.forEach((tx) => {
-      if (tx.payload && tx.payload.amount < 0 && tx.payload.category !== "Opening Balance") {
+      if (tx.payload && tx.payload.amount < 0 && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)) {
         const cat = tx.payload.category || "General";
         categories[cat] = (categories[cat] || 0) + Math.abs(effectiveAmount(tx.payload));
       }
@@ -569,11 +801,11 @@ export default function AccountDetailPage() {
       .sort((a, b) => b.value - a.value);
   })();
 
-  // Income by category for this account (within date range)
+  // Income by category — excludes "Opening Balance" and transfers
   const incomeChartData = (() => {
     const categories: Record<string, number> = {};
     filteredTxs.forEach((tx) => {
-      if (tx.payload && tx.payload.amount > 0 && tx.payload.category !== "Opening Balance") {
+      if (tx.payload && tx.payload.amount > 0 && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)) {
         const cat = tx.payload.category || "General";
         categories[cat] = (categories[cat] || 0) + effectiveAmount(tx.payload);
       }
@@ -639,9 +871,9 @@ export default function AccountDetailPage() {
     (sum, tx) => sum + effectiveAmount(tx.payload!), 0
   );
 
-  // Regular transactions: exclude "Opening Balance"
+  // Regular transactions: exclude "Opening Balance" and transfers from stats
   const regularFilteredTxs = filteredTxs.filter(
-    (tx) => !tx.payload || tx.payload.category !== "Opening Balance"
+    (tx) => tx.payload && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)
   );
   const incomeTx = regularFilteredTxs.filter((tx) => tx.payload && tx.payload.amount > 0);
   const expenseTxFromFiltered = regularFilteredTxs.filter((tx) => tx.payload && tx.payload.amount < 0);
@@ -653,7 +885,11 @@ export default function AccountDetailPage() {
   const expenseAvgAcc = expenseTxFromFiltered.length > 0
     ? Math.abs(expenseTxFromFiltered.reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0)) / expenseTxFromFiltered.length
     : 0;
-  const recentAccountTxs = regularFilteredTxs.slice(0, 10);
+  // For display: show all non-Opening-Balance transactions (including transfers)
+  const displayAccountTxs = filteredTxs.filter(
+    (tx) => tx.payload && tx.payload.category !== "Opening Balance"
+  );
+  const recentAccountTxs = displayAccountTxs.slice(0, 10);
 
   return (
     <div className="space-y-3">
@@ -687,176 +923,23 @@ export default function AccountDetailPage() {
           </div>
         </div>
         <div className="flex gap-2 self-start sm:self-auto shrink-0">
-          {/* Create Transaction */}
+          {/* Create Transaction — using shared TransactionForm */}
           <ResponsiveDialog open={createOpen} onOpenChange={setCreateOpen} title="New Transaction" trigger={<Button>Add Transaction</Button>}>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Amount</label>
-                  <div className="flex gap-2">
-                    <div className="flex rounded-md border border-input overflow-hidden shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => { setTxType("expense"); setTxCategory(""); }}
-                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                          txType === "expense"
-                            ? "bg-expense text-expense-foreground"
-                            : "bg-transparent text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Expense
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setTxType("income"); setTxCategory(""); }}
-                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                          txType === "income"
-                            ? "bg-income text-income-foreground"
-                            : "bg-transparent text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Income
-                      </button>
-                    </div>
-                    <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
-                        {txType === "expense" ? "-" : "+"}
-                      </span>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={txAmount}
-                        onChange={(e) => setTxAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="pl-7"
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Commission / Fee (optional)</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={txCommission}
-                    onChange={(e) => setTxCommission(e.target.value)}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Date</label>
-                  <Input
-                    type="date"
-                    value={txDate}
-                    onChange={(e) => setTxDate(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Category</label>
-                  {!showCategoryInput ? (
-                    <div className="flex gap-2">
-                      <select
-                        value={txCategory}
-                        onChange={(e) => {
-                          if (e.target.value === "__new__") {
-                            setShowCategoryInput(true);
-                          } else {
-                            setTxCategory(e.target.value);
-                          }
-                        }}
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-                      >
-                        <option value="">Select category...</option>
-                        {id &&
-                          getCategories(txType as CategoryType).map((cat) => (
-                            <option key={cat} value={cat}>
-                              {cat}
-                            </option>
-                          ))}
-                        <option value="__new__">+ Add new category...</option>
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Input
-                        value={newCategory}
-                        onChange={(e) => setNewCategory(e.target.value)}
-                        placeholder="New category name"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleAddNewCategory();
-                          }
-                        }}
-                      />
-                      <Button type="button" size="sm" onClick={handleAddNewCategory}>
-                        Add
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setShowCategoryInput(false)}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Counterparty</label>
-                  <Input
-                    value={txCounterparty}
-                    onChange={(e) => setTxCounterparty(e.target.value)}
-                    placeholder="e.g. Store name, employer"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Notes</label>
-                  <Input
-                    value={txNotes}
-                    onChange={(e) => setTxNotes(e.target.value)}
-                    placeholder="Optional notes"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Receipt / Document</label>
-                  <Input
-                    ref={createFileRef}
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) => {
-                      try {
-                        const file = e.target.files?.[0] ?? null;
-                        setTxFile(file);
-                        setFileInputError("");
-                      } catch (err: any) {
-                        setFileInputError(err?.message ?? String(err));
-                      }
-                    }}
-                  />
-                  {txFile && (
-                    <p className="text-xs text-muted-foreground">
-                      {txFile.name} ({(txFile.size / 1024).toFixed(1)} KB)
-                    </p>
-                  )}
-                  {fileInputError && (
-                    <p className="text-xs text-destructive">{fileInputError}</p>
-                  )}
-                </div>
-                {txCreateError && <p className="text-sm text-destructive">{txCreateError}</p>}
-                <Button onClick={handleCreateTransaction} className="w-full" disabled={txCreating}>
-                  {txCreating ? "Creating..." : "Create"}
-                </Button>
-              </div>
+            <TransactionForm
+              accounts={accounts.map((a) => ({ id: a.id, label: `${a.name || a.currency} (${a.type})` }))}
+              getCategories={getCategories}
+              addCategory={addCategory}
+              onSave={handleCreateTransaction}
+              saving={txCreating}
+              error={txCreateError}
+            />
           </ResponsiveDialog>
 
           {/* Edit Transaction Dialog (shared TransactionForm) */}
           <ResponsiveDialog open={editTxOpen} onOpenChange={(open) => { setEditTxOpen(open); if (!open) { setEditTxId(null); setEditTxInitialValues(undefined); } }} title="Edit Transaction">
             {editTxInitialValues && (
               <TransactionForm
+                accounts={accounts.map((a) => ({ id: a.id, label: `${a.name || a.currency} (${a.type})` }))}
                 accountId={id}
                 initialValues={editTxInitialValues}
                 existingDocuments={editTxExistingDocs}
@@ -932,6 +1015,31 @@ export default function AccountDetailPage() {
                 ))}
               </select>
             </div>
+            <div className="space-y-2 pt-2 border-t border-border/50">
+              <label className="text-sm font-medium">
+                Opening Balance
+                <span className="ml-2 text-xs text-muted-foreground font-normal">
+                  (current: {formatCurrency(openingBalance, account?.currency ?? "EUR", true)})
+                </span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none select-none">
+                  +
+                </span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editOpeningBalance}
+                  onChange={(e) => setEditOpeningBalance(e.target.value)}
+                  placeholder="0.00"
+                  className="pl-7"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Adjusts the base balance of this account. Creates an adjustment transaction if changed.
+              </p>
+            </div>
             {editError && <p className="text-sm text-destructive">{editError}</p>}
             <Button onClick={handleEdit} className="w-full" disabled={editing}>
               {editing ? "Saving..." : "Save"}
@@ -970,7 +1078,7 @@ export default function AccountDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{filteredTxs.length}</div>
+            <div className="text-2xl font-bold">{displayAccountTxs.length}</div>
           </CardContent>
         </Card>
         <Card>
