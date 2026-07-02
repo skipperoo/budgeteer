@@ -15,6 +15,7 @@ import { encryptTransactionPayload, effectiveAmount, isTransferPayload } from "@
 import { encryptFile } from "@/lib/crypto-file";
 import { encryptForRecipient } from "@/lib/crypto-rules";
 import { fetchAndDecryptTransactions, getAccountKey } from "@/lib/decrypt-transactions";
+import { useFilterStore } from "@/stores/filter-store";
 import { TransactionCard } from "@/components/transactions/TransactionCard";
 import { TransactionDetailOverlay } from "@/components/transactions/TransactionDetailOverlay";
 import { TransactionForm, type TransactionFormData } from "@/components/transactions/TransactionForm";
@@ -44,11 +45,28 @@ export default function DashboardPage() {
 
   // Date range
   const dateRange = useDateRangeStore((s) => s.range);
+  const { selectedCategories, selectedTypes } = useFilterStore();
 
-  // Filter transactions to the selected date range
+  // Filter transactions by date range, category, and type
   const filteredTxs = allTxs.filter((tx) => {
+    // Date range
     const d = tx.time.slice(0, 10);
-    return d >= dateRange.start && d <= dateRange.end;
+    if (d < dateRange.start || d > dateRange.end) return false;
+    if (!tx.payload) return true;
+
+    // Type filter
+    if (selectedTypes.length > 0) {
+      const isTransfer = isTransferPayload(tx.payload);
+      const txType = isTransfer ? "transfer" : tx.payload.amount > 0 ? "income" : "expense";
+      if (!selectedTypes.includes(txType)) return false;
+    }
+
+    // Category filter
+    if (selectedCategories.length > 0) {
+      if (!selectedCategories.includes(tx.payload.category)) return false;
+    }
+
+    return true;
   });
 
   // No-accounts overlay

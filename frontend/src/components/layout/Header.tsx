@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 import { DateRangePicker } from "@/components/shared/DateRangePicker";
+import { FilterMenu } from "@/components/layout/FilterMenu";
 import { useNotificationStore } from "@/stores/notification-store";
 
 export function Header() {
@@ -27,6 +28,7 @@ export function Header() {
             </span>
           )}
         </button>
+        <FilterMenu />
         <DateRangePicker />
       </div>
     </header>

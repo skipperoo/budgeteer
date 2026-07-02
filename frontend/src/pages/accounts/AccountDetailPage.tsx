@@ -16,6 +16,7 @@ import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64 } from "@/lib/crypto";
 import { encryptForRecipient, decryptECIESPayload } from "@/lib/crypto-rules";
 import { encryptTransactionPayload, decryptTransactionPayload, effectiveAmount, isTransferPayload } from "@/lib/crypto-transaction";
+import { useFilterStore } from "@/stores/filter-store";
 import type { TransactionPayload } from "@/lib/crypto-transaction";
 import { encryptFile } from "@/lib/crypto-file";
 import { getAccountKey } from "@/lib/decrypt-transactions";
@@ -775,16 +776,33 @@ export default function AccountDetailPage() {
 
   // Date range
   const dateRange = useDateRangeStore((s) => s.range);
+  const { selectedCategories, selectedTypes } = useFilterStore();
 
   // All-time balance for this account
   const totalBalance = transactions
     .filter((tx) => tx.payload)
     .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
 
-  // Filter transactions to the date range for the chart and list
+  // Filter transactions by date range, category, and type
   const filteredTxs = transactions.filter((tx) => {
+    // Date range
     const d = tx.time.slice(0, 10);
-    return d >= dateRange.start && d <= dateRange.end;
+    if (d < dateRange.start || d > dateRange.end) return false;
+    if (!tx.payload) return true;
+
+    // Type filter
+    if (selectedTypes.length > 0) {
+      const isTransfer = isTransferPayload(tx.payload);
+      const txType = isTransfer ? "transfer" : tx.payload.amount > 0 ? "income" : "expense";
+      if (!selectedTypes.includes(txType)) return false;
+    }
+
+    // Category filter
+    if (selectedCategories.length > 0) {
+      if (!selectedCategories.includes(tx.payload.category)) return false;
+    }
+
+    return true;
   });
 
   // Pastel chart colors (matches dashboard)
