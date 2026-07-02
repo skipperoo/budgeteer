@@ -131,7 +131,18 @@ export default function DashboardPage() {
   const displayTxs = filteredTxs.filter(
     (tx) => tx.payload && tx.payload.category !== "Opening Balance"
   );
-  const recentTxs = displayTxs.slice(0, 10);
+  // Deduplicate transfer pairs — show each pair only once (the expense side)
+  const deduplicatedTxs = (() => {
+    const seen = new Set<string>();
+    return displayTxs.filter((tx) => {
+      if (tx.payload && isTransferPayload(tx.payload) && tx.payload.transfer_pair_id) {
+        if (seen.has(tx.payload.transfer_pair_id)) return false;
+        seen.add(tx.payload.transfer_pair_id);
+      }
+      return true;
+    });
+  })();
+  const recentTxs = deduplicatedTxs.slice(0, 10);
   const currencyMap = Object.fromEntries(accounts.map((a) => [a.id, a.currency]));
 
   // Balance computations (within date range)
@@ -784,7 +795,7 @@ export default function DashboardPage() {
             <CardHeader className="shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
-                {displayTxs.length > 0 && (
+                {deduplicatedTxs.length > 0 && (
                   <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setShowAllOpen(true)}>
                     Show All
                   </Button>
@@ -795,7 +806,7 @@ export default function DashboardPage() {
               {recentTxs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-[260px] text-center">
                   <p className="text-sm text-muted-foreground mb-4">
-                    {displayTxs.length === 0
+                    {deduplicatedTxs.length === 0
                       ? 'No transactions yet. Add one to get started.'
                       : 'No transactions in selected range.'}
                   </p>
@@ -1093,16 +1104,16 @@ export default function DashboardPage() {
       {/* Show All Transactions overlay (all accounts) */}
       <ResponsiveDialog open={showAllOpen} onOpenChange={setShowAllOpen} title="All Transactions">
         <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
-          {displayTxs.length === 0 ? (
+          {deduplicatedTxs.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
               No transactions in the selected range.
             </p>
           ) : (
             <>
               <p className="text-xs text-muted-foreground mb-2">
-                Showing {displayTxs.length} transaction{displayTxs.length !== 1 ? "s" : ""} across {currencyMap ? new Set(displayTxs.map((tx) => tx.account_id)).size : 0} accounts
+                Showing {deduplicatedTxs.length} transaction{deduplicatedTxs.length !== 1 ? "s" : ""} across {currencyMap ? new Set(deduplicatedTxs.map((tx) => tx.account_id)).size : 0} accounts
               </p>
-              {displayTxs.map((tx) => (
+              {deduplicatedTxs.map((tx) => (
                 <TransactionCard
                   key={tx.id}
                   transaction={{

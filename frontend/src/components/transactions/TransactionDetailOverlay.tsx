@@ -17,6 +17,7 @@ import { formatDate, formatCurrency } from "@/lib/format";
 import {
   ArrowUpRight,
   ArrowDownLeft,
+  ArrowLeftRight,
   FileText,
   ImageIcon,
   Download,
@@ -27,6 +28,7 @@ import {
   FileIcon,
 } from "lucide-react";
 import type { TransactionPayload } from "@/lib/crypto-transaction";
+import { isTransferPayload } from "@/lib/crypto-transaction";
 import type { DocumentMetadata, DocumentDataResponse } from "@/types";
 
 export interface TransactionDetailDisplay {
@@ -55,7 +57,8 @@ export function TransactionDetailOverlay({
   onDelete,
 }: TransactionDetailOverlayProps) {
   const { id, time, payload } = transaction;
-  const isIncome = payload.amount >= 0;
+  const isTransfer = isTransferPayload(payload);
+  const isIncome = !isTransfer && payload.amount >= 0;
   const totalAmount = payload.amount - (payload.commission || 0);
 
   // Document state
@@ -190,12 +193,16 @@ export function TransactionDetailOverlay({
           <div className="flex items-center gap-4">
             <div
               className={`flex items-center justify-center rounded-full h-12 w-12 shrink-0 ${
-                isIncome
-                  ? "bg-income/10 text-income"
-                  : "bg-expense/10 text-expense"
+                isTransfer
+                  ? "bg-blue-500/10 text-blue-500"
+                  : isIncome
+                    ? "bg-income/10 text-income"
+                    : "bg-expense/10 text-expense"
               }`}
             >
-              {isIncome ? (
+              {isTransfer ? (
+                <ArrowLeftRight className="h-6 w-6" />
+              ) : isIncome ? (
                 <ArrowUpRight className="h-6 w-6" />
               ) : (
                 <ArrowDownLeft className="h-6 w-6" />
@@ -204,13 +211,16 @@ export function TransactionDetailOverlay({
             <div className="min-w-0">
               <span
                 className={`text-2xl font-bold tabular-nums ${
-                  isIncome ? "text-income" : "text-foreground"
+                  isTransfer ? "text-foreground" : isIncome ? "text-income" : "text-foreground"
                 }`}
               >
-                {formatCurrency(totalAmount, currency, true)}
+                {isTransfer
+                  ? formatCurrency(Math.abs(totalAmount), currency, false)
+                  : formatCurrency(totalAmount, currency, true)
+                }
               </span>
               <span className="block text-xs text-muted-foreground mt-0.5">
-                {isIncome ? "Income" : "Expense"}
+                {isTransfer ? "Transfer" : isIncome ? "Income" : "Expense"}
               </span>
             </div>
           </div>
@@ -234,7 +244,11 @@ export function TransactionDetailOverlay({
               <span className="block text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
                 Category
               </span>
-              {payload.category ? (
+              {isTransfer ? (
+                <span className="text-[11px] uppercase font-bold tracking-wider bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded">
+                  Transfer
+                </span>
+              ) : payload.category ? (
                 <span className="text-[11px] uppercase font-bold tracking-wider bg-secondary text-secondary-foreground px-2 py-0.5 rounded">
                   {payload.category}
                 </span>
