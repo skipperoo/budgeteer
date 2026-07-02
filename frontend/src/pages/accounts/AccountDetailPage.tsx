@@ -101,6 +101,7 @@ export default function AccountDetailPage() {
   const [showAllOpen, setShowAllOpen] = useState(false);
   const [showAllTxs, setShowAllTxs] = useState<TransactionDisplay[]>([]);
   const [showAllLoading, setShowAllLoading] = useState(false);
+  const [showAllRawOffset, setShowAllRawOffset] = useState(0); // raw unfiltered count for pagination offset
   const [hasMoreTxs, setHasMoreTxs] = useState(true);
 
   // --- Opening balance edit state ---
@@ -376,9 +377,11 @@ export default function AccountDetailPage() {
       counterparty: tx.payload.counterparty ?? "",
       notes: tx.payload.notes ?? "",
       isTransfer: isTransferPayload(tx.payload),
-      targetAccountId: tx.payload.transfer_target_account_id
-        ?? tx.payload.transfer_source_account_id
-        ?? undefined,
+      targetAccountId: tx.payload.is_transfer
+        ? (tx.payload.amount > 0
+            ? tx.payload.transfer_source_account_id   // income side → other side is the source
+            : tx.payload.transfer_target_account_id)   // expense side → other side is the target
+        : undefined,
     });
     // Fetch existing documents for the transaction
     try {
@@ -900,6 +903,7 @@ export default function AccountDetailPage() {
   // --- Show All transactions callbacks ---
   const openShowAll = useCallback(() => {
     setShowAllTxs(displayAccountTxs);
+    setShowAllRawOffset(transactions.length); // total raw (unfiltered) transactions fetched so far
     setHasMoreTxs(transactions.length >= 50);
     setShowAllOpen(true);
   }, [displayAccountTxs, transactions]);
@@ -908,10 +912,10 @@ export default function AccountDetailPage() {
     if (!id || showAllLoading) return;
     setShowAllLoading(true);
     try {
-      const offset = showAllTxs.length;
-      const data = await apiFetch<Transaction[]>(`${ENDPOINTS.transactions(id)}?limit=50&offset=${offset}`);
+      const data = await apiFetch<Transaction[]>(`${ENDPOINTS.transactions(id)}?limit=50&offset=${showAllRawOffset}`);
       const raw = data ?? [];
 
+      setShowAllRawOffset((prev) => prev + raw.length);
       if (raw.length < 50) {
         setHasMoreTxs(false);
       }
@@ -954,7 +958,7 @@ export default function AccountDetailPage() {
     } finally {
       setShowAllLoading(false);
     }
-  }, [id, showAllLoading, showAllTxs, accountKeyBase64, privKeyBase64, dateRange]);
+  }, [id, showAllLoading, showAllRawOffset, accountKeyBase64, privKeyBase64, dateRange]);
 
   return (
     <div className="space-y-3">
@@ -1594,13 +1598,16 @@ export default function AccountDetailPage() {
                 />
               ))}
               {hasMoreTxs && (
-                <div className="flex justify-center pt-2 pb-1">
+                <div className="flex justify-center pt-3 pb-1 border-t border-border/50 mt-2">
                   <button
                     type="button"
                     onClick={loadMoreTransactions}
                     disabled={showAllLoading}
-                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
                     {showAllLoading ? "Loading..." : "Load more transactions"}
                   </button>
                 </div>

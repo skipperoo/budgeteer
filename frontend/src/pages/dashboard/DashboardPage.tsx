@@ -70,6 +70,9 @@ export default function DashboardPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailAccountKey, setDetailAccountKey] = useState<string | null>(null);
 
+  // Show All transactions overlay state (dashboard-wide, across all accounts)
+  const [showAllOpen, setShowAllOpen] = useState(false);
+
   const { getCategories, addCategory } = useCategoryStore();
 
   const privKeyBase64 = plaintextPrivateKey
@@ -779,13 +782,22 @@ export default function DashboardPage() {
         <div>
           <Card className="flex flex-col h-[400px]">
             <CardHeader className="shrink-0">
-              <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-bold">Recent Transactions</CardTitle>
+                {displayTxs.length > 0 && (
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setShowAllOpen(true)}>
+                    Show All
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 overflow-y-auto">
               {recentTxs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-[260px] text-center">
                   <p className="text-sm text-muted-foreground mb-4">
-                    No transactions yet. Add one to get started.
+                    {displayTxs.length === 0
+                      ? 'No transactions yet. Add one to get started.'
+                      : 'No transactions in selected range.'}
                   </p>
                   <Button
                     onClick={() => {
@@ -862,9 +874,11 @@ export default function DashboardPage() {
               counterparty: editTx.payload.counterparty ?? "",
               notes: editTx.payload.notes ?? "",
               isTransfer: isTransferPayload(editTx.payload),
-              targetAccountId: editTx.payload.transfer_target_account_id
-                ?? editTx.payload.transfer_source_account_id
-                ?? undefined,
+              targetAccountId: editTx.payload.is_transfer
+                ? (editTx.payload.amount > 0
+                    ? editTx.payload.transfer_source_account_id   // income side → other side is the source
+                    : editTx.payload.transfer_target_account_id)  // expense side → other side is the target
+                : undefined,
             }}
             getCategories={getCategories}
             addCategory={addCategory}
@@ -1075,6 +1089,45 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Show All Transactions overlay (all accounts) */}
+      <ResponsiveDialog open={showAllOpen} onOpenChange={setShowAllOpen} title="All Transactions">
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+          {displayTxs.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No transactions in the selected range.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground mb-2">
+                Showing {displayTxs.length} transaction{displayTxs.length !== 1 ? "s" : ""} across {currencyMap ? new Set(displayTxs.map((tx) => tx.account_id)).size : 0} accounts
+              </p>
+              {displayTxs.map((tx) => (
+                <TransactionCard
+                  key={tx.id}
+                  transaction={{
+                    id: tx.id,
+                    time: tx.time,
+                    account_id: tx.account_id,
+                    payload: tx.payload,
+                  }}
+                  currency={currencyMap[tx.account_id]}
+                  onClick={
+                    tx.payload
+                      ? () => {
+                          setShowAllOpen(false);
+                          setDetailTx(tx);
+                          setDetailOpen(true);
+                        }
+                      : undefined
+                  }
+                  compact
+                />
+              ))}
+            </>
+          )}
+        </div>
+      </ResponsiveDialog>
     </div>
   );
 }
