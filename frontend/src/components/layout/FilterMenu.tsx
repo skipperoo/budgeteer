@@ -6,6 +6,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Filter, X, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,11 @@ function formatDateLabel(range: { start: string; end: string }): string {
 }
 
 export function FilterMenu() {
+  const location = useLocation();
+  // Only show on Dashboard and AccountDetail pages
+  const showOnRoutes = ["/dashboard", "/accounts/"];
+  const isVisible = showOnRoutes.some((route) => location.pathname.startsWith(route));
+
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -82,15 +88,20 @@ export function FilterMenu() {
     setCustomEnd(range.end);
   }, [range]);
 
-  // Close on outside click
+  // Close on outside click — ignore clicks inside Radix dropdown menus (portaled content)
   useEffect(() => {
     if (!open) return;
     const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Don't close if clicking inside a Radix dropdown menu or its trigger
+      if (target.closest('[data-radix-dropdown-menu-content]') || target.closest('[data-radix-dropdown-menu-trigger]')) {
+        return;
+      }
       if (
         panelRef.current &&
-        !panelRef.current.contains(e.target as Node) &&
+        !panelRef.current.contains(target) &&
         btnRef.current &&
-        !btnRef.current.contains(e.target as Node)
+        !btnRef.current.contains(target)
       ) {
         setOpen(false);
       }
@@ -112,6 +123,8 @@ export function FilterMenu() {
 
   const activeFilterCount =
     selectedCategories.length + selectedTypes.length;
+
+  if (!isVisible) return null;
 
   return (
     <div className="relative">
@@ -197,7 +210,7 @@ export function FilterMenu() {
                   setCustomStart(v);
                   if (v && customEnd) applyCustomIfReady(v, customEnd);
                 }}
-                className="flex-1 text-xs px-2 py-1"
+                className="flex-1 text-[11px] px-1 py-1 leading-none [&::-webkit-datetime-edit]:text-[11px]"
               />
               <span className="text-xs text-muted-foreground shrink-0">→</span>
               <Input
@@ -208,7 +221,7 @@ export function FilterMenu() {
                   setCustomEnd(v);
                   if (customStart && v) applyCustomIfReady(customStart, v);
                 }}
-                className="flex-1 text-xs px-2 py-1"
+                className="flex-1 text-[11px] px-1 py-1 leading-none [&::-webkit-datetime-edit]:text-[11px]"
               />
             </div>
           </div>
