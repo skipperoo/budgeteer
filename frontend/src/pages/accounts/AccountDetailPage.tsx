@@ -104,6 +104,9 @@ export default function AccountDetailPage() {
   const [showAllRawOffset, setShowAllRawOffset] = useState(0); // raw unfiltered count for pagination offset
   const [hasMoreTxs, setHasMoreTxs] = useState(true);
 
+  // --- Card transaction limit for "Show more" pagination ---
+  const [cardTxLimit, setCardTxLimit] = useState(10);
+
   // --- Opening balance edit state ---
   const [openingBalanceEditOpen, setOpeningBalanceEditOpen] = useState(false);
   const [openingBalanceInput, setOpeningBalanceInput] = useState("");
@@ -898,7 +901,8 @@ export default function AccountDetailPage() {
   const displayAccountTxs = filteredTxs.filter(
     (tx) => tx.payload && tx.payload.category !== "Opening Balance"
   );
-  const recentAccountTxs = displayAccountTxs.slice(0, 10);
+  const recentAccountTxs = displayAccountTxs.slice(0, cardTxLimit);
+  const hasMoreCardTxs = cardTxLimit < displayAccountTxs.length;
 
   // --- Show All transactions callbacks ---
   const openShowAll = useCallback(() => {
@@ -1329,6 +1333,17 @@ export default function AccountDetailPage() {
                       compact
                     />
                   ))}
+                  {hasMoreCardTxs && (
+                    <div className="flex justify-center pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setCardTxLimit((prev) => prev + 10)}
+                        className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+                      >
+                        Show more
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

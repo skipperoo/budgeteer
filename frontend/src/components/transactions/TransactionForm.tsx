@@ -120,15 +120,6 @@ export function TransactionForm({
     }
   }, [isTransfer]);
 
-  // When accountId changes in transfer mode, update counterparty if both accounts selected
-  useEffect(() => {
-    if (isTransfer && accountId && targetAccountId) {
-      const fromName = accountLabelMap[accountId] || accountId;
-      const toName = accountLabelMap[targetAccountId] || targetAccountId;
-      setCounterparty(`${fromName} → ${toName}`);
-    }
-  }, [isTransfer, accountId, targetAccountId, accountLabelMap]);
-
   // When target account changes, auto-fill counterparty
   const handleTargetAccountChange = (value: string) => {
     setTargetAccountId(value);
@@ -136,8 +127,17 @@ export function TransactionForm({
       const fromName = accountLabelMap[accountId] || accountId;
       const toName = accountLabelMap[value] || value;
       setCounterparty(`${fromName} → ${toName}`);
-    } else {
-      setCounterparty("");
+    }
+  };
+
+  // Auto-fill counterparty when source account changes in transfer mode
+  const handleAccountChange = (value: string) => {
+    setAccountId(value);
+    setShowCategoryInput(false);
+    if (isTransfer && value && targetAccountId) {
+      const fromName = accountLabelMap[value] || value;
+      const toName = accountLabelMap[targetAccountId] || targetAccountId;
+      setCounterparty(`${fromName} → ${toName}`);
     }
   };
 
@@ -186,8 +186,7 @@ export function TransactionForm({
           <select
             value={accountId}
             onChange={(e) => {
-              setAccountId(e.target.value);
-              setShowCategoryInput(false);
+              handleAccountChange(e.target.value);
             }}
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
             required

@@ -8,8 +8,9 @@
 
 import { Button } from "@/components/ui/button";
 import type { TransactionPayload } from "@/lib/crypto-transaction";
+import { isTransferPayload } from "@/lib/crypto-transaction";
 import { formatDate, formatCurrency } from "@/lib/format";
-import { ArrowUpRight, ArrowDownLeft, Lock, Pencil, Trash2 } from "lucide-react";
+import { ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Lock, Pencil, Trash2 } from "lucide-react";
 
 export interface TransactionDisplay {
   id: string;
@@ -44,7 +45,8 @@ export function TransactionCard({
   compact = false,
 }: TransactionCardProps) {
   const { payload, time } = transaction;
-  const isIncome = payload ? payload.amount >= 0 : null;
+  const isTransfer = payload ? isTransferPayload(payload) : false;
+  const isIncome = payload && !isTransfer ? payload.amount >= 0 : null;
   const totalAmount = payload ? payload.amount - (payload.commission || 0) : null;
 
   return (
@@ -74,16 +76,20 @@ export function TransactionCard({
           className={`
             flex items-center justify-center rounded-full shrink-0
             ${compact ? "h-8 w-8" : "h-10 w-10"}
-            ${payload 
-              ? isIncome 
-                ? "bg-income/10 text-income" 
-                : "bg-expense/10 text-expense"
-              : "bg-muted text-muted-foreground"
+            ${!payload
+              ? "bg-muted text-muted-foreground"
+              : isTransfer
+                ? "bg-blue-500/10 text-blue-500"
+                : isIncome
+                  ? "bg-income/10 text-income"
+                  : "bg-expense/10 text-expense"
             }
           `}
         >
           {payload ? (
-            isIncome ? (
+            isTransfer ? (
+              <ArrowLeftRight className={compact ? "h-4 w-4" : "h-5 w-5"} />
+            ) : isIncome ? (
               <ArrowUpRight className={compact ? "h-4 w-4" : "h-5 w-5"} />
             ) : (
               <ArrowDownLeft className={compact ? "h-4 w-4" : "h-5 w-5"} />
@@ -100,11 +106,14 @@ export function TransactionCard({
           </span>
           <div className="flex items-center gap-2 mt-1">
             {payload?.category && (
-              <span className="text-[10px] uppercase font-bold tracking-wider bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded">
-                {payload.category}
+              <span className={`
+                text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded
+                ${isTransfer ? "bg-blue-500/10 text-blue-600" : "bg-secondary text-secondary-foreground"}
+              `}>
+                {isTransfer ? "Transfer" : payload.category}
               </span>
             )}
-            {payload?.notes && (
+            {payload?.notes && !isTransfer && (
               <span className="text-xs text-muted-foreground truncate italic opacity-80">
                 {payload.notes}
               </span>
@@ -122,10 +131,13 @@ export function TransactionCard({
                 className={`
                   ${compact ? "text-sm" : "text-base"} 
                   font-bold tabular-nums leading-none
-                  ${isIncome ? "text-income" : "text-foreground"}
+                  ${isTransfer ? "text-foreground" : isIncome ? "text-income" : "text-foreground"}
                 `}
               >
-                {formatCurrency(totalAmount!, currency, true)}
+                {isTransfer
+                  ? formatCurrency(Math.abs(totalAmount!), currency, false)
+                  : formatCurrency(totalAmount!, currency, true)
+                }
               </span>
               {payload.commission != null && payload.commission > 0 && (
                 <span className="text-[10px] text-muted-foreground mt-0.5 leading-none">

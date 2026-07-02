@@ -183,8 +183,8 @@ describe("TransactionForm - transfer mode", () => {
     const amountInput = screen.getByDisplayValue("500");
     expect(amountInput).toBeInTheDocument();
 
-    // Counterparty should be pre-filled
-    const counterpartyInput = screen.getByDisplayValue("Checking (personal) → Savings (savings)");
+    // Counterparty should be pre-filled from initialValues
+    const counterpartyInput = screen.getByDisplayValue("Checking → Savings");
     expect(counterpartyInput).toBeInTheDocument();
   });
 
