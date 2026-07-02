@@ -24,7 +24,7 @@ import { useRuleStore } from "@/stores/rule-store";
 import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
 import { TransactionDetailOverlay } from "@/components/transactions/TransactionDetailOverlay";
 import { TransactionForm, type TransactionFormData } from "@/components/transactions/TransactionForm";
-import { CURRENCIES, getCurrencySymbol, formatCurrency } from "@/lib/format";
+import { CURRENCIES, getCurrencySymbol, formatCurrency, formatNumber, formatDate } from "@/lib/format";
 import type { Transaction, CreateTransactionRequest, DocumentMetadata } from "@/types";
 import {
   ResponsiveContainer,
@@ -882,10 +882,7 @@ export default function AccountDetailPage() {
       cumulative += dayTotals[date];
       return {
         date,
-        displayDate: new Date(date + "T12:00:00Z").toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        }),
+        displayDate: formatDate(date, { month: "short", day: "numeric" }),
         balance: Number(cumulative.toFixed(2)),
       };
     });
@@ -1002,10 +999,7 @@ export default function AccountDetailPage() {
                 }`}
               >
                 {getCurrencySymbol(account.currency)}
-                {totalBalance.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {formatNumber(totalBalance)}
               </span>
               <span className="text-xs sm:text-sm text-muted-foreground capitalize">• {account.type} account</span>
             </div>
@@ -1456,10 +1450,7 @@ export default function AccountDetailPage() {
                                   <p className="font-semibold mb-1">{data.name}</p>
                                   <p className="font-mono text-destructive font-bold">
                                     {getCurrencySymbol(account.currency)}
-                                    {data.value.toLocaleString(undefined, {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    })}
+                                    {formatNumber(data.value)}
                                   </p>
                                 </div>
                               );
@@ -1476,10 +1467,7 @@ export default function AccountDetailPage() {
                           style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
                         >
                           {getCurrencySymbol(account.currency)}
-                          {expenseTotal.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatNumber(expenseTotal)}
                         </text>
                         <text
                           x="50%"
@@ -1546,10 +1534,7 @@ export default function AccountDetailPage() {
                                   <p className="font-semibold mb-1">{data.name}</p>
                                   <p className="font-mono text-income font-bold">
                                     {getCurrencySymbol(account.currency)}
-                                    {data.value.toLocaleString(undefined, {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    })}
+                                    {formatNumber(data.value)}
                                   </p>
                                 </div>
                               );
@@ -1566,10 +1551,7 @@ export default function AccountDetailPage() {
                           style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
                         >
                           {getCurrencySymbol(account.currency)}
-                          {incomeTotal.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatNumber(incomeTotal)}
                         </text>
                         <text
                           x="50%"

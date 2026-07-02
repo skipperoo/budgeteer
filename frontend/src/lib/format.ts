@@ -49,7 +49,26 @@ export function getCurrencySymbol(code: string): string {
 }
 
 /**
- * Format a number as currency with a symbol.
+ * Format a number using the user's stored locale.
+ * Falls back to "en" if the stored locale is not supported.
+ */
+export function formatNumber(
+  value: number,
+  options: Intl.NumberFormatOptions = {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }
+): string {
+  const locale = getStoredLocale();
+  try {
+    return value.toLocaleString(locale, options);
+  } catch {
+    return value.toLocaleString("en", options);
+  }
+}
+
+/**
+ * Format a number as currency with a symbol, using stored locale for digit grouping.
  */
 export function formatCurrency(
   amount: number,
@@ -58,13 +77,27 @@ export function formatCurrency(
 ): string {
   const symbol = getCurrencySymbol(currencyCode);
   const isPositive = amount >= 0;
-  const absAmount = Math.abs(amount).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const absAmount = formatNumber(Math.abs(amount));
 
   const sign = isPositive ? (showPlus ? "+" : "") : "-";
   return `${sign}${symbol}${absAmount}`;
+}
+
+/**
+ * Format a short date range label like "Jun 2 – Jul 2" using stored locale.
+ */
+export function formatDateLabel(start: string, end: string): string {
+  const locale = getStoredLocale();
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  try {
+    const s = new Date(start + "T12:00:00").toLocaleDateString(locale, opts);
+    const e = new Date(end + "T12:00:00").toLocaleDateString(locale, opts);
+    return `${s} – ${e}`;
+  } catch {
+    const s = new Date(start + "T12:00:00").toLocaleDateString("en", opts);
+    const e = new Date(end + "T12:00:00").toLocaleDateString("en", opts);
+    return `${s} – ${e}`;
+  }
 }
 
 /**

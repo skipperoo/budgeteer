@@ -23,7 +23,7 @@ import type { CreateTransactionRequest, Transaction } from "@/types";
 import type { DecryptedTransaction } from "@/lib/decrypt-transactions";
 import { BalanceChart } from "@/components/shared/BalanceChart";
 import { BudgetProgressSection } from "@/components/shared/BudgetProgressSection";
-import { getCurrencySymbol, formatCurrency } from "@/lib/format";
+import { getCurrencySymbol, formatCurrency, formatNumber, formatDate } from "@/lib/format";
 import {
   ResponsiveContainer,
   PieChart,
@@ -255,10 +255,7 @@ export default function DashboardPage() {
       cumulative += dayTotals[date];
       return {
         date,
-        displayDate: new Date(date + "T12:00:00Z").toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        }),
+        displayDate: formatDate(date, { month: "short", day: "numeric" }),
         balance: Number(cumulative.toFixed(2)),
       };
     });
@@ -790,10 +787,7 @@ export default function DashboardPage() {
                       }`}
                     >
                       {getCurrencySymbol(cur)}
-                      {val.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {formatNumber(val)}
                     </span>
                   ))}
                 </div>
@@ -965,10 +959,7 @@ export default function DashboardPage() {
                                 <p className="font-semibold mb-1">{data.name}</p>
                                 <p className="font-mono text-destructive font-bold">
                                   {defaultSymbol}
-                                  {data.value.toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
+                                  {formatNumber(data.value)}
                                 </p>
                               </div>
                             );
@@ -985,10 +976,7 @@ export default function DashboardPage() {
                         style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
                       >
                         {defaultSymbol}
-                        {expenseTotal.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                        {formatNumber(expenseTotal)}
                       </text>
                       <text
                         x="50%"
@@ -1062,10 +1050,7 @@ export default function DashboardPage() {
                                 <p className="font-semibold mb-1">{data.name}</p>
                                 <p className="font-mono text-income font-bold">
                                   {defaultSymbol}
-                                  {data.value.toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
+                                  {formatNumber(data.value)}
                                 </p>
                               </div>
                             );
@@ -1082,10 +1067,7 @@ export default function DashboardPage() {
                         style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
                       >
                         {defaultSymbol}
-                        {incomeTotal.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                        {formatNumber(expenseTotal)}
                       </text>
                       <text
                         x="50%"

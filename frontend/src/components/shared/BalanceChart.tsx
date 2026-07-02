@@ -16,7 +16,7 @@ import {
   CartesianGrid,
   Tooltip as ChartTooltip,
 } from "recharts";
-import { getCurrencySymbol } from "@/lib/format";
+import { getCurrencySymbol, formatNumber } from "@/lib/format";
 
 interface BalanceChartDatum {
   displayDate: string;
@@ -80,10 +80,7 @@ export function BalanceChart({ data, currency = "EUR", gradientId }: BalanceChar
                     <p className="font-semibold mb-1">{datum.displayDate}</p>
                     <p className="font-mono text-foreground font-bold">
                       {symbol}
-                      {Number(payload[0].value ?? 0).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {formatNumber(Number(payload[0].value ?? 0))}
                     </p>
                   </div>
                 );

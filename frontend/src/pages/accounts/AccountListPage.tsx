@@ -11,7 +11,7 @@ import { ENDPOINTS } from "@/lib/constants";
 import { generateAccountKey, encryptAccountKeyForRecipient, bytesToBase64 } from "@/lib/crypto";
 import { encryptTransactionPayload, effectiveAmount } from "@/lib/crypto-transaction";
 import { getAccountKey, fetchAndDecryptTransactions } from "@/lib/decrypt-transactions";
-import { formatDate, CURRENCIES, getCurrencySymbol } from "@/lib/format";
+import { formatDate, CURRENCIES, getCurrencySymbol, formatNumber } from "@/lib/format";
 import type { CreateTransactionRequest } from "@/types";
 
 type AccountType = "personal" | "joint" | "savings";
@@ -217,10 +217,7 @@ export default function AccountListPage() {
                     ) : (
                       <>
                         {getCurrencySymbol(account.currency)}
-                        {(balances[account.id] ?? 0).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                        {formatNumber(balances[account.id] ?? 0)}
                       </>
                     )}
                   </span>

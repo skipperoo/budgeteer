@@ -10,6 +10,7 @@ import { useLocation } from "react-router-dom";
 import { Filter, X, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { formatDateLabel } from "@/lib/format";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -41,13 +42,6 @@ const TYPE_OPTIONS = [
   { value: "expense" as const, label: "Expense" },
   { value: "transfer" as const, label: "Transfer" },
 ];
-
-function formatDateLabel(range: { start: string; end: string }): string {
-  const s = new Date(range.start + "T12:00:00");
-  const e = new Date(range.end + "T12:00:00");
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-  return `${s.toLocaleDateString(undefined, opts)} – ${e.toLocaleDateString(undefined, opts)}`;
-}
 
 export function FilterMenu() {
   const location = useLocation();
@@ -183,7 +177,7 @@ export function FilterMenu() {
               Date Range
             </span>
             <p className="text-xs text-foreground font-medium">
-              {formatDateLabel(range)}
+              {formatDateLabel(range.start, range.end)}
             </p>
             <div className="flex gap-1.5">
               {QUICK_PRESETS.map((preset) => (
