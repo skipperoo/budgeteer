@@ -51,7 +51,8 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
     }
     return get().items
       .filter((c) => c.type === type)
-      .map((c) => c.name);
+      .map((c) => c.name)
+      .sort((a, b) => a.localeCompare(b));
   },
 
   fetchCategories: async () => {

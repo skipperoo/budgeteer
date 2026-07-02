@@ -999,7 +999,10 @@ export default function AccountDetailPage() {
           {/* Create Transaction — using shared TransactionForm */}
           <ResponsiveDialog open={createOpen} onOpenChange={setCreateOpen} title="New Transaction" trigger={<Button>Add Transaction</Button>}>
             <TransactionForm
-              accounts={accounts.map((a) => ({ id: a.id, label: `${a.name || a.currency} (${a.type})` }))}
+              accounts={accounts
+                .map((a) => ({ id: a.id, label: `${a.name || a.currency} (${a.type})` }))
+                .sort((a, b) => a.label.localeCompare(b.label))}
+              accountId={id}
               getCategories={getCategories}
               addCategory={addCategory}
               onSave={handleCreateTransaction}
@@ -1012,7 +1015,9 @@ export default function AccountDetailPage() {
           <ResponsiveDialog open={editTxOpen} onOpenChange={(open) => { setEditTxOpen(open); if (!open) { setEditTxId(null); setEditTxInitialValues(undefined); } }} title="Edit Transaction">
             {editTxInitialValues && (
               <TransactionForm
-                accounts={accounts.map((a) => ({ id: a.id, label: `${a.name || a.currency} (${a.type})` }))}
+                accounts={accounts
+                  .map((a) => ({ id: a.id, label: `${a.name || a.currency} (${a.type})` }))
+                  .sort((a, b) => a.label.localeCompare(b.label))}
                 accountId={id}
                 initialValues={editTxInitialValues}
                 existingDocuments={editTxExistingDocs}

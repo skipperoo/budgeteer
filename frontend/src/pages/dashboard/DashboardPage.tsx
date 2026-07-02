@@ -659,7 +659,9 @@ export default function DashboardPage() {
         {accounts.length > 0 ? (
           <ResponsiveDialog open={createOpen} onOpenChange={setCreateOpen} title="New Transaction" trigger={<Button size="lg">+ New Transaction</Button>}>
             <TransactionForm
-              accounts={accounts.map((a) => ({ id: a.id, label: `${a.name || a.currency} (${a.type})` }))}
+              accounts={accounts
+                .map((a) => ({ id: a.id, label: `${a.name || a.currency} (${a.type})` }))
+                .sort((a, b) => a.label.localeCompare(b.label))}
               getCategories={getCategories}
               addCategory={addCategory}
               onSave={handleCreateTransaction}
@@ -873,7 +875,9 @@ export default function DashboardPage() {
       {editTx?.payload && (
         <ResponsiveDialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); if (!open) setEditTx(null); }} title="Edit Transaction">
           <TransactionForm
-            accounts={accounts.map((a) => ({ id: a.id, label: `${a.name || a.currency} (${a.type})` }))}
+            accounts={accounts
+              .map((a) => ({ id: a.id, label: `${a.name || a.currency} (${a.type})` }))
+              .sort((a, b) => a.label.localeCompare(b.label))}
             accountId={editTx.account_id}
             initialValues={{
               type: editTx.payload.amount >= 0 ? "income" : "expense",
