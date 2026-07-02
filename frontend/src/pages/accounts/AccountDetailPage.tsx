@@ -774,7 +774,7 @@ export default function AccountDetailPage() {
     );
   }
 
-  // Date range
+  // Date range (affects all components)
   const dateRange = useDateRangeStore((s) => s.range);
   const { selectedCategories, selectedTypes } = useFilterStore();
 
@@ -783,25 +783,23 @@ export default function AccountDetailPage() {
     .filter((tx) => tx.payload)
     .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
 
-  // Filter transactions by date range, category, and type
+  // Date-range-only filter (used for stats: counts, money flow, balance chart)
   const filteredTxs = transactions.filter((tx) => {
-    // Date range
     const d = tx.time.slice(0, 10);
-    if (d < dateRange.start || d > dateRange.end) return false;
-    if (!tx.payload) return true;
+    return d >= dateRange.start && d <= dateRange.end;
+  });
 
-    // Type filter
+  // Display filter: date range + category + type (used for pie charts and transaction lists)
+  const displayFilteredTxs = filteredTxs.filter((tx) => {
+    if (!tx.payload) return true;
     if (selectedTypes.length > 0) {
       const isTransfer = isTransferPayload(tx.payload);
       const txType = isTransfer ? "transfer" : tx.payload.amount > 0 ? "income" : "expense";
       if (!selectedTypes.includes(txType)) return false;
     }
-
-    // Category filter
     if (selectedCategories.length > 0) {
       if (!selectedCategories.includes(tx.payload.category)) return false;
     }
-
     return true;
   });
 
@@ -817,10 +815,10 @@ export default function AccountDetailPage() {
     "oklch(0.76 0.11 10)",
   ];
 
-  // Expenses by category — excludes "Opening Balance" and transfers
+  // Expenses by category — applies display filters + excludes "Opening Balance" and transfers
   const expenseChartData = (() => {
     const categories: Record<string, number> = {};
-    filteredTxs.forEach((tx) => {
+    displayFilteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount < 0 && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)) {
         const cat = tx.payload.category || "General";
         categories[cat] = (categories[cat] || 0) + Math.abs(effectiveAmount(tx.payload));
@@ -831,10 +829,10 @@ export default function AccountDetailPage() {
       .sort((a, b) => b.value - a.value);
   })();
 
-  // Income by category — excludes "Opening Balance" and transfers
+  // Income by category — applies display filters + excludes "Opening Balance" and transfers
   const incomeChartData = (() => {
     const categories: Record<string, number> = {};
-    filteredTxs.forEach((tx) => {
+    displayFilteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount > 0 && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)) {
         const cat = tx.payload.category || "General";
         categories[cat] = (categories[cat] || 0) + effectiveAmount(tx.payload);
@@ -915,8 +913,8 @@ export default function AccountDetailPage() {
   const expenseAvgAcc = expenseTxFromFiltered.length > 0
     ? Math.abs(expenseTxFromFiltered.reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0)) / expenseTxFromFiltered.length
     : 0;
-  // For display: show all non-Opening-Balance transactions (including transfers)
-  const displayAccountTxs = filteredTxs.filter(
+  // For display: apply display filters + exclude Opening Balance
+  const displayAccountTxs = displayFilteredTxs.filter(
     (tx) => tx.payload && tx.payload.category !== "Opening Balance"
   );
   const recentAccountTxs = displayAccountTxs.slice(0, cardTxLimit);

@@ -43,29 +43,29 @@ export default function DashboardPage() {
   const [allTxs, setAllTxs] = useState<DecryptedTransaction[]>([]);
   const [rawTxCount, setRawTxCount] = useState(0);
 
-  // Date range
+  // Date range (affects all components)
   const dateRange = useDateRangeStore((s) => s.range);
   const { selectedCategories, selectedTypes } = useFilterStore();
 
-  // Filter transactions by date range, category, and type
+  // Date-range-only filter (used for stats: counts, money flow, balance chart)
   const filteredTxs = allTxs.filter((tx) => {
-    // Date range
     const d = tx.time.slice(0, 10);
-    if (d < dateRange.start || d > dateRange.end) return false;
-    if (!tx.payload) return true;
+    return d >= dateRange.start && d <= dateRange.end;
+  });
 
+  // Display filter: date range + category + type (used for pie charts and transaction lists)
+  const displayFilteredTxs = filteredTxs.filter((tx) => {
+    if (!tx.payload) return true;
     // Type filter
     if (selectedTypes.length > 0) {
       const isTransfer = isTransferPayload(tx.payload);
       const txType = isTransfer ? "transfer" : tx.payload.amount > 0 ? "income" : "expense";
       if (!selectedTypes.includes(txType)) return false;
     }
-
     // Category filter
     if (selectedCategories.length > 0) {
       if (!selectedCategories.includes(tx.payload.category)) return false;
     }
-
     return true;
   });
 
@@ -145,8 +145,8 @@ export default function DashboardPage() {
   const regularTxs = filteredTxs.filter(
     (tx) => tx.payload && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)
   );
-  // For display in the recent transactions list, show all non-Opening-Balance transactions
-  const displayTxs = filteredTxs.filter(
+  // For display in the recent transactions list, apply category/type + exclude Opening Balance
+  const displayTxs = displayFilteredTxs.filter(
     (tx) => tx.payload && tx.payload.category !== "Opening Balance"
   );
   // Deduplicate transfer pairs — show each pair only once (the expense side)
@@ -264,10 +264,10 @@ export default function DashboardPage() {
     });
   })();
 
-  // Expenses by category — excludes "Opening Balance" (it's an accounting entry, not a real expense) and transfers
+  // Expenses by category — applies display filters + excludes "Opening Balance" and transfers
   const expenseChartData = (() => {
     const categories: Record<string, number> = {};
-    filteredTxs.forEach((tx) => {
+    displayFilteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount < 0 && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)) {
         const cat = tx.payload.category || "General";
         categories[cat] = (categories[cat] || 0) + Math.abs(effectiveAmount(tx.payload));
@@ -281,10 +281,10 @@ export default function DashboardPage() {
       .sort((a, b) => b.value - a.value);
   })();
 
-  // Income by category — excludes "Opening Balance" (it's an accounting entry, not real income) and transfers
+  // Income by category — applies display filters + excludes "Opening Balance" and transfers
   const incomeChartData = (() => {
     const categories: Record<string, number> = {};
-    filteredTxs.forEach((tx) => {
+    displayFilteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount > 0 && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)) {
         const cat = tx.payload.category || "General";
         categories[cat] = (categories[cat] || 0) + effectiveAmount(tx.payload);

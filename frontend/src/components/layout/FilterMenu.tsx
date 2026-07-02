@@ -6,14 +6,11 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { SlidersHorizontal, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Filter, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useDateRangeStore } from "@/stores/date-range-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { useCategoryStore } from "@/stores/category-store";
-import { isTransferPayload } from "@/lib/crypto-transaction";
-import type { DecryptedTransaction } from "@/lib/decrypt-transactions";
 
 function daysAgo(n: number): string {
   const d = new Date();
@@ -23,15 +20,6 @@ function daysAgo(n: number): string {
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-/** Determine the transaction type from a decrypted payload. */
-export function getTransactionType(
-  tx: DecryptedTransaction
-): "income" | "expense" | "transfer" {
-  if (tx.payload && isTransferPayload(tx.payload)) return "transfer";
-  if (tx.payload && tx.payload.amount > 0) return "income";
-  return "expense";
 }
 
 const QUICK_PRESETS = [
@@ -46,6 +34,13 @@ const TYPE_OPTIONS = [
   { value: "transfer" as const, label: "Transfer" },
 ];
 
+function formatDateLabel(range: { start: string; end: string }): string {
+  const s = new Date(range.start + "T12:00:00");
+  const e = new Date(range.end + "T12:00:00");
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  return `${s.toLocaleDateString(undefined, opts)} – ${e.toLocaleDateString(undefined, opts)}`;
+}
+
 export function FilterMenu() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -55,7 +50,7 @@ export function FilterMenu() {
   const { range, setRange } = useDateRangeStore();
 
   // Category + type filters
-  const { selectedCategories, selectedTypes, toggleCategory, toggleType, resetFilters } =
+  const { selectedCategories, selectedTypes, toggleCategory, toggleType, setSelectedCategories, resetFilters } =
     useFilterStore();
 
   // All categories from the store (merged income + expense)
@@ -95,9 +90,10 @@ export function FilterMenu() {
     setRange({ start: daysAgo(days), end: today() });
   };
 
-  const handleCustomRange = () => {
-    if (customStart && customEnd) {
-      setRange({ start: customStart, end: customEnd });
+  // Apply custom range when the second date is selected (both are set)
+  const applyCustomIfReady = (start: string, end: string) => {
+    if (start && end) {
+      setRange({ start, end });
     }
   };
 
@@ -116,7 +112,7 @@ export function FilterMenu() {
         }`}
         aria-label="Filters"
       >
-        <SlidersHorizontal className="h-5 w-5" />
+        <Filter className="h-5 w-5" />
         {activeFilterCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 bg-primary text-primary-foreground text-[10px] rounded-full h-4 min-w-[16px] flex items-center justify-center px-0.5">
             {activeFilterCount > 9 ? "9+" : activeFilterCount}
@@ -160,6 +156,9 @@ export function FilterMenu() {
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Date Range
             </span>
+            <p className="text-xs text-foreground font-medium">
+              {formatDateLabel(range)}
+            </p>
             <div className="flex gap-1.5">
               {QUICK_PRESETS.map((preset) => (
                 <button
@@ -176,29 +175,28 @@ export function FilterMenu() {
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex items-center gap-1.5 pt-1">
               <Input
                 type="date"
                 value={customStart}
-                onChange={(e) => setCustomStart(e.target.value)}
-                className="h-8 text-xs"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCustomStart(v);
+                  if (v && customEnd) applyCustomIfReady(v, customEnd);
+                }}
+                className="h-7 text-[11px] min-w-0 flex-1"
               />
-              <span className="text-xs text-muted-foreground">→</span>
+              <span className="text-xs text-muted-foreground shrink-0">→</span>
               <Input
                 type="date"
                 value={customEnd}
-                onChange={(e) => setCustomEnd(e.target.value)}
-                className="h-8 text-xs"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCustomEnd(v);
+                  if (customStart && v) applyCustomIfReady(customStart, v);
+                }}
+                className="h-7 text-[11px] min-w-0 flex-1"
               />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs shrink-0"
-                onClick={handleCustomRange}
-              >
-                Go
-              </Button>
             </div>
           </div>
 
@@ -236,30 +234,30 @@ export function FilterMenu() {
             {allCategories.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">No categories available.</p>
             ) : (
-              <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
-                {allCategories.map((cat) => {
-                  const active = selectedCategories.includes(cat);
-                  return (
-                    <label
-                      key={cat}
-                      className={`flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer text-xs transition-colors ${
-                        active
-                          ? "bg-primary/5 text-foreground"
-                          : "text-muted-foreground hover:bg-secondary"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={active}
-                        onChange={() => toggleCategory(cat)}
-                        className="accent-primary h-3.5 w-3.5 rounded"
-                      />
-                      {cat}
-                    </label>
-                  );
-                })}
-              </div>
+              <select
+                multiple
+                value={selectedCategories}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions, (o) => o.value);
+                  setSelectedCategories(selected);
+                }}
+                className="w-full h-32 rounded-md border border-input bg-background px-2 py-1 text-xs"
+              >
+                <option value="" disabled>
+                  Select categories...
+                </option>
+                {allCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
             )}
+            <p className="text-[10px] text-muted-foreground">
+              {selectedCategories.length > 0
+                ? `${selectedCategories.length} selected`
+                : "None selected — shows all"}
+            </p>
           </div>
         </div>
       )}
