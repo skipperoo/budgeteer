@@ -135,7 +135,7 @@ export function TransactionCard({
                 `}
               >
                 {isTransfer
-                  ? formatCurrency(Math.abs(totalAmount!), currency, false)
+                  ? formatCurrency(Math.abs(payload.amount), currency, false)
                   : formatCurrency(totalAmount!, currency, true)
                 }
               </span>
