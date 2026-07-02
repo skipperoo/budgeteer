@@ -64,8 +64,8 @@ export default function PinSetupSection() {
       // Encrypt the password with the PIN
       const encryptedPassword = await encryptWithPassword(currentPassword, newPin);
 
-      // Store it locally
-      storePinData(encryptedPassword);
+      // Store it locally with the current user's email
+      storePinData(encryptedPassword, user?.email || "");
       setPinEnabled(true);
       setPinSuccess("PIN unlock enabled successfully.");
       setCurrentPassword("");

@@ -47,12 +47,13 @@ describe("device token storage", () => {
 });
 
 describe("PIN data storage", () => {
-  it("should store and retrieve PIN data", () => {
-    storePinData("encrypted-password-value");
+  it("should store and retrieve PIN data with email", () => {
+    storePinData("encrypted-password-value", "test@test.com");
 
     const data = getPinData();
     expect(data).not.toBeNull();
     expect(data!.encrypted_password).toBe("encrypted-password-value");
+    expect(data!.email).toBe("test@test.com");
   });
 
   it("should return null when no PIN data is stored", () => {
@@ -60,7 +61,7 @@ describe("PIN data storage", () => {
   });
 
   it("should clear PIN data", () => {
-    storePinData("encrypted-password-value");
+    storePinData("encrypted-password-value", "test@test.com");
     expect(getPinData()).not.toBeNull();
 
     clearPinData();
@@ -70,7 +71,7 @@ describe("PIN data storage", () => {
   it("isPinEnabled should reflect PIN data existence", () => {
     expect(isPinEnabled()).toBe(false);
 
-    storePinData("encrypted-password-value");
+    storePinData("encrypted-password-value", "test@test.com");
     expect(isPinEnabled()).toBe(true);
 
     clearPinData();
@@ -85,7 +86,7 @@ describe("PIN data storage", () => {
 
   it("should not be affected by PIN data on another device (separate localStorage)", () => {
     // Simulate device A: PIN data exists
-    storePinData("encrypted-password-A");
+    storePinData("encrypted-password-A", "user-a@test.com");
     expect(getPinData()).not.toBeNull();
     expect(isPinEnabled()).toBe(true);
 

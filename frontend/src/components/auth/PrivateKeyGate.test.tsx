@@ -144,7 +144,7 @@ describe("PrivateKeyGate", () => {
 
   it("should show PIN unlock form when PIN is enabled", async () => {
     setupAuthStore();
-    storePinData("encrypted-password-value");
+    storePinData("encrypted-password-value", "test@test.com");
 
     render(
       <PrivateKeyGate>
@@ -158,10 +158,29 @@ describe("PrivateKeyGate", () => {
     expect(screen.getByText("Use password instead")).toBeDefined();
   });
 
+  it("should NOT show PIN form when PIN data belongs to a different user", () => {
+    // Simulate user A's PIN data still in localStorage
+    storePinData("encrypted-password-user-a", "user-a@test.com");
+
+    // But the current auth store is for user B (email: test@test.com)
+    setupAuthStore();
+
+    render(
+      <PrivateKeyGate>
+        <div>Protected Content</div>
+      </PrivateKeyGate>
+    );
+
+    // Should show password form, NOT PIN form
+    expect(screen.getByText("Enter your password")).toBeDefined();
+    expect(screen.queryByText("Enter your PIN")).toBeNull();
+    expect(screen.queryByText("Back to PIN")).toBeNull();
+  });
+
   it("should unlock with correct PIN", async () => {
     setupAuthStore();
     // Store encrypted password that decrypts to the correct password when PIN is entered
-    storePinData("encrypted-password-value");
+    storePinData("encrypted-password-value", "test@test.com");
 
     // decryptWithPassword mock will succeed when password is "correct-pin-decrypted"
     // which is the result of decrypting "encrypted-password-value" with the correct PIN
@@ -204,7 +223,7 @@ describe("PrivateKeyGate", () => {
 
   it("should switch to password form when clicking 'Use password instead'", async () => {
     setupAuthStore();
-    storePinData("encrypted-password-value");
+    storePinData("encrypted-password-value", "test@test.com");
 
     render(
       <PrivateKeyGate>

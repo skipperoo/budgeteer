@@ -43,9 +43,18 @@ export default function PrivateKeyGate({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Show PIN input when a PIN is set; allow switching to password
-  const pinEnabled = isPinEnabled();
+  // Show PIN input when a PIN is set for the current user; allow switching to password.
+  // If PIN data exists but belongs to a different user (e.g. after logout + login with
+  // another account), clear the stale PIN data and show the password form instead.
+  const pinData = getPinData();
+  const pinDataBelongsToCurrentUser = pinData && user?.email && pinData.email === user.email;
+  const pinEnabled = pinDataBelongsToCurrentUser ? true : false;
   const [showPinInput, setShowPinInput] = useState(() => pinEnabled);
+
+  // If PIN data is stale (belongs to a different user), silently clear it
+  if (pinData && !pinDataBelongsToCurrentUser) {
+    clearPinData();
+  }
 
   // Don't show anything while the initial hydration is in flight
   if (hydrating) {

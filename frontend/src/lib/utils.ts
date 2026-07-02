@@ -111,17 +111,23 @@ const PIN_STORAGE_KEY = "budgeteer_pin_data";
 interface PinData {
   /** The user's password, encrypted with the PIN via PBKDF2+AES-GCM */
   encrypted_password: string;
+  /** The user email this PIN was set up for (prevents PIN prompt for wrong account) */
+  email: string;
 }
 
 /**
  * Store the encrypted password (encrypted with the user's PIN).
  * The user's password is stored encrypted so the PIN can be used to
  * decrypt it later without requiring the original password again.
+ *
+ * @param encryptedPassword The user's password encrypted with the PIN
+ * @param email The user's email — stored alongside to verify ownership
  */
-export function storePinData(encryptedPassword: string): void {
+export function storePinData(encryptedPassword: string, email: string): void {
   try {
     localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify({
       encrypted_password: encryptedPassword,
+      email,
     } as PinData));
   } catch { /* ignore quota errors */ }
 }
