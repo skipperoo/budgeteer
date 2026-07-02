@@ -6,8 +6,15 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { Filter, X } from "lucide-react";
+import { Filter, X, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
 import { useDateRangeStore } from "@/stores/date-range-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { useCategoryStore } from "@/stores/category-store";
@@ -50,11 +57,17 @@ export function FilterMenu() {
   const { range, setRange } = useDateRangeStore();
 
   // Category + type filters
-  const { selectedCategories, selectedTypes, toggleCategory, toggleType, setSelectedCategories, resetFilters } =
+  const { selectedCategories, selectedTypes, toggleCategory, toggleType, resetFilters } =
     useFilterStore();
 
-  // All categories from the store (merged income + expense)
-  const { items: categoryItems } = useCategoryStore();
+  // Categories — trigger lazy load on mount
+  const { items: categoryItems, fetchCategories, loaded: categoriesLoaded } = useCategoryStore();
+  useEffect(() => {
+    if (!categoriesLoaded) {
+      fetchCategories();
+    }
+  }, [categoriesLoaded, fetchCategories]);
+
   const allCategories = [
     ...new Set(categoryItems.map((c) => c.name)),
   ].sort((a, b) => a.localeCompare(b));
@@ -184,7 +197,7 @@ export function FilterMenu() {
                   setCustomStart(v);
                   if (v && customEnd) applyCustomIfReady(v, customEnd);
                 }}
-                className="h-7 text-[11px] min-w-0 flex-1"
+                className="flex-1 text-xs px-2 py-1"
               />
               <span className="text-xs text-muted-foreground shrink-0">→</span>
               <Input
@@ -195,7 +208,7 @@ export function FilterMenu() {
                   setCustomEnd(v);
                   if (customStart && v) applyCustomIfReady(customStart, v);
                 }}
-                className="h-7 text-[11px] min-w-0 flex-1"
+                className="flex-1 text-xs px-2 py-1"
               />
             </div>
           </div>
@@ -231,33 +244,34 @@ export function FilterMenu() {
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Category
             </span>
-            {allCategories.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">No categories available.</p>
+            {allCategories.length === 0 && !categoriesLoaded ? (
+              <p className="text-xs text-muted-foreground italic">Loading categories...</p>
+            ) : allCategories.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">No categories yet. Create a transaction to see categories.</p>
             ) : (
-              <select
-                multiple
-                value={selectedCategories}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions, (o) => o.value);
-                  setSelectedCategories(selected);
-                }}
-                className="w-full h-32 rounded-md border border-input bg-background px-2 py-1 text-xs"
-              >
-                <option value="" disabled>
-                  Select categories...
-                </option>
-                {allCategories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full justify-between text-xs font-normal">
+                    {selectedCategories.length > 0
+                      ? `${selectedCategories.length} selected`
+                      : "All categories"}
+                    <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-50" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="max-h-48 overflow-y-auto w-72">
+                  {allCategories.map((cat) => (
+                    <DropdownMenuCheckboxItem
+                      key={cat}
+                      checked={selectedCategories.includes(cat)}
+                      onCheckedChange={() => toggleCategory(cat)}
+                      onSelect={(e) => e.preventDefault()} // prevent menu from closing
+                    >
+                      {cat}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
-            <p className="text-[10px] text-muted-foreground">
-              {selectedCategories.length > 0
-                ? `${selectedCategories.length} selected`
-                : "None selected — shows all"}
-            </p>
           </div>
         </div>
       )}
