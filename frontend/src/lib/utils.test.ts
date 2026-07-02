@@ -76,6 +76,24 @@ describe("PIN data storage", () => {
     clearPinData();
     expect(isPinEnabled()).toBe(false);
   });
+
+  it("should return null on a fresh device (clean localStorage)", () => {
+    // localStorage cleared in beforeEach — simulates a new device
+    expect(getPinData()).toBeNull();
+    expect(isPinEnabled()).toBe(false);
+  });
+
+  it("should not be affected by PIN data on another device (separate localStorage)", () => {
+    // Simulate device A: PIN data exists
+    storePinData("encrypted-password-A");
+    expect(getPinData()).not.toBeNull();
+    expect(isPinEnabled()).toBe(true);
+
+    // Clear — simulates device B (different browser, no PIN set)
+    localStorage.clear();
+    expect(getPinData()).toBeNull();
+    expect(isPinEnabled()).toBe(false);
+  });
 });
 
 describe("clearDeviceFingerprint", () => {

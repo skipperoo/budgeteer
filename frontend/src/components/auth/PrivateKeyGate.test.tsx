@@ -80,6 +80,22 @@ describe("PrivateKeyGate", () => {
     expect(screen.getByPlaceholderText("Enter your password")).toBeDefined();
   });
 
+  it("should NOT show PIN form on a fresh device (no PIN data in localStorage)", () => {
+    // localStorage is cleared in beforeEach — simulates a new device
+    setupAuthStore();
+
+    render(
+      <PrivateKeyGate>
+        <div>Protected Content</div>
+      </PrivateKeyGate>
+    );
+
+    // Should show password form, NOT PIN form
+    expect(screen.getByText("Enter your password")).toBeDefined();
+    expect(screen.queryByText("Enter your PIN")).toBeNull();
+    expect(screen.queryByText("Back to PIN")).toBeNull();
+  });
+
   it("should unlock with correct password", async () => {
     setupAuthStore();
     const setPrivateKeySpy = vi.spyOn(useAuthStore.getState(), "setPrivateKey");
