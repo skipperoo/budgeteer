@@ -88,13 +88,13 @@ export function FilterMenu() {
     setCustomEnd(range.end);
   }, [range]);
 
-  // Close on outside click — ignore clicks inside Radix dropdown menus (portaled content)
+  // Close on outside click — ignore clicks inside portaled content (Radix menus)
   useEffect(() => {
     if (!open) return;
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // Don't close if clicking inside a Radix dropdown menu or its trigger
-      if (target.closest('[data-radix-dropdown-menu-content]') || target.closest('[data-radix-dropdown-menu-trigger]')) {
+      // Don't close if clicking inside any Radix portaled content
+      if (target.closest('[data-radix-collection-item]') || target.closest('[data-radix-popper-content-wrapper]')) {
         return;
       }
       if (
@@ -106,8 +106,8 @@ export function FilterMenu() {
         setOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("mousedown", handleClick, true);
+    return () => document.removeEventListener("mousedown", handleClick, true);
   }, [open]);
 
   const handleQuickPreset = (days: number) => {
@@ -210,7 +210,8 @@ export function FilterMenu() {
                   setCustomStart(v);
                   if (v && customEnd) applyCustomIfReady(v, customEnd);
                 }}
-                className="flex-1 text-[11px] px-1 py-1 leading-none [&::-webkit-datetime-edit]:text-[11px]"
+                className="flex-1 px-1 py-1 leading-none"
+                style={{ fontSize: "0.688rem" }}
               />
               <span className="text-xs text-muted-foreground shrink-0">→</span>
               <Input
@@ -221,7 +222,8 @@ export function FilterMenu() {
                   setCustomEnd(v);
                   if (customStart && v) applyCustomIfReady(customStart, v);
                 }}
-                className="flex-1 text-[11px] px-1 py-1 leading-none [&::-webkit-datetime-edit]:text-[11px]"
+                className="flex-1 px-1 py-1 leading-none"
+                style={{ fontSize: "0.688rem" }}
               />
             </div>
           </div>
@@ -271,13 +273,16 @@ export function FilterMenu() {
                     <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-50" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="max-h-48 overflow-y-auto w-72">
+                <DropdownMenuContent className="max-h-48 overflow-y-auto w-72" align="start">
                   {allCategories.map((cat) => (
                     <DropdownMenuCheckboxItem
                       key={cat}
                       checked={selectedCategories.includes(cat)}
                       onCheckedChange={() => toggleCategory(cat)}
-                      onSelect={(e) => e.preventDefault()} // prevent menu from closing
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
                     >
                       {cat}
                     </DropdownMenuCheckboxItem>
