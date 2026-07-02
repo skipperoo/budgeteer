@@ -6,48 +6,48 @@
 @theme {
   /* ─── Fonts ─────────────────────────────────────────── */
   --font-display: "Lora", Georgia, serif;
-  --font-body:    "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-body: "DM Sans", system-ui, -apple-system, sans-serif;
 
   /* ─── Light mode palette (neumorphic) ────────────── */
   /* Background: slightly warmer/saturated rose-tint — neumorphism needs a surface with
      enough body to cast visible shadows. The bg and card are now the same color;
      card depth comes from dual shadows, not from a lighter fill. */
-  --color-background:         oklch(0.97 0.012 25);
-  --color-foreground:         oklch(0.22 0.025 15);
+  --color-background: oklch(0.97 0.012 25);
+  --color-foreground: oklch(0.22 0.025 15);
 
   /* Card/popover match background — neumorphic extrusion effect */
-  --color-card:               oklch(0.97 0.012 25);
-  --color-card-foreground:    oklch(0.22 0.025 15);
+  --color-card: oklch(0.97 0.012 25);
+  --color-card-foreground: oklch(0.22 0.025 15);
 
-  --color-popover:            oklch(0.97 0.012 25);
+  --color-popover: oklch(0.97 0.012 25);
   --color-popover-foreground: oklch(0.22 0.025 15);
 
   /* Primary: muted slate blue – restrained, professional accent */
-  --color-primary:            oklch(0.40 0.06 260);
+  --color-primary: oklch(0.4 0.06 260);
   --color-primary-foreground: oklch(0.97 0.005 260);
 
   /* Secondary / muted: slightly deeper rose-tint for active/hover surfaces */
-  --color-secondary:          oklch(0.93 0.018 22);
-  --color-secondary-foreground: oklch(0.30 0.03 15);
+  --color-secondary: oklch(0.93 0.018 22);
+  --color-secondary-foreground: oklch(0.3 0.03 15);
 
-  --color-muted:              oklch(0.93 0.018 22);
-  --color-muted-foreground:   oklch(0.48 0.025 15);
+  --color-muted: oklch(0.93 0.018 22);
+  --color-muted-foreground: oklch(0.48 0.025 15);
 
-  --color-accent:             oklch(0.91 0.022 25);
-  --color-accent-foreground:  oklch(0.25 0.03 15);
+  --color-accent: oklch(0.91 0.022 25);
+  --color-accent-foreground: oklch(0.25 0.03 15);
 
   /* Destructive: desaturated terracotta (softer than harsh red) */
-  --color-destructive:        oklch(0.56 0.15 22);
+  --color-destructive: oklch(0.56 0.15 22);
   --color-destructive-foreground: oklch(0.99 0.005 30);
 
   /* Borders repurposed — most come from shadow contrast now, but kept for
      fine-detail separators (table rows, form field labels) */
-  --color-border:  oklch(0.90 0.015 25);
-  --color-input:   oklch(0.90 0.015 25);
-  --color-ring:    oklch(0.40 0.06 260);
+  --color-border: oklch(0.9 0.015 25);
+  --color-input: oklch(0.9 0.015 25);
+  --color-ring: oklch(0.4 0.06 260);
 
   /* Income green: soft sage */
-  --color-income:  oklch(0.48 0.1 150);
+  --color-income: oklch(0.48 0.1 150);
   --color-income-foreground: oklch(0.98 0.005 150);
   /* Expense red: muted terracotta */
   --color-expense: oklch(0.52 0.13 22);
@@ -62,29 +62,29 @@
      contrast alone. */
 
   /* Raised: default card elevation */
-  --shadow-raised:   -6px -6px 16px oklch(1 0 0),
-                      6px  6px 16px oklch(0.835 0.015 25);
+  --shadow-raised:
+    -6px -6px 16px oklch(1 0 0), 6px 6px 16px oklch(0.835 0.015 25);
 
   /* Elevated: modals, dialogs — largest offset + blur */
-  --shadow-elevated: -10px -10px 28px oklch(1 0 0),
-                      10px  10px 28px oklch(0.835 0.015 25);
+  --shadow-elevated:
+    -10px -10px 28px oklch(1 0 0), 10px 10px 28px oklch(0.835 0.015 25);
 
   /* Sunken (inset): inputs, active nav — carved into the surface */
-  --shadow-sunken:   inset  3px  3px  8px oklch(0.835 0.015 25),
-                     inset -3px -3px  8px oklch(1 0 0);
+  --shadow-sunken:
+    inset 3px 3px 8px oklch(0.835 0.015 25), inset -3px -3px 8px oklch(1 0 0);
 
   /* Deep sunken: pressed button state */
-  --shadow-sunken-deep: inset  5px  5px 12px oklch(0.835 0.015 25),
-                        inset -5px -5px 12px oklch(1 0 0);
+  --shadow-sunken-deep:
+    inset 5px 5px 12px oklch(0.835 0.015 25), inset -5px -5px 12px oklch(1 0 0);
 
   /* Subtle raised: transaction rows, small elements */
-  --shadow-raised-subtle: -3px -3px 8px oklch(1 0 0),
-                           3px  3px 8px oklch(0.835 0.015 25);
+  --shadow-raised-subtle:
+    -3px -3px 8px oklch(1 0 0), 3px 3px 8px oklch(0.835 0.015 25);
 
   /* Colored raised: primary/destructive filled buttons — softer
      highlight shadow to let the button colour show through. */
-  --shadow-raised-color: -5px -5px 14px oklch(1 0 0 / 0.5),
-                          5px  5px 14px oklch(0 0 0 / 0.20);
+  --shadow-raised-color:
+    -5px -5px 14px oklch(1 0 0 / 0.5), 5px 5px 14px oklch(0 0 0 / 0.2);
 }
 
 /* ─── Dark mode overrides ─────────────────────────────── */
@@ -92,35 +92,35 @@
 /* Highlight:  #2C2427 → oklch(0.13 0.01 340)   — warm purple-gray, used as
    the light-side shadow colour (top-left highlight) */
 .dark {
-  --color-background:         oklch(0.06 0.015 270);
-  --color-foreground:         oklch(0.90 0.012 30);
+  --color-background: oklch(0.06 0.015 270);
+  --color-foreground: oklch(0.9 0.012 30);
 
-  --color-card:               oklch(0.06 0.015 270);
-  --color-card-foreground:    oklch(0.90 0.012 30);
+  --color-card: oklch(0.06 0.015 270);
+  --color-card-foreground: oklch(0.9 0.012 30);
 
-  --color-popover:            oklch(0.06 0.015 270);
-  --color-popover-foreground: oklch(0.90 0.012 30);
+  --color-popover: oklch(0.06 0.015 270);
+  --color-popover-foreground: oklch(0.9 0.012 30);
 
-  --color-primary:            oklch(0.62 0.07 260);
+  --color-primary: oklch(0.62 0.07 260);
   --color-primary-foreground: oklch(0.06 0.015 270);
 
-  --color-secondary:          oklch(0.11 0.015 280);
+  --color-secondary: oklch(0.11 0.015 280);
   --color-secondary-foreground: oklch(0.85 0.012 30);
 
-  --color-muted:              oklch(0.10 0.015 280);
-  --color-muted-foreground:   oklch(0.55 0.015 25);
+  --color-muted: oklch(0.1 0.015 280);
+  --color-muted-foreground: oklch(0.55 0.015 25);
 
-  --color-accent:             oklch(0.12 0.015 300);
-  --color-accent-foreground:  oklch(0.88 0.012 30);
+  --color-accent: oklch(0.12 0.015 300);
+  --color-accent-foreground: oklch(0.88 0.012 30);
 
-  --color-destructive:        oklch(0.55 0.12 22);
-  --color-destructive-foreground: oklch(0.90 0.012 20);
+  --color-destructive: oklch(0.55 0.12 22);
+  --color-destructive-foreground: oklch(0.9 0.012 20);
 
   --color-border: oklch(0.15 0.012 280);
-  --color-input:  oklch(0.15 0.012 280);
-  --color-ring:   oklch(0.62 0.07 260);
+  --color-input: oklch(0.15 0.012 280);
+  --color-ring: oklch(0.62 0.07 260);
 
-  --color-income:  oklch(0.65 0.1 150);
+  --color-income: oklch(0.65 0.1 150);
   --color-income-foreground: oklch(0.06 0.015 270);
   --color-expense: oklch(0.62 0.12 22);
   --color-expense-foreground: oklch(0.06 0.015 270);
@@ -128,33 +128,42 @@
   /* Dark-mode neumorphic shadows — same formula as light mode.
      The highlight uses the user-specified #2C2427 warm tone.
      The shadow dark is an even deeper version of the cool bg. */
-  --shadow-raised:   -8px -8px 14px oklch(0.13 0.01 340),
-                      8px  8px 14px oklch(0.035 0.012 270);
+  --shadow-raised:
+    -8px -8px 14px oklch(0.13 0.01 340), 8px 8px 14px oklch(0.035 0.012 270);
 
-  --shadow-elevated: -12px -12px 24px oklch(0.13 0.01 340),
-                      12px  12px 24px oklch(0.035 0.012 270);
+  --shadow-elevated:
+    -12px -12px 24px oklch(0.13 0.01 340), 12px 12px 24px oklch(0.035 0.012 270);
 
-  --shadow-sunken:   inset  4px  4px  8px oklch(0.035 0.012 270),
-                     inset -4px -4px  8px oklch(0.13 0.01 340);
+  --shadow-sunken:
+    inset 4px 4px 8px oklch(0.035 0.012 270),
+    inset -4px -4px 8px oklch(0.13 0.01 340);
 
-  --shadow-sunken-deep: inset  6px  6px 12px oklch(0.035 0.012 270),
-                        inset -6px -6px 12px oklch(0.13 0.01 340);
+  --shadow-sunken-deep:
+    inset 6px 6px 12px oklch(0.035 0.012 270),
+    inset -6px -6px 12px oklch(0.13 0.01 340);
 
-  --shadow-raised-subtle: -4px -4px 7px oklch(0.13 0.01 340),
-                           4px  4px 7px oklch(0.035 0.012 270);
+  --shadow-raised-subtle:
+    -4px -4px 7px oklch(0.13 0.01 340), 4px 4px 7px oklch(0.035 0.012 270);
 
-  --shadow-raised-color: -6px -6px 12px oklch(0.13 0.01 340 / 0.4),
-                          6px  6px 12px oklch(0 0 0 / 0.60);
+  --shadow-raised-color:
+    -6px -6px 12px oklch(0.13 0.01 340 / 0.4), 6px 6px 12px oklch(0 0 0 / 0.6);
 }
 
 /* ─── Global resets ───────────────────────────────────── */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   border-color: var(--color-border);
-  transition: background-color 0.15s ease, border-color 0.15s ease,
-              color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     transition: none;
   }
 }
@@ -184,20 +193,28 @@ body {
   background-color: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-body);
-  font-size: 0.9375rem;        /* 15px – slightly larger than the original 14px */
+  font-size: 0.9375rem; /* 15px – slightly larger than the original 14px */
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   font-family: var(--font-display);
   font-weight: 600;
   text-wrap: balance;
   letter-spacing: -0.01em;
 }
 
-h4, h5, h6, button, label, .font-medium, .font-semibold {
+h4,
+h5,
+h6,
+button,
+label,
+.font-medium,
+.font-semibold {
   font-family: var(--font-body);
 }
 
@@ -205,20 +222,4 @@ h4, h5, h6, button, label, .font-medium, .font-semibold {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
-}
-
-/* Prevent iOS Safari from auto-zooming on input focus.
- * Browsers zoom when font-size < 16px on form controls.
- * !important overrides Tailwind utility classes (text-sm etc). */
-input, select, textarea {
-  font-size: 16px !important;
-}
-html {
-  touch-action: manipulation;
-  -webkit-text-size-adjust: 100%;
-}
-@media (min-width: 768px) {
-  input, select, textarea {
-    font-size: 0.875rem !important;
-  }
 }

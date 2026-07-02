@@ -213,7 +213,7 @@ export function FilterMenu() {
                 className="flex-1 px-1 py-1 leading-none"
                 style={{ fontSize: "0.688rem" }}
               />
-              <span className="text-xs text-muted-foreground shrink-0">→</span>
+              <span className="text-s text-muted-foreground shrink-0">→</span>
               <Input
                 type="date"
                 value={customEnd}
