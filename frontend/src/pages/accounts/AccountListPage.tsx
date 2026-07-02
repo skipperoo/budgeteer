@@ -9,7 +9,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { generateAccountKey, encryptAccountKeyForRecipient, bytesToBase64 } from "@/lib/crypto";
-import { encryptTransactionPayload } from "@/lib/crypto-transaction";
+import { encryptTransactionPayload, effectiveAmount } from "@/lib/crypto-transaction";
 import { getAccountKey, fetchAndDecryptTransactions } from "@/lib/decrypt-transactions";
 import { formatDate, CURRENCIES, getCurrencySymbol } from "@/lib/format";
 import type { CreateTransactionRequest } from "@/types";
@@ -67,7 +67,7 @@ export default function AccountListPage() {
             privKeyBase64 ?? undefined,
             user?.public_key
           );
-          const bal = decrypted.reduce((sum, tx) => sum + tx.payload.amount, 0);
+          const bal = decrypted.reduce((sum, tx) => sum + (tx.payload ? effectiveAmount(tx.payload) : 0), 0);
           newBalances[acc.id] = bal;
         } catch {
           newBalances[acc.id] = 0;
