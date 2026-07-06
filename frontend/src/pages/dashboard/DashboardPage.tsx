@@ -1067,7 +1067,7 @@ export default function DashboardPage() {
                         style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
                       >
                         {defaultSymbol}
-                        {formatNumber(expenseTotal)}
+                        {formatNumber(incomeTotal)}
                       </text>
                       <text
                         x="50%"
