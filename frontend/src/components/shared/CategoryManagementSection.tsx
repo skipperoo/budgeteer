@@ -96,52 +96,47 @@ export function CategoryManagementSection() {
       {expanded && (
         <CardContent className="space-y-6">
           {/* Add new category */}
-          <div className="space-y-3 p-4 rounded-lg border border-border/50 bg-secondary/20">
-            <h4 className="text-sm font-semibold">Add New Category</h4>
-            <div className="flex gap-2">
-              <div className="flex rounded-md border border-input overflow-hidden shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setNewType("expense")}
-                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                    newType === "expense"
-                      ? "bg-expense text-expense-foreground"
-                      : "bg-transparent text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Expense
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewType("income")}
-                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                    newType === "income"
-                      ? "bg-income text-income-foreground"
-                      : "bg-transparent text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Income
-                </button>
-              </div>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-md border border-input overflow-hidden shrink-0">
+              <button
+                type="button"
+                onClick={() => setNewType("expense")}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  newType === "expense"
+                    ? "bg-expense text-expense-foreground"
+                    : "bg-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Expense
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewType("income")}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  newType === "income"
+                    ? "bg-income text-income-foreground"
+                    : "bg-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Income
+              </button>
             </div>
-            <div className="flex gap-2">
-              <Input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Category name"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAdd();
-                  }
-                }}
-                className="flex-1"
-              />
-              <Button size="sm" onClick={handleAdd} disabled={adding || !newName.trim()}>
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Add
-              </Button>
-            </div>
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Category name"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAdd();
+                }
+              }}
+              className="flex-1"
+            />
+            <Button size="sm" onClick={handleAdd} disabled={adding || !newName.trim()}>
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Add
+            </Button>
           </div>
 
           {/* Loading state */}
