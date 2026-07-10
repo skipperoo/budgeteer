@@ -1,5 +1,7 @@
 # Budgeteer - Technical Specifications
 
+> **Revision 16** — Added category management with color, icon, and enable/disable support. New `color` (VARCHAR(7) hex), `icon` (VARCHAR(100) lucide name), and `is_disabled` (BOOLEAN) columns on `user_categories` (migration 0014). New `PUT /api/v1/categories/{id}` backend endpoint for updating category fields. Settings page refactored into accordion cards (Account, General, Categories, Appearance, Data Management). New `CategoryManagementSection` component for adding/renaming/coloring/icons/enabling/disabling/deleting categories. New `IconPicker` component with ~70 curated lucide-react icons and search. Pie charts (`DashboardPage`, `AccountDetailPage`) use user-defined category colors with deterministic hash-based fallback, and show icons in legend when available. The "+ N more" legend badge shows an interactive popover on hover/tap with remaining categories and their values. Disabled categories are excluded from dropdowns (TransactionForm, FilterMenu) and pie chart data. Store methods `getCategoryColor()`, `getCategoryIcon()`, `getCategoryObjects()`, `updateCategory()`, `removeCategoryById()` added to category store. See Section 3 (CategoryManagementSection, IconPicker, CategoryPieChart), Section 4 (PUT categories endpoint), Section 5 (migration 0014).
+
 > **Revision 15** — Added filter-by-category feature. New `FilterMenu` in the Header (right of notification bell) with: date-range quick presets (7d/30d/90d), transaction type checkboxes (income/expense/transfer merged into a single category list), and category multi-select checkboxes (all categories merged from income + expense types). New `filter-store.ts` Zustand store holds `selectedCategories` and `selectedTypes`. Both `DashboardPage` and `AccountDetailPage` apply these filters on top of the date range. The filter button shows a badge with the active filter count. See Section 3 (FilterMenu component, filter-store), Section 4 (no backend changes — all filtering is client-side).
 
 > **Revision 14** — Verified PIN is per-device (localStorage-only, never synced to backend). On a fresh device without PIN data, `isPinEnabled()` returns `false` and the PrivateKeyGate shows the password form (never the PIN prompt). Added explicit tests for the new-device scenario. No code change needed — behavior was already correct. See Section 3 (PIN unlock, PrivateKeyGate), Section 2 (device-local storage).
@@ -110,11 +112,15 @@ Categories are stored on the **backend** under the user's profile (the `user_cat
 
 - **Storage:** Categories are persisted in the `user_categories` database table, scoped per user. The frontend fetches them via `GET /api/v1/categories` on first access and keeps an in-memory cache (Zustand store) with optimistic updates.
 - **Per-user:** Each user maintains their own category list, split by transaction type (`income` / `expense`). When a user creates a transaction with a new category, a `POST /api/v1/categories` call persists it server-side.
+- **Fields:** Each category has a `name`, `type` (`income`/`expense`), an optional `color` (hex string, e.g. `"#3B82F6"`), an optional `icon` (lucide-react icon name, e.g. `"shopping-cart"`), and an `is_disabled` boolean flag. Categories with `is_disabled = true` are hidden from dropdowns and pie charts but preserved in the database.
+- **Colors:** When a user assigns a color, it is used in pie charts. If no color is set, a deterministic hash-based fallback color is computed client-side from the category name (consistent across page loads).
+- **Icons:** When an icon is assigned, it is displayed in the pie chart legend instead of the category name. Dropdowns always show the text name.
 - **Joint accounts:** Categories are per-user, not per-account. Each member sees only their own categories. The category string is part of the encrypted transaction payload, so decrypted transactions from joint accounts contain the category as typed by the creator.
-- **UI:** A dropdown/combobox in the transaction creation form shows existing categories for the selected type plus an "Add new category..." option. Selecting this shows a text input to type and save a new category.
+- **UI:** A dropdown/combobox in the transaction creation form shows existing categories (excluding disabled) for the selected type plus an "Add new category..." option. Selecting this shows a text input to type and save a new category. Category management is done via the Settings page → Categories accordion, which allows adding, renaming, coloring, icon selection, enabling/disabling, and deleting categories.
 - **Endpoints:**
-  - `GET    /api/v1/categories` — List all categories for the authenticated user.
+  - `GET    /api/v1/categories` — List all categories for the authenticated user (now includes `color`, `icon`, `is_disabled`).
   - `POST   /api/v1/categories` — Create a new category (body: `{ name, type }`).
+  - `PUT    /api/v1/categories/{id}` — Update a category (body: optional `{ name, color, icon, is_disabled }`).
   - `DELETE /api/v1/categories/{id}` — Delete a category by its ID.
 
 ---
