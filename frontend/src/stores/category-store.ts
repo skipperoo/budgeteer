@@ -159,11 +159,14 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
     // Don't add duplicates
     if (get().items.some((c) => c.type === type && c.name === normalized)) return;
 
+    // Compute a deterministic default color so the category gets one immediately
+    const defaultColor = getFallbackColor(normalized);
+
     // Optimistic add with a temp ID (the real ID comes from the server)
     const tempId = `temp_${Date.now()}`;
     const prev = get().items;
     set({
-      items: [...prev, { id: tempId, user_id: "", name: normalized, type, created_at: "", is_disabled: false }],
+      items: [...prev, { id: tempId, user_id: "", name: normalized, type, color: defaultColor, created_at: "", is_disabled: false }],
       version: get().version + 1,
     });
 
@@ -172,14 +175,21 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
         method: "POST",
         body: JSON.stringify({ name: normalized, type }),
       });
-      // Replace the temp entry with the server response
+      // Replace the temp entry with the server response, then immediately assign the color
       set({
         items: get().items.map((c) =>
           c.id === tempId
-            ? { ...created, color: created.color ?? undefined, icon: created.icon ?? undefined }
+            ? { ...created, color: created.color ?? defaultColor, icon: created.icon ?? undefined }
             : c
         ),
       });
+      // Persist the color to the backend so future page loads have it
+      try {
+        await apiFetch(ENDPOINTS.updateCategory(created.id), {
+          method: "PUT",
+          body: JSON.stringify({ color: defaultColor }),
+        });
+      } catch { /* non-critical — fallback color will be used */ }
     } catch {
       // Revert optimistic add
       set({ items: prev, version: get().version + 1 });
