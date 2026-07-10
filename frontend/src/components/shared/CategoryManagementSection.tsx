@@ -287,22 +287,13 @@ function CategoryRow({
           title="Change color"
         />
         {showColorPicker && (
-          <div className="absolute top-full left-0 mt-1 z-50 bg-card border border-border/50 rounded-lg p-2 shadow-lg flex gap-1">
+          <div className="absolute top-full left-0 mt-1 z-50 bg-card border border-border/50 rounded-lg p-2 shadow-lg">
             <input
               type="color"
               value={category.color || "#3B82F6"}
               onChange={(e) => onColorChange(e.target.value)}
               className="w-8 h-8 rounded cursor-pointer border-0 p-0"
             />
-            {category.color && (
-              <button
-                type="button"
-                onClick={() => { onColorChange(null); setShowColorPicker(false); }}
-                className="text-[10px] text-muted-foreground hover:text-foreground px-1"
-              >
-                Clear
-              </button>
-            )}
           </div>
         )}
       </div>
