@@ -27,44 +27,49 @@ BACKUPS_DIR="${PROJECT_DIR}/backups"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT_NAME:-budgeteer}"
 SOURCE_DIR=""
+SKIP_RESTART=""
 
 # ── Parse arguments ───────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -s|--source)
-      SOURCE_DIR="$2"
-      shift 2
-      ;;
-    -l|--list)
-      echo "Available backups in ${BACKUPS_DIR}:"
-      if [[ -d "$BACKUPS_DIR" ]]; then
-        for d in "$BACKUPS_DIR"/*/; do
-          if [[ -f "${d}/MANIFEST.txt" ]]; then
-            echo "  $(basename "$d")  — $(head -1 "${d}/MANIFEST.txt" | sed 's/.*— //')"
-          elif [[ -d "$d" ]]; then
-            echo "  $(basename "$d")  (no manifest)"
-          fi
-        done
-      else
-        echo "  (no backups directory found)"
-      fi
-      exit 0
-      ;;
-    -h|--help)
-      echo "Usage: $0 [-s <dir>] [-l]"
-      echo ""
-      echo "  -s, --source <dir>  Restore from this backup directory"
-      echo "  -l, --list          List available backups and exit"
-      echo "  -h, --help          Show this help"
-      echo ""
-      echo "If -s is omitted, the latest backup in ${BACKUPS_DIR}/ is used."
-      exit 0
-      ;;
-    *)
-      echo "Unknown option: $1"
-      echo "Usage: $0 [-s <dir>] [-l]"
-      exit 1
-      ;;
+  -s | --source)
+    SOURCE_DIR="$2"
+    shift 2
+    ;;
+  -l | --list)
+    echo "Available backups in ${BACKUPS_DIR}:"
+    if [[ -d "$BACKUPS_DIR" ]]; then
+      for d in "$BACKUPS_DIR"/*/; do
+        if [[ -f "${d}/MANIFEST.txt" ]]; then
+          echo "  $(basename "$d")  — $(head -1 "${d}/MANIFEST.txt" | sed 's/.*— //')"
+        elif [[ -d "$d" ]]; then
+          echo "  $(basename "$d")  (no manifest)"
+        fi
+      done
+    else
+      echo "  (no backups directory found)"
+    fi
+    exit 0
+    ;;
+  -h | --help)
+    echo "Usage: $0 [-s <dir>] [-l]"
+    echo ""
+    echo "  -s, --source <dir>  Restore from this backup directory"
+    echo "  -l, --list          List available backups and exit"
+    echo "  -h, --help          Show this help"
+    echo ""
+    echo "If -s is omitted, the latest backup in ${BACKUPS_DIR}/ is used."
+    exit 0
+    ;;
+  --skip-restart)
+    SKIP_RESTART=1
+    shift
+    ;;
+  *)
+    echo "Unknown option: $1"
+    echo "Usage: $0 [-s <dir>] [-l]"
+    exit 1
+    ;;
   esac
 done
 
@@ -140,8 +145,8 @@ echo "► Stopping Docker Compose stack..."
 echo "► Restoring Docker named volumes..."
 
 restore_volume() {
-  local vol_name="$1"   # friendly name (pg_data, redis_data)
-  local tar_file="$2"   # path to tar.gz
+  local vol_name="$1" # friendly name (pg_data, redis_data)
+  local tar_file="$2" # path to tar.gz
   local compose_vol="${COMPOSE_PROJECT}_${vol_name}"
 
   if [[ ! -f "$tar_file" ]]; then
@@ -157,7 +162,7 @@ restore_volume() {
     target_vol="$vol_name"
   else
     echo "   → Creating volume ${compose_vol} ..."
-    docker volume create "$compose_vol" > /dev/null
+    docker volume create "$compose_vol" >/dev/null
     target_vol="$compose_vol"
   fi
 
@@ -174,11 +179,11 @@ restore_volume() {
     -v "$(dirname "$tar_file"):/source:ro" \
     alpine:latest \
     tar xzf "/source/$(basename "$tar_file")" -C /target || {
-      echo "⚠  Warning: Failed to restore ${vol_name}"
-    }
+    echo "⚠  Warning: Failed to restore ${vol_name}"
+  }
 }
 
-restore_volume "pg_data"    "${SOURCE_DIR}/pg_data.tar.gz"
+restore_volume "pg_data" "${SOURCE_DIR}/pg_data.tar.gz"
 restore_volume "redis_data" "${SOURCE_DIR}/redis_data.tar.gz"
 
 # ── Restore secrets ───────────────────────────────────────────────────────
@@ -198,6 +203,10 @@ fi
 # ── Ensure correct permissions on secrets ────────────────────────────────
 if [[ -d "${PROJECT_DIR}/secrets" ]]; then
   chmod 600 "${PROJECT_DIR}/secrets"/*.txt 2>/dev/null || true
+fi
+
+if [[ -n "$SKIP_RESTART" ]]; then
+  exit 0
 fi
 
 # ── Restart the stack ─────────────────────────────────────────────────────

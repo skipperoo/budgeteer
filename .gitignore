@@ -1,5 +1,5 @@
 # Secrets (real values, never commit)
-secrets/
+secrets*
 # Backup archives (contain secrets + database dumps)
 backups/
 .env
