@@ -23,13 +23,13 @@ This is the backlog of Budgeteer
   - [x] Add an overlay when the user taps on mobile or hovers on desktop on the + N more badge
 - [ ] Add the account creation date in the account details page
 
-- [ ] Categories management — remaining polish:
-  - [ ] Remove clear button in color picker popover
-  - [ ] Assign default deterministic color upon category creation
-  - [ ] Remove surrounding box and title from "Add new category" form
-  - [ ] Add global toggle switch to enable/disable icons in pie charts (fall back to names + color dots)
-  - [ ] Replace per-category hide/disable (eye) button with edit (pencil) button that triggers inline rename
-  - [ ] When a category is deleted, warn user then batch-update all transactions with that category to "General"
-  - [ ] Account accordion in settings should be closed by default
+- [x] Categories management — remaining polish:
+  - [x] Remove clear button in color picker popover
+  - [x] Assign default deterministic color upon category creation
+  - [x] Remove surrounding box and title from "Add new category" form
+  - [x] Add global toggle switch to enable/disable icons in pie charts (fall back to names + color dots)
+  - [x] Replace per-category hide/disable (eye) button with edit (pencil) button that triggers inline rename
+  - [x] When a category is deleted, warn user then batch-update all transactions with that category to "General"
+  - [x] Account accordion in settings should be closed by default
 
 # BUGS
