@@ -466,7 +466,12 @@ function CategoryRow({
               onChange={(e) => onEditValueChange(e.target.value)}
               className="h-7 text-xs px-2"
               autoFocus
-              onBlur={onCancelRename}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  onCancelRename();
+                }
+              }}
             />
             <Button type="submit" size="sm" className="h-7 px-2 text-[10px]">
               Save
