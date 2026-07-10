@@ -17,9 +17,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useCategoryStore } from "@/stores/category-store";
+import { useAuthStore } from "@/stores/auth-store";
+import { useAccountStore } from "@/stores/account-store";
 import { IconPicker } from "@/components/shared/IconPicker";
 import { getCuratedIcon } from "@/lib/curated-icons";
-import { Plus, Trash2, Pencil, Palette, ImageIcon, ImageOff } from "lucide-react";
+import { bytesToBase64 } from "@/lib/crypto";
+import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
+import { decryptECIESPayload } from "@/lib/crypto-rules";
+import { apiFetch } from "@/lib/api";
+import { ENDPOINTS } from "@/lib/constants";
+import { getAccountKey } from "@/lib/decrypt-transactions";
+import type { Transaction, CreateTransactionRequest } from "@/types";
+import { Plus, Trash2, Pencil, Palette } from "lucide-react";
 
 export function CategoryManagementSection() {
   const { items, loaded, loading, fetchCategories, addCategory, updateCategory, removeCategoryById } = useCategoryStore();
@@ -51,6 +60,11 @@ export function CategoryManagementSection() {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
+  // Delete confirmation dialog
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deletingInProgress, setDeletingInProgress] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState("");
+
   useEffect(() => {
     if (expanded && !loaded && !loading) {
       fetchCategories();
@@ -66,13 +80,102 @@ export function CategoryManagementSection() {
     setAdding(false);
   }, [newName, newType, adding, addCategory]);
 
-  const handleDelete = useCallback(async (id: string) => {
-    // Double-check with the user
+  const handleDeleteStart = useCallback((id: string) => {
     const cat = items.find((c) => c.id === id);
     if (!cat) return;
-    if (!confirm(`Delete category "${cat.name}"? This cannot be undone.`)) return;
-    await removeCategoryById(id);
-  }, [items, removeCategoryById]);
+    setDeleteTarget({ id: cat.id, name: cat.name });
+  }, [items]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeletingInProgress(true);
+    setDeleteProgress(`Re-categorizing transactions from "${deleteTarget.name}" to "General"...`);
+
+    try {
+      const oldCategory = deleteTarget.name;
+
+      // Gather all accounts
+      const accounts = useAccountStore.getState().accounts;
+      if (accounts.length === 0) {
+        // No accounts — just delete the category
+        await removeCategoryById(deleteTarget.id);
+        setDeleteTarget(null);
+        setDeletingInProgress(false);
+        setDeleteProgress("");
+        return;
+      }
+
+      const privKey = useAuthStore.getState().plaintextPrivateKey;
+      const privKeyBase64 = privKey ? bytesToBase64(new Uint8Array(privKey)) : null;
+      const userPubKey = useAuthStore.getState().user?.public_key;
+
+      let updatedCount = 0;
+
+      for (const acc of accounts) {
+        let accountKey: string;
+        try {
+          accountKey = await getAccountKey(acc.id, privKeyBase64 ?? undefined, userPubKey);
+        } catch {
+          continue; // skip accounts we can't access
+        }
+
+        // Fetch all transactions for this account
+        const txs = await apiFetch<Transaction[]>(ENDPOINTS.transactions(acc.id));
+        if (!txs || txs.length === 0) continue;
+
+        for (const tx of txs) {
+          try {
+            let payload: { category: string };
+
+            if (tx.encrypted_payload.startsWith("1|")) {
+              if (!privKeyBase64) continue;
+              payload = await decryptECIESPayload<{ category: string }>(
+                tx.encrypted_payload,
+                privKeyBase64,
+              );
+            } else {
+              payload = await decryptTransactionPayload(
+                tx.encrypted_payload,
+                accountKey,
+              );
+            }
+
+            if (payload.category === oldCategory) {
+              payload.category = "General";
+              const reEncrypted = await encryptTransactionPayload(payload as any, accountKey);
+              await apiFetch<Transaction>(ENDPOINTS.transaction(tx.id), {
+                method: "PUT",
+                body: JSON.stringify({
+                  time: tx.time,
+                  encrypted_payload: reEncrypted,
+                } as CreateTransactionRequest),
+              });
+              updatedCount++;
+            }
+          } catch {
+            // Skip transactions we can't decrypt
+          }
+        }
+      }
+
+      setDeleteProgress(`Updated ${updatedCount} transaction${updatedCount !== 1 ? "s" : ""}. Deleting category...`);
+      await removeCategoryById(deleteTarget.id);
+
+      setDeleteTarget(null);
+      setDeletingInProgress(false);
+      setDeleteProgress("");
+    } catch (err) {
+      setDeletingInProgress(false);
+      setDeleteProgress(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  }, [deleteTarget, removeCategoryById]);
+
+  const handleDeleteCancel = useCallback(() => {
+    if (!deletingInProgress) {
+      setDeleteTarget(null);
+      setDeleteProgress("");
+    }
+  }, [deletingInProgress]);
 
   const handleColorChange = useCallback(async (id: string, color: string | null) => {
     await updateCategory(id, { color });
@@ -193,7 +296,7 @@ export function CategoryManagementSection() {
                   onCancelRename={() => setEditingName(null)}
                   onColorChange={(color) => handleColorChange(cat.id, color)}
                   onIconChange={(icon) => handleIconChange(cat.id, icon)}
-                  onDelete={() => handleDelete(cat.id)}
+                  onDelete={() => handleDeleteStart(cat.id)}
                 />
               ))}
             </div>
@@ -217,7 +320,7 @@ export function CategoryManagementSection() {
                   onCancelRename={() => setEditingName(null)}
                   onColorChange={(color) => handleColorChange(cat.id, color)}
                   onIconChange={(icon) => handleIconChange(cat.id, icon)}
-                  onDelete={() => handleDelete(cat.id)}
+                  onDelete={() => handleDeleteStart(cat.id)}
                 />
               ))}
             </div>
@@ -227,6 +330,42 @@ export function CategoryManagementSection() {
             <p className="text-xs text-muted-foreground italic text-center py-4">
               No categories yet. Create one above.
             </p>
+          )}
+
+          {/* Delete confirmation dialog */}
+          {deleteTarget && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="mx-4 w-full max-w-md rounded-lg bg-card p-6 elevated">
+                <h3 className="mb-2 text-lg font-semibold text-destructive">Delete Category</h3>
+                <p className="mb-2 text-sm text-muted-foreground">
+                  This will delete the category <strong>"{deleteTarget.name}"</strong> and
+                  move all transactions using it to <strong>"General"</strong>.
+                </p>
+                <p className="mb-4 text-sm text-amber-600 dark:text-amber-400">
+                  <strong>Note:</strong> All affected transactions will be decrypted, updated,
+                  and re-encrypted. This may take a while if you have many transactions.
+                </p>
+                {deleteProgress && (
+                  <p className="mb-3 text-sm text-muted-foreground italic">{deleteProgress}</p>
+                )}
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={handleDeleteCancel}
+                    disabled={deletingInProgress}
+                    className="rounded-md bg-card px-4 py-2 text-sm font-medium border border-input hover:bg-secondary disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteConfirm}
+                    disabled={deletingInProgress}
+                    className="rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                  >
+                    {deletingInProgress ? "Working..." : "Delete Category"}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </CardContent>
       )}
