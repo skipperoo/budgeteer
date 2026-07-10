@@ -191,11 +191,11 @@ export function CategoryPieChart({
             </span>
             {morePopoverOpen && (
               <div
-                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 bg-card border border-border/50 rounded-lg shadow-xl p-2 min-w-[140px]"
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 bg-card border border-border/50 rounded-lg shadow-xl p-2 min-w-[180px]"
                 onMouseEnter={() => setMorePopoverOpen(true)}
                 onMouseLeave={() => setMorePopoverOpen(false)}
               >
-                <div className="space-y-1">
+                <div className="space-y-1 max-h-48 overflow-y-auto">
                   {remainingItems.map((entry) => {
                     const iconName = getCategoryIcon(entry.name);
                     const IconComponent = iconName ? getCuratedIcon(iconName) : null;
