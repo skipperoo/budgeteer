@@ -19,6 +19,7 @@ import { useCategoryStore } from "@/stores/category-store";
 import { getCuratedIcon } from "@/lib/curated-icons";
 
 interface PieSlice {
+  id?: string;    // category_id for stable lookup
   name: string;
   value: number;
 }
@@ -162,14 +163,14 @@ export function CategoryPieChart({
       {/* Legend */}
       <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 text-xs font-sans text-muted-foreground font-medium">
         {visibleItems.map((entry) => {
-          const iconName = getCategoryIcon(entry.name);
+          const iconName = getCategoryIcon(entry.name, entry.id);
           const IconComponent = iconName ? getCuratedIcon(iconName) : null;
           const showIcon = iconsEnabled && IconComponent;
           return (
-            <div key={entry.name} className="flex items-center gap-1">
+            <div key={entry.id || entry.name} className="flex items-center gap-1">
               <span
                 className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: getCategoryColor(entry.name) }}
+                style={{ backgroundColor: getCategoryColor(entry.name, entry.id) }}
               />
               {showIcon ? (
                 <IconComponent className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -197,14 +198,14 @@ export function CategoryPieChart({
               >
                 <div className="space-y-1 max-h-48 overflow-y-auto">
                   {remainingItems.map((entry) => {
-                    const iconName = getCategoryIcon(entry.name);
+                    const iconName = getCategoryIcon(entry.name, entry.id);
                     const IconComponent = iconName ? getCuratedIcon(iconName) : null;
                     const showIcon = iconsEnabled && IconComponent;
                     return (
-                      <div key={entry.name} className="flex items-center gap-2 text-xs whitespace-nowrap">
+                      <div key={entry.id || entry.name} className="flex items-center gap-2 text-xs whitespace-nowrap">
                         <span
                           className="w-2 h-2 rounded-full shrink-0"
-                          style={{ backgroundColor: getCategoryColor(entry.name) }}
+                          style={{ backgroundColor: getCategoryColor(entry.name, entry.id) }}
                         />
                         {showIcon ? (
                           <IconComponent className="h-4 w-4 shrink-0 text-muted-foreground" />
