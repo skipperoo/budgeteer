@@ -19,10 +19,27 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useCategoryStore } from "@/stores/category-store";
 import { IconPicker } from "@/components/shared/IconPicker";
 import { getCuratedIcon } from "@/lib/curated-icons";
-import { Plus, Trash2, Eye, EyeOff, Palette } from "lucide-react";
+import { Plus, Trash2, Pencil, Palette, ImageIcon, ImageOff } from "lucide-react";
 
 export function CategoryManagementSection() {
   const { items, loaded, loading, fetchCategories, addCategory, updateCategory, removeCategoryById } = useCategoryStore();
+
+  // Global icons toggle — stored in localStorage
+  const [iconsEnabled, setIconsEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("budgeteer_categories_show_icons") !== "false";
+    } catch { return true; }
+  });
+
+  // Persist icons preference
+  const handleIconsToggle = (enabled: boolean) => {
+    setIconsEnabled(enabled);
+    try {
+      localStorage.setItem("budgeteer_categories_show_icons", String(enabled));
+      // Dispatch a custom event so CategoryPieChart picks up the change
+      window.dispatchEvent(new CustomEvent("icons-toggle", { detail: { enabled } }));
+    } catch { /* ignore */ }
+  };
   const [expanded, setExpanded] = useState(false);
 
   // Add category form
@@ -56,10 +73,6 @@ export function CategoryManagementSection() {
     if (!confirm(`Delete category "${cat.name}"? This cannot be undone.`)) return;
     await removeCategoryById(id);
   }, [items, removeCategoryById]);
-
-  const handleToggleDisabled = useCallback(async (id: string, current: boolean) => {
-    await updateCategory(id, { is_disabled: !current });
-  }, [updateCategory]);
 
   const handleColorChange = useCallback(async (id: string, color: string | null) => {
     await updateCategory(id, { color });
@@ -95,6 +108,26 @@ export function CategoryManagementSection() {
       </CardHeader>
       {expanded && (
         <CardContent className="space-y-6">
+          {/* Global icons toggle */}
+          <div className="flex items-center justify-between rounded-md border border-input px-3 py-2">
+            <span className="text-sm font-medium">Show category icons in charts</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={iconsEnabled}
+              onClick={() => handleIconsToggle(!iconsEnabled)}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                iconsEnabled ? "bg-primary" : "bg-input"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow transform ring-0 transition duration-200 ease-in-out ${
+                  iconsEnabled ? "translate-x-4" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
           {/* Add new category */}
           <div className="flex items-center gap-2">
             <div className="flex rounded-md border border-input overflow-hidden shrink-0">
@@ -160,7 +193,6 @@ export function CategoryManagementSection() {
                   onCancelRename={() => setEditingName(null)}
                   onColorChange={(color) => handleColorChange(cat.id, color)}
                   onIconChange={(icon) => handleIconChange(cat.id, icon)}
-                  onToggleDisabled={() => handleToggleDisabled(cat.id, cat.is_disabled)}
                   onDelete={() => handleDelete(cat.id)}
                 />
               ))}
@@ -185,32 +217,6 @@ export function CategoryManagementSection() {
                   onCancelRename={() => setEditingName(null)}
                   onColorChange={(color) => handleColorChange(cat.id, color)}
                   onIconChange={(icon) => handleIconChange(cat.id, icon)}
-                  onToggleDisabled={() => handleToggleDisabled(cat.id, cat.is_disabled)}
-                  onDelete={() => handleDelete(cat.id)}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Disabled categories */}
-          {items.some((c) => c.is_disabled) && (
-            <div className="space-y-2 pt-2 border-t border-border/50">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Disabled ({items.filter((c) => c.is_disabled).length})
-              </h4>
-              {items.filter((c) => c.is_disabled).map((cat) => (
-                <CategoryRow
-                  key={cat.id}
-                  category={cat}
-                  editingName={editingName}
-                  editValue={editValue}
-                  onStartEdit={() => { setEditingName(cat.id); setEditValue(cat.name); }}
-                  onEditValueChange={setEditValue}
-                  onSaveRename={() => handleRename(cat.id)}
-                  onCancelRename={() => setEditingName(null)}
-                  onColorChange={(color) => handleColorChange(cat.id, color)}
-                  onIconChange={(icon) => handleIconChange(cat.id, icon)}
-                  onToggleDisabled={() => handleToggleDisabled(cat.id, cat.is_disabled)}
                   onDelete={() => handleDelete(cat.id)}
                 />
               ))}
@@ -240,7 +246,6 @@ interface CategoryRowProps {
   onCancelRename: () => void;
   onColorChange: (color: string | null) => void;
   onIconChange: (icon: string | null) => void;
-  onToggleDisabled: () => void;
   onDelete: () => void;
 }
 
@@ -254,7 +259,6 @@ function CategoryRow({
   onCancelRename,
   onColorChange,
   onIconChange,
-  onToggleDisabled,
   onDelete,
 }: CategoryRowProps) {
   const [showIconPicker, setShowIconPicker] = useState(false);
@@ -263,15 +267,7 @@ function CategoryRow({
   const IconComponent = category.icon ? getCuratedIcon(category.icon) : null;
 
   return (
-    <div
-      className={`
-        flex items-center gap-2 p-2 rounded-lg border transition-all
-        ${category.is_disabled
-          ? "border-border/30 bg-muted/30 opacity-60"
-          : "border-border/50 bg-card hover:border-border"
-        }
-      `}
-    >
+    <div className="flex items-center gap-2 p-2 rounded-lg border border-border/50 bg-card hover:border-border transition-all">
       {/* Color dot */}
       <div className="relative shrink-0">
         <button
@@ -347,22 +343,14 @@ function CategoryRow({
         )}
       </div>
 
-      {/* Toggle disabled */}
+      {/* Edit button — triggers inline rename */}
       <button
         type="button"
-        onClick={onToggleDisabled}
-        className={`p-1 rounded-md transition-colors ${
-          category.is_disabled
-            ? "text-muted-foreground hover:text-foreground"
-            : "text-muted-foreground hover:text-foreground"
-        }`}
-        title={category.is_disabled ? "Enable category" : "Disable category"}
+        onClick={onStartEdit}
+        className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+        title="Rename category"
       >
-        {category.is_disabled ? (
-          <EyeOff className="h-3.5 w-3.5" />
-        ) : (
-          <Eye className="h-3.5 w-3.5" />
-        )}
+        <Pencil className="h-3.5 w-3.5" />
       </button>
 
       {/* Delete */}

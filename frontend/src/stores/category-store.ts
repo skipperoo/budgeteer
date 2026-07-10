@@ -98,7 +98,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       get().fetchCategories();
     }
     return get().items
-      .filter((c) => c.type === type && !c.is_disabled)
+      .filter((c) => c.type === type)
       .map((c) => c.name)
       .sort((a, b) => a.localeCompare(b));
   },
@@ -108,7 +108,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       get().fetchCategories();
     }
     return get().items
-      .filter((c) => c.type === type && !c.is_disabled)
+      .filter((c) => c.type === type)
       .sort((a, b) => a.name.localeCompare(b.name));
   },
 
@@ -117,7 +117,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       get().fetchCategories();
     }
     return get().items.find(
-      (c) => c.name.toLowerCase() === name.toLowerCase() && !c.is_disabled
+      (c) => c.name.toLowerCase() === name.toLowerCase()
     );
   },
 

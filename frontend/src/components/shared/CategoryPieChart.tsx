@@ -6,7 +6,7 @@
  * on hover/click with the full list of remaining categories.
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   ResponsiveContainer,
   PieChart,
@@ -44,6 +44,25 @@ export function CategoryPieChart({
   const symbol = getCurrencySymbol(currency);
   const [morePopoverOpen, setMorePopoverOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
+
+  // Global icons toggle — read from localStorage, listen for custom event
+  const [iconsEnabled, setIconsEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("budgeteer_categories_show_icons") !== "false";
+    } catch { return true; }
+  });
+
+  const handleIconsEvent = useCallback((e: Event) => {
+    const detail = (e as CustomEvent).detail;
+    if (detail && typeof detail.enabled === "boolean") {
+      setIconsEnabled(detail.enabled);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("icons-toggle", handleIconsEvent);
+    return () => window.removeEventListener("icons-toggle", handleIconsEvent);
+  }, [handleIconsEvent]);
 
   // Close popover on outside click
   useEffect(() => {
@@ -145,13 +164,14 @@ export function CategoryPieChart({
         {visibleItems.map((entry) => {
           const iconName = getCategoryIcon(entry.name);
           const IconComponent = iconName ? getCuratedIcon(iconName) : null;
+          const showIcon = iconsEnabled && IconComponent;
           return (
             <div key={entry.name} className="flex items-center gap-1">
               <span
                 className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: getCategoryColor(entry.name) }}
               />
-              {IconComponent ? (
+              {showIcon ? (
                 <IconComponent className="h-3 w-3 shrink-0 text-muted-foreground" />
               ) : (
                 <span className="truncate max-w-[80px]">{entry.name}</span>
@@ -179,13 +199,14 @@ export function CategoryPieChart({
                   {remainingItems.map((entry) => {
                     const iconName = getCategoryIcon(entry.name);
                     const IconComponent = iconName ? getCuratedIcon(iconName) : null;
+                    const showIcon = iconsEnabled && IconComponent;
                     return (
                       <div key={entry.name} className="flex items-center gap-2 text-xs whitespace-nowrap">
                         <span
                           className="w-2 h-2 rounded-full shrink-0"
                           style={{ backgroundColor: getCategoryColor(entry.name) }}
                         />
-                        {IconComponent ? (
+                        {showIcon ? (
                           <IconComponent className="h-3 w-3 shrink-0 text-muted-foreground" />
                         ) : (
                           <span className="text-foreground font-medium">{entry.name}</span>
