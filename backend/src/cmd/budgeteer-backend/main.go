@@ -99,6 +99,7 @@ func main() {
 		AddHandler("DELETE /v1/transactions/{id}",           handler.DeleteTransaction).
 		AddHandler("GET    /v1/categories",                  handler.ListCategories).
 		AddHandler("POST   /v1/categories",                  handler.CreateCategory).
+		AddHandler("PUT    /v1/categories/{id}",             handler.UpdateCategory).
 		AddHandler("DELETE /v1/categories/{id}",             handler.DeleteCategory).
 		// Transaction documents
 		AddHandler("POST   /v1/transactions/{id}/documents",                handler.UploadDocument).
