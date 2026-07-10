@@ -194,17 +194,5 @@ export function getCuratedIcon(name: string): LucideIcon | null {
   return entry?.component ?? null;
 }
 
-/** Render a lucide icon by name (works for any lucide icon name, not just curated). */
-export function getIconByName(name: string): LucideIcon | null {
-  try {
-    // Dynamic import from lucide-react — we cache in a map
-    const icon = (window as any).__lucideIcons?.[name];
-    if (icon) return icon;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 /** All curated icon names for quick searching. */
 export const CURATED_ICON_NAMES = CURATED_ICONS.map((i) => i.name);
