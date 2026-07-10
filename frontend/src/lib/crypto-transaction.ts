@@ -14,6 +14,7 @@ import { encryptData, decryptData, compress, decompress } from "./crypto";
 export interface TransactionPayload {
   amount: number;
   category: string;
+  category_id?: string; // stable UUID linking to user_categories; enables id-based lookup on rename/delete
   notes: string;
   counterparty: string;
   commission?: number; // fee added to amount; default 0

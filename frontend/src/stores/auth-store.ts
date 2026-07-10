@@ -3,6 +3,7 @@ import { getToken, setToken, removeToken } from "@/lib/api";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { syncLocaleFromPreferences } from "@/lib/format";
+import { useMigrationStore } from "./migration-store";
 import type { User } from "@/types";
 
 // Persist minimal user info to localStorage so the header can show the email
@@ -58,6 +59,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     setUser({ email: user.email });
     syncLocaleFromPreferences(user.preferences?.locale);
     set({ token, user, encryptedPrivateKey: encryptedKey });
+    // Run pending migrations in the background (non-blocking)
+    useMigrationStore.getState().runPendingMigrations().catch(() => {});
   },
 
   setPrivateKey: (key) => {
@@ -95,6 +98,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       setUser({ email: user.email });
       syncLocaleFromPreferences(user.preferences?.locale);
       set({ user, encryptedPrivateKey: user.encrypted_private_key });
+      // Run pending migrations in the background (non-blocking)
+      useMigrationStore.getState().runPendingMigrations().catch(() => {});
     } catch {
       // Token is invalid — clear auth state
       removeToken();

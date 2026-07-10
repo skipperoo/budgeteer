@@ -32,14 +32,20 @@ interface CategoryState {
   getCategories: (type: CategoryType) => string[];
   /** Get all category objects for a given type (excludes disabled) */
   getCategoryObjects: (type: CategoryType) => UserCategory[];
-  /** Get a single category by name (case-insensitive, excludes disabled) */
+  /** Get a single category by name (case-insensitive) */
   getCategoryByName: (name: string) => UserCategory | undefined;
-  /** Get the color for a category name, or a deterministic default */
-  getCategoryColor: (name: string) => string;
-  /** Get the icon name for a category, or null */
-  getCategoryIcon: (name: string) => string | null;
+  /** Get a single category by stable id */
+  getCategoryById: (id: string) => UserCategory | undefined;
+  /** Resolve the current display name for a category, by id first then name fallback */
+  resolveCategoryName: (categoryName: string, categoryId?: string) => string;
+  /** Get the color for a category, by id first then name fallback */
+  getCategoryColor: (name: string, categoryId?: string) => string;
+  /** Get the icon name for a category, by id first then name fallback */
+  getCategoryIcon: (name: string, categoryId?: string) => string | null;
   /** Add a new category under the given transaction type */
   addCategory: (type: CategoryType, category: string) => Promise<void>;
+  /** Ensure a category exists and return its id (waits for creation if new) */
+  ensureCategory: (type: CategoryType, name: string) => Promise<string | undefined>;
   /** Update a category's fields (name, color, icon, is_disabled) */
   updateCategory: (id: string, updates: Partial<Pick<UserCategory, "name" | "color" | "icon" | "is_disabled">>) => Promise<void>;
   /** Remove a category by id */
@@ -117,24 +123,55 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
     );
   },
 
-  getCategoryColor: (name) => {
-    if (!get().loaded && !get().loading) {
-      get().fetchCategories();
-    }
-    const cat = get().items.find(
-      (c) => c.name.toLowerCase() === name.toLowerCase()
-    );
-    if (cat?.color) return cat.color;
-    if (cat) return getFallbackColor(cat.id);  // use stable id, not mutable name
-    return getFallbackColor(name);             // system entry (Opening Balance, Transfer…)
+  getCategoryById: (id) => {
+    return get().items.find((c) => c.id === id);
   },
 
-  getCategoryIcon: (name) => {
+  resolveCategoryName: (categoryName, categoryId) => {
+    if (categoryId) {
+      const cat = get().items.find((c) => c.id === categoryId);
+      if (cat) return cat.name;
+    }
+    // Fall back to name-based lookup (legacy transactions without category_id)
+    const cat = get().items.find(
+      (c) => c.name.toLowerCase() === (categoryName || "").toLowerCase()
+    );
+    if (cat) return cat.name;
+    // Category not found (deleted) — show the stored name or "General"
+    return categoryName || "General";
+  },
+
+  getCategoryColor: (name, categoryId) => {
     if (!get().loaded && !get().loading) {
       get().fetchCategories();
     }
+    // First try id-based lookup
+    if (categoryId) {
+      const catById = get().items.find((c) => c.id === categoryId);
+      if (catById?.color) return catById.color;
+      if (catById) return getFallbackColor(catById.id);
+    }
+    // Fall back to name-based lookup (legacy transactions)
     const cat = get().items.find(
-      (c) => c.name.toLowerCase() === name.toLowerCase()
+      (c) => c.name.toLowerCase() === (name || "").toLowerCase()
+    );
+    if (cat?.color) return cat.color;
+    if (cat) return getFallbackColor(cat.id);
+    return getFallbackColor(name || "General");
+  },
+
+  getCategoryIcon: (name, categoryId) => {
+    if (!get().loaded && !get().loading) {
+      get().fetchCategories();
+    }
+    // First try id-based lookup
+    if (categoryId) {
+      const catById = get().items.find((c) => c.id === categoryId);
+      if (catById?.icon) return catById.icon;
+    }
+    // Fall back to name-based lookup (legacy transactions)
+    const cat = get().items.find(
+      (c) => c.name.toLowerCase() === (name || "").toLowerCase()
     );
     return cat?.icon ?? null;
   },
@@ -268,6 +305,19 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       // Revert
       set({ items: prev, version: get().version + 1 });
     }
+  },
+
+  ensureCategory: async (type, name) => {
+    const normalized = name.trim();
+    if (!normalized) return undefined;
+    // Check if already exists
+    const existing = get().items.find((c) => c.type === type && c.name === normalized);
+    if (existing) return existing.id;
+    // Create it — waits for server response
+    await get().addCategory(type, normalized);
+    // After creation, find it in the store
+    const created = get().items.find((c) => c.type === type && c.name === normalized);
+    return created?.id;
   },
 
   removeCategory: async (type, category) => {

@@ -79,6 +79,9 @@ func main() {
 		AddHandler("PUT    /v1/auth/password",             handler.ChangePassword).
 		AddHandler("GET    /v1/auth/preferences",           handler.GetPreferences).
 		AddHandler("PUT    /v1/auth/preferences",           handler.UpdatePreferences).
+		AddHandler("GET    /v1/auth/pending-migrations",       handler.ListPendingMigrations).
+		AddHandler("POST   /v1/auth/complete-migration",       handler.CompleteMigration).
+		AddHandler("POST   /v1/auth/fail-migration",           handler.FailMigration).
 		AddHandler("POST   /v1/auth/devices",               handler.StoreAccessSecret).
 		AddHandler("GET    /v1/auth/devices",               handler.ListAccessSecrets).
 		AddHandler("DELETE /v1/auth/devices/{id}",          handler.RemoveAccessSecret).

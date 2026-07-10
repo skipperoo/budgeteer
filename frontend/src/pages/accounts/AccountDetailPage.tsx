@@ -518,9 +518,9 @@ export default function AccountDetailPage() {
         // Fall through to regular update
         const amount = data.type === "expense" ? -absAmount : absAmount;
         const category = data.category || "general";
-        addCategory(data.type as CategoryType, category);
+        const categoryId = await useCategoryStore.getState().ensureCategory(data.type as CategoryType, category);
         const encryptedPayload = await encryptTransactionPayload(
-          { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined, interest_amount: interest > 0 ? interest : undefined },
+          { amount, category, category_id: categoryId, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined, interest_amount: interest > 0 ? interest : undefined },
           accountKeyBase64
         );
         await apiFetch(ENDPOINTS.transaction(editTxId), {
@@ -531,10 +531,10 @@ export default function AccountDetailPage() {
         // ---- Regular transaction update ----
         const amount = data.type === "expense" ? -absAmount : absAmount;
         const category = data.category || "general";
-        addCategory(data.type as CategoryType, category);
+        const categoryId = await useCategoryStore.getState().ensureCategory(data.type as CategoryType, category);
 
         const encryptedPayload = await encryptTransactionPayload(
-          { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined, interest_amount: interest > 0 ? interest : undefined },
+          { amount, category, category_id: categoryId, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined, interest_amount: interest > 0 ? interest : undefined },
           accountKeyBase64
         );
 
@@ -650,10 +650,10 @@ export default function AccountDetailPage() {
       const accountKeyBase64 = await getAccountKey(id, privKeyBase64 ?? undefined, currentUser?.public_key);
 
       const category = data.category || "general";
-      addCategory(data.type as CategoryType, category);
+      const categoryId = await useCategoryStore.getState().ensureCategory(data.type as CategoryType, category);
 
       const encryptedPayload = await encryptTransactionPayload(
-        { amount, category, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined },
+        { amount, category, category_id: categoryId, notes: data.notes, counterparty: data.counterparty, commission: commission > 0 ? commission : undefined },
         accountKeyBase64
       );
 
@@ -801,29 +801,47 @@ export default function AccountDetailPage() {
 
   // Expenses by category — applies display filters + excludes "Opening Balance" and transfers
   const expenseChartData = (() => {
-    const categories: Record<string, number> = {};
+    const groups = new Map<string, { id?: string; name: string; value: number }>();
     displayFilteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount < 0 && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)) {
-        const cat = tx.payload.category || "General";
-        categories[cat] = (categories[cat] || 0) + Math.abs(effectiveAmount(tx.payload));
+        const key = tx.payload.category_id || tx.payload.category || "General";
+        const existing = groups.get(key);
+        if (existing) {
+          existing.value += Math.abs(effectiveAmount(tx.payload));
+        } else {
+          groups.set(key, {
+            id: tx.payload.category_id,
+            name: tx.payload.category || "General",
+            value: Math.abs(effectiveAmount(tx.payload)),
+          });
+        }
       }
     });
-    return Object.entries(categories)
-      .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
+    return Array.from(groups.values())
+      .map((g) => ({ ...g, value: Number(g.value.toFixed(2)) }))
       .sort((a, b) => b.value - a.value);
   })();
 
   // Income by category — applies display filters + excludes "Opening Balance" and transfers
   const incomeChartData = (() => {
-    const categories: Record<string, number> = {};
+    const groups = new Map<string, { id?: string; name: string; value: number }>();
     displayFilteredTxs.forEach((tx) => {
       if (tx.payload && tx.payload.amount > 0 && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)) {
-        const cat = tx.payload.category || "General";
-        categories[cat] = (categories[cat] || 0) + effectiveAmount(tx.payload);
+        const key = tx.payload.category_id || tx.payload.category || "General";
+        const existing = groups.get(key);
+        if (existing) {
+          existing.value += effectiveAmount(tx.payload);
+        } else {
+          groups.set(key, {
+            id: tx.payload.category_id,
+            name: tx.payload.category || "General",
+            value: effectiveAmount(tx.payload),
+          });
+        }
       }
     });
-    return Object.entries(categories)
-      .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
+    return Array.from(groups.values())
+      .map((g) => ({ ...g, value: Number(g.value.toFixed(2)) }))
       .sort((a, b) => b.value - a.value);
   })();
 
