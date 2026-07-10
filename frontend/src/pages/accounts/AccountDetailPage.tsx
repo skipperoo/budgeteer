@@ -26,13 +26,7 @@ import { TransactionDetailOverlay } from "@/components/transactions/TransactionD
 import { TransactionForm, type TransactionFormData } from "@/components/transactions/TransactionForm";
 import { CURRENCIES, getCurrencySymbol, formatCurrency, formatNumber, formatDate } from "@/lib/format";
 import type { Transaction, CreateTransactionRequest, DocumentMetadata } from "@/types";
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip as ChartTooltip,
-} from "recharts";
+import { CategoryPieChart } from "@/components/shared/CategoryPieChart";
 
 const ACCOUNT_TYPES = ["personal", "joint", "savings"] as const;
 
@@ -803,17 +797,7 @@ export default function AccountDetailPage() {
     return true;
   });
 
-  // Pastel chart colors (matches dashboard)
-  const CHART_COLORS = [
-    "oklch(0.75 0.12 140)",
-    "oklch(0.78 0.10 220)",
-    "oklch(0.76 0.10 280)",
-    "oklch(0.80 0.09 40)",
-    "oklch(0.74 0.12 320)",
-    "oklch(0.77 0.08 100)",
-    "oklch(0.72 0.10 180)",
-    "oklch(0.76 0.11 10)",
-  ];
+  // Category colors are now sourced from the category store (user-defined or deterministic fallback)
 
   // Expenses by category — applies display filters + excludes "Opening Balance" and transfers
   const expenseChartData = (() => {
@@ -1419,83 +1403,12 @@ export default function AccountDetailPage() {
               <CardTitle className="text-lg font-bold">Expenses by Category</CardTitle>
             </CardHeader>
             <CardContent>
-              {expenseChartData.length === 0 ? (
-                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
-                  No expense data.
-                </div>
-              ) : (
-                <div className="h-64 w-full flex flex-col justify-between font-mono text-[10px]">
-                  <div className="h-44 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={expenseChartData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={2}
-                          dataKey="value"
-                        >
-                          {expenseChartData.map((_entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
-                          ))}
-                        </Pie>
-                        <ChartTooltip
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              return (
-                                <div className="bg-card text-card-foreground p-3 rounded-lg raised text-xs">
-                                  <p className="font-semibold mb-1">{data.name}</p>
-                                  <p className="font-mono text-destructive font-bold">
-                                    {getCurrencySymbol(account.currency)}
-                                    {formatNumber(data.value)}
-                                  </p>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                        <text
-                          x="50%"
-                          y="50%"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="fill-destructive"
-                          style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                        >
-                          {getCurrencySymbol(account.currency)}
-                          {formatNumber(expenseTotal)}
-                        </text>
-                        <text
-                          x="50%"
-                          y="50%"
-                          dy={16}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="fill-muted-foreground"
-                          style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                        >
-                          expenses
-                        </text>
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 text-xs font-sans text-muted-foreground font-medium">
-                    {expenseChartData.slice(0, 5).map((entry, index) => (
-                      <div key={entry.name} className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
-                        <span className="truncate max-w-[80px]">{entry.name}</span>
-                      </div>
-                    ))}
-                    {expenseChartData.length > 5 && (
-                      <span className="text-muted-foreground italic text-[11px] self-center">+{expenseChartData.length - 5} more</span>
-                    )}
-                  </div>
-                </div>
-              )}
+              <CategoryPieChart
+                data={expenseChartData}
+                total={expenseTotal}
+                currency={account.currency}
+                type="expense"
+              />
             </CardContent>
           </Card>
           <Card>
@@ -1503,83 +1416,12 @@ export default function AccountDetailPage() {
               <CardTitle className="text-lg font-bold">Income by Category</CardTitle>
             </CardHeader>
             <CardContent>
-              {incomeChartData.length === 0 ? (
-                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
-                  No income data.
-                </div>
-              ) : (
-                <div className="h-64 w-full flex flex-col justify-between font-mono text-[10px]">
-                  <div className="h-44 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={incomeChartData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={2}
-                          dataKey="value"
-                        >
-                          {incomeChartData.map((_entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />
-                          ))}
-                        </Pie>
-                        <ChartTooltip
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              return (
-                                <div className="bg-card text-card-foreground p-3 rounded-lg raised text-xs">
-                                  <p className="font-semibold mb-1">{data.name}</p>
-                                  <p className="font-mono text-income font-bold">
-                                    {getCurrencySymbol(account.currency)}
-                                    {formatNumber(data.value)}
-                                  </p>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                        <text
-                          x="50%"
-                          y="50%"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="fill-income"
-                          style={{ fontSize: 14, fontWeight: 700, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                        >
-                          {getCurrencySymbol(account.currency)}
-                          {formatNumber(incomeTotal)}
-                        </text>
-                        <text
-                          x="50%"
-                          y="50%"
-                          dy={16}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="fill-muted-foreground"
-                          style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
-                        >
-                          income
-                        </text>
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 text-xs font-sans text-muted-foreground font-medium">
-                    {incomeChartData.slice(0, 5).map((entry, index) => (
-                      <div key={entry.name} className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
-                        <span className="truncate max-w-[80px]">{entry.name}</span>
-                      </div>
-                    ))}
-                    {incomeChartData.length > 5 && (
-                      <span className="text-muted-foreground italic text-[11px] self-center">+{incomeChartData.length - 5} more</span>
-                    )}
-                  </div>
-                </div>
-              )}
+              <CategoryPieChart
+                data={incomeChartData}
+                total={incomeTotal}
+                currency={account.currency}
+                type="income"
+              />
             </CardContent>
           </Card>
         </div>

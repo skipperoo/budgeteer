@@ -68,8 +68,13 @@ export function FilterMenu() {
     }
   }, [categoriesLoaded, fetchCategories]);
 
+  // Exclude disabled categories from the filter dropdown
   const allCategories = [
-    ...new Set(categoryItems.map((c) => c.name)),
+    ...new Set(
+      categoryItems
+        .filter((c) => !c.is_disabled)
+        .map((c) => c.name)
+    ),
   ].sort((a, b) => a.localeCompare(b));
 
   // Custom date range inputs
