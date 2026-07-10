@@ -125,7 +125,8 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       (c) => c.name.toLowerCase() === name.toLowerCase()
     );
     if (cat?.color) return cat.color;
-    return getFallbackColor(name);
+    if (cat) return getFallbackColor(cat.id);  // use stable id, not mutable name
+    return getFallbackColor(name);             // system entry (Opening Balance, Transfer…)
   },
 
   getCategoryIcon: (name) => {
@@ -150,7 +151,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       if (needsColor.length > 0) {
         await Promise.all(
           needsColor.map(async (cat) => {
-            const color = getFallbackColor(cat.name);
+            const color = getFallbackColor(cat.id);
             // Optimistically update in-memory
             const idx = items.findIndex((c) => c.id === cat.id);
             if (idx !== -1) items[idx] = { ...items[idx], color };
@@ -177,14 +178,13 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
     // Don't add duplicates
     if (get().items.some((c) => c.type === type && c.name === normalized)) return;
 
-    // Compute a deterministic default color so the category gets one immediately
-    const defaultColor = getFallbackColor(normalized);
-
     // Optimistic add with a temp ID (the real ID comes from the server)
     const tempId = `temp_${Date.now()}`;
     const prev = get().items;
+    // Use name-based color as a brief placeholder; replaced once the real id is known
+    const tempColor = getFallbackColor(normalized);
     set({
-      items: [...prev, { id: tempId, user_id: "", name: normalized, type, color: defaultColor, created_at: "", is_disabled: false }],
+      items: [...prev, { id: tempId, user_id: "", name: normalized, type, color: tempColor, created_at: "", is_disabled: false }],
       version: get().version + 1,
     });
 
@@ -193,11 +193,15 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
         method: "POST",
         body: JSON.stringify({ name: normalized, type }),
       });
+
+      // Compute color from the stable id so it never changes on rename
+      const stableColor = getFallbackColor(created.id);
+
       // Replace the temp entry with the server response, then immediately assign the color
       set({
         items: get().items.map((c) =>
           c.id === tempId
-            ? { ...created, color: created.color ?? defaultColor, icon: created.icon ?? undefined }
+            ? { ...created, color: created.color ?? stableColor, icon: created.icon ?? undefined }
             : c
         ),
       });
@@ -205,7 +209,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       try {
         await apiFetch(ENDPOINTS.updateCategory(created.id), {
           method: "PUT",
-          body: JSON.stringify({ color: defaultColor }),
+          body: JSON.stringify({ color: stableColor }),
         });
       } catch { /* non-critical — fallback color will be used */ }
     } catch {
