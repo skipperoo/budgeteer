@@ -290,7 +290,7 @@ export default function SettingsPage() {
 
       <div className="space-y-4">
         {/* ── Account Accordion ── */}
-        <AccordionCard title="Account" defaultOpen={true}>
+        <AccordionCard title="Account">
           <div>
             <label className="text-sm font-medium">Email</label>
             <p className="text-sm text-muted-foreground">{user?.email ?? "—"}</p>
