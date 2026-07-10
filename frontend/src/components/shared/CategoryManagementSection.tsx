@@ -404,6 +404,8 @@ function CategoryRow({
   const [showColorPicker, setShowColorPicker] = useState(false);
   const isEditing = editingName === category.id;
   const IconComponent = category.icon ? getCuratedIcon(category.icon) : null;
+  // Use the store's getCategoryColor which falls back to a deterministic default
+  const displayColor = useCategoryStore.getState().getCategoryColor(category.name);
 
   return (
     <div className="flex items-center gap-2 p-2 rounded-lg border border-border/50 bg-card hover:border-border transition-all">
@@ -413,7 +415,7 @@ function CategoryRow({
           type="button"
           onClick={() => setShowColorPicker(!showColorPicker)}
           className="w-5 h-5 rounded-full border border-border/50 cursor-pointer hover:ring-1 hover:ring-ring transition-all"
-          style={{ backgroundColor: category.color || "var(--muted-foreground)" }}
+          style={{ backgroundColor: displayColor }}
           title="Change color"
         />
         {showColorPicker && (
