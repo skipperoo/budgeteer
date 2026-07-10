@@ -1,5 +1,7 @@
 # Secrets (real values, never commit)
 secrets/
+# Backup archives (contain secrets + database dumps)
+backups/
 .env
 # Local data volumes
 pg_data/
