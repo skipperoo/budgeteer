@@ -13,6 +13,8 @@ import { useAccent, type ThemeKey } from "@/hooks/use-accent";
 import { isPinEnabled, storePinData, clearPinData, getPinData, clearDeviceFingerprint } from "@/lib/utils";
 import type { UserPreferences } from "@/types";
 import { DataManagementSection } from "./DataManagementSection";
+import { CategoryManagementSection } from "@/components/shared/CategoryManagementSection";
+import { ChevronDown } from "lucide-react";
 
 const CURRENCIES = [
   { code: "EUR", symbol: "€", name: "Euro" },
@@ -47,6 +49,40 @@ function setSetting(key: string, value: string): void {
     localStorage.setItem(key, value);
   } catch { /* ignore quota errors */ }
 }
+
+// ─── Accordion wrapper ───────────────────────────────────────────────────
+
+function AccordionCard({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card>
+      <CardHeader
+        className="cursor-pointer select-none"
+        onClick={() => setOpen(!open)}
+      >
+        <div className="flex items-center justify-between">
+          <CardTitle>{title}</CardTitle>
+          <ChevronDown
+            className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
+              open ? "rotate-180" : ""
+            }`}
+          />
+        </div>
+      </CardHeader>
+      {open && <CardContent className="space-y-4">{children}</CardContent>}
+    </Card>
+  );
+}
+
+// ─── Main Page ───────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
   const user = useAuthStore((s) => s.user);
@@ -179,8 +215,6 @@ export default function SettingsPage() {
   }, [defaultCommission, saveCommission]);
 
   // --- Password change ---
-  // Per AGENTS.md: re-encrypt the EXISTING private key with the new password,
-  // rather than generating a new keypair (which would destroy access to past data).
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwError("");
@@ -197,19 +231,14 @@ export default function SettingsPage() {
     }
 
     try {
-      // 1. Decrypt the existing private key with the CURRENT password
       const plaintextKey = await decryptWithPassword(
         encryptedPrivateKey,
         currentPassword
       );
-
-      // 2. Re-encrypt the SAME private key with the NEW password
       const newEncryptedKey = await encryptWithPassword(
         plaintextKey,
         newPassword
       );
-
-      // 3. Send the re-encrypted key and new password to the backend
       const resp = await apiFetch<{ message: string; token: string; encrypted_private_key: string }>(ENDPOINTS.changePassword, {
         method: "PUT",
         body: JSON.stringify({
@@ -218,17 +247,12 @@ export default function SettingsPage() {
           new_encrypted_private_key: newEncryptedKey,
         }),
       });
-
-      // 4. Update auth state with new token and key — user stays logged in
       setToken(resp.token);
       setPwSuccess("Password changed successfully.");
-
-      // Refresh user data with new token (apiFetch picks up the new token automatically)
       try {
         const userData = await apiFetch<any>(ENDPOINTS.me);
         useAuthStore.getState().setAuth(resp.token, userData, resp.encrypted_private_key);
       } catch {
-        // If refreshing fails, force re-login
         logout();
       }
     } catch (err: any) {
@@ -236,7 +260,7 @@ export default function SettingsPage() {
     }
   };
 
-  // --- Email change (P3.3) ---
+  // --- Email change ---
   const handleChangeEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setEmailError("");
@@ -261,17 +285,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4">
+    <div className="mx-auto w-full max-w-2xl px-4 pb-8">
       <h1 className="text-3xl font-bold mb-6">Settings</h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column: Account card (wider) */}
-        <div className="lg:col-span-2">
-          <Card>
-        <CardHeader>
-          <CardTitle>Account</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="space-y-4">
+        {/* ── Account Accordion ── */}
+        <AccordionCard title="Account">
           <div>
             <label className="text-sm font-medium">Email</label>
             <p className="text-sm text-muted-foreground">{user?.email ?? "—"}</p>
@@ -360,148 +379,136 @@ export default function SettingsPage() {
             {emailSuccess && <p className="text-sm text-income">{emailSuccess}</p>}
             <Button type="submit">Change Email</Button>
           </form>
-        </CardContent>
-      </Card>
-    </div>
+        </AccordionCard>
 
-        {/* Right column: Currency + Locale */}
-        <div className="space-y-6 lg:col-span-1">
-          {/* --- Default Currency Card --- */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Default Currency</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">
-                Set your preferred default currency for new accounts.
+        {/* ── General Accordion ── */}
+        <AccordionCard title="General">
+          {/* Default Currency */}
+          <div>
+            <label className="text-sm font-medium block mb-1">Default Currency</label>
+            <p className="text-xs text-muted-foreground mb-3">
+              Preferred currency for new accounts.
+            </p>
+            <select
+              value={defaultCurrency}
+              onChange={(e) => setDefaultCurrency(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} — {c.symbol} {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Separator />
+
+          {/* Locale */}
+          <div>
+            <label className="text-sm font-medium block mb-1">Locale</label>
+            <p className="text-xs text-muted-foreground mb-3">
+              Language for formatting numbers, dates, and currency.
+            </p>
+            <select
+              value={locale}
+              onChange={(e) => setLocale(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            >
+              {LOCALES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+            <div className="mt-3 text-xs text-muted-foreground space-y-0.5">
+              <p>
+                Date:{" "}
+                {new Intl.DateTimeFormat(locale || "en", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                }).format(new Date())}
               </p>
-              <select
-                value={defaultCurrency}
-                onChange={(e) => setDefaultCurrency(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.code} — {c.symbol} {c.name}
-                  </option>
-                ))}
-              </select>
-            </CardContent>
-          </Card>
-
-          {/* --- Locale Card --- */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Locale</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">
-                Choose your preferred language for formatting numbers, dates, and currency.
+              <p>
+                Number:{" "}
+                {(1234567.89).toLocaleString(locale || "en", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </p>
-              <select
-                value={locale}
-                onChange={(e) => setLocale(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-              >
-                {LOCALES.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
-              <div className="mt-3 text-xs text-muted-foreground space-y-0.5">
-                <p>
-                  Date:{" "}
-                  {new Intl.DateTimeFormat(locale || "en", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  }).format(new Date())}
-                </p>
-                <p>
-                  Number:{" "}
-                  {(1234567.89).toLocaleString(locale || "en", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          {/* --- Default Commission Card --- */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Default Commission</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">
-                Pre-fill the commission/fee field when creating new transactions.
-              </p>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={defaultCommission}
-                  onChange={(e) => setDefaultCommission(e.target.value)}
-                  placeholder="0.00"
-                  className="w-28"
-                />
-                <span className="text-sm text-muted-foreground">per transaction</span>
-              </div>
-            </CardContent>
-          </Card>
+          <Separator />
 
-          {/* --- Appearance Card (Theme + Accent Color) --- */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Appearance</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium block mb-2">Mode</label>
-                <ThemeToggle />
-              </div>
-              <div>
-                <label className="text-sm font-medium block mb-2">Accent Color</label>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Choose your preferred accent color for buttons and highlights.
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                {(Object.entries(presets) as [ThemeKey, typeof presets[ThemeKey]][]).map(([key, def]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setAccent(key)}
-                    className={`
-                      flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all duration-150 cursor-pointer
-                      ${themeKey === key
-                        ? "border-ring ring-1 ring-ring"
-                        : "border-border hover:border-muted-foreground/30"
-                      }
-                    `}
-                    title={def.label}
-                  >
-                    <span
-                      className="w-6 h-6 rounded-full shrink-0"
-                      style={{ backgroundColor: def.light.primary }}
-                    />
-                    <span className="text-[10px] font-medium text-muted-foreground leading-tight text-center">
-                      {def.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+          {/* Default Commission */}
+          <div>
+            <label className="text-sm font-medium block mb-1">Default Commission</label>
+            <p className="text-xs text-muted-foreground mb-3">
+              Pre-fill the commission/fee field when creating new transactions.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={defaultCommission}
+                onChange={(e) => setDefaultCommission(e.target.value)}
+                placeholder="0.00"
+                className="w-28"
+              />
+              <span className="text-sm text-muted-foreground">per transaction</span>
+            </div>
+          </div>
+        </AccordionCard>
 
-      {/* Data Management Section (full width below the grid) */}
-      <div className="mt-8">
-        <DataManagementSection />
+        {/* ── Categories Accordion ── */}
+        <CategoryManagementSection />
+
+        {/* ── Appearance Accordion ── */}
+        <AccordionCard title="Appearance">
+          <div>
+            <label className="text-sm font-medium block mb-2">Mode</label>
+            <ThemeToggle />
+          </div>
+          <div>
+            <label className="text-sm font-medium block mb-2">Accent Color</label>
+            <p className="text-sm text-muted-foreground mb-3">
+              Choose your preferred accent color for buttons and highlights.
+            </p>
+            <div className="grid grid-cols-4 gap-2">
+              {(Object.entries(presets) as [ThemeKey, typeof presets[ThemeKey]][]).map(([key, def]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setAccent(key)}
+                  className={`
+                    flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all duration-150 cursor-pointer
+                    ${themeKey === key
+                      ? "border-ring ring-1 ring-ring"
+                      : "border-border hover:border-muted-foreground/30"
+                    }
+                  `}
+                  title={def.label}
+                >
+                  <span
+                    className="w-6 h-6 rounded-full shrink-0"
+                    style={{ backgroundColor: def.light.primary }}
+                  />
+                  <span className="text-[10px] font-medium text-muted-foreground leading-tight text-center">
+                    {def.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </AccordionCard>
+
+        {/* ── Data Management Accordion ── */}
+        <AccordionCard title="Data Management">
+          <DataManagementSection />
+        </AccordionCard>
       </div>
     </div>
   );

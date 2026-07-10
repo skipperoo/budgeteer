@@ -5,92 +5,31 @@ This is the backlog of Budgeteer
 
 # TODO
 
-- [x] Add document field to the transaction so that I can upload an image or a pdf of the receipt. The data should be added to the transaction encrypted blob and saved to the database. In the frontend when clicking on a transaction it should open a nice overlay card (like the new transaction form) where the transaction data is nicely formatted and the image is showed (if there is an image) or a link to open the document in a new page is shown
-- [x] UI consistency and enhanchments
-  - [x] Dashboard page:
-    - [x] (desktop) The top cards are ok, but instead of AVG amount rename that in Average Amount and inside the card place a green\red incomes\expenses. The average must be computed based on the number of transaction in the timerange (e.g. tx = [ -10, 20, -30, 50], the card will report ((20+50)/2)/(|(-10 + (-30))/2|) -> 35/20 and the currency symbol).
-    - [x] (desktop) The two pie charts should be replaced by the recent transactions card that has to be as tall as the All Assets chart on the left. the recent transaction height has to be fixed and the content scrollable (this is true also for mobile).
-    - [x] (desktop) The two pie charts have to be moved under the All Assets and Recent transactions card and placed side by side, not stacked
-  - [x] Accounts Page:
-    - [x] (desktop) The account cards has to be smaller (less wide)
-    - [x] (desktop & mobile) The page when opening an account should show a version of the main dashboard fixed using only the account data: remove the Total Accounts card and keep everything else.
-  - [x] General:
-    - [x] (mobile) editing and opening a transaction should open a drawer instead of a dialog as on the desktop.
-    - [x] (mobile) enlarge the bottom navigation menu and add a bottom padding to it to dodge the iOS/Android bottom gesture area (1 or 2 em should be plenty)
-
-- [x] Implement rules:
-  - [x] Recurring payments
-  - [x] Recurring transfers between two accounts or between two
-  - [x] Server X25519 keypair (docker secret) + public-key endpoint
-  - [x] Rule payloads encrypted with server's public key via ECIES
-  - [x] Generated transactions encrypted with user's X25519 public key (ECIES `1|` prefix)
-  - [x] Rule scheduler worker (configurable interval)
-  - [x] Balance tracking on accounts for precondition checks
-  - [x] Atomic multi-transaction execution (pgx.WithTx + SELECT FOR UPDATE)
-  - [x] Frontend rules management page (create/list/edit/delete)
-  - [x] Rules nav link in sidebar and bottom nav
-  - [x] Add the alert dropdown (1 hour, 2 hours, 12 hours, 1 day, 2 days, 1 week, 2 weeks) to select when to receive a notification and email to be notified of the rule that will fire (send a report with the amount, the exact due time and the transfer details). In the backend accept the time as an offset so that more options could be added in future without modifying the backend
-  - [x] For the rules and the expenses transactions ad the transfers add the commissions (default 0) to keep track of those (in the transaction info card keep them separate from the amount) too. A transaction of 100$ + 2$ commission will result in -102$ from the selected account.
-  - [x] Rules should include also include Income type to automatically add income transaction
-- [x] Implement invitation system for rules and joint accounts
-  - [x] target_email field for user_transfer rules
-  - [x] In-app notification panel (notifications table, list/mark-read API)
-  - [x] Generic invitations table (rules + accounts)
-  - [x] Accept/decline flow for invitations
-  - [x] Receiver picks target account for rule invitations (encrypted with server's public key)
-  - [x] Email notifications for invites (registered + unregistered users)
-  - [x] 30-day expiry worker (deletes rules, marks expired, notifies sender)
-  - [x] Unregistered invite flow (subscription email → register → see pending invites)
-  - [x] Email-based account invitations (encrypt with server's public key, re-encrypt on accept)
-  - [x] Unread notification badge in sidebar + bottom nav
-  - [x] Periodic unread count polling
-- [x] Budget menu
-  - [x] Add per account monthly budgets
-  - [x] Add per category monthly budget
-  - [x] Notify the user via notifications and emails when you reach the 50%, 80% and 100% budget
-  - [x] Show in the dashboard and account details a horizontal bar chart where the full length is the budget and the amount fill is what you spent.
-    - [x] In the dashboard you have the expenses of every account combined and merged and the per category budgets
-    - [x] In the account details, only the account budget and account expenses
-- [x] Implement mortgages (rules disguised as special transactions)
-  - [x] Select the amount, the duration period, the interest rate, and the amortization type (French/Italian)
-  - [x] Automatically create a transaction each month (the day of payment has to be settable) of the correct amount
-  - [x] IF the interest rate is != 0 the transaction info card must report the amount paid in interest
-  - [x] E2E-encrypted mortgage payload (total amount, interest rate, term, payment day, amortization type all encrypted)
-  - [x] Remaining balance tracked inside the encrypted payload, re-encrypted after each payment
-  - [x] Both French (fixed payment) and Italian (decreasing payment) amortization supported
-  - [x] Amortization type explanation modal accessible from the mortgage form
-  - [x] Rule auto-deactivates when mortgage is paid off (remaining_balance <= 0)
-- [x] Add the remember device option not to be asked the otp again and pin unlock
-  - [x] Create a access secrets list on the user data
-  - [x] When the remember device option is on and the user issues the correct otp create a new secret associate with a fingerprint of the device
-  - [x] When the user signs in again make the login flow send the device fingerprint and the secret stored on the device and check that the couple <fingerprint, secret> is present in the access secret list. If so, let the user in, otherwise ask for the otp again and if the remember device option was set add the new <fingerprint, secret> to the backend. Note that the <fingerprint, secret> pair is encrypted using the user's password, so that it can be checked only when the user can provide basic authentication.
-  - [x] Add an option in settings to decrypt the data using a pin instead of password the password gets encrypted in the localstorage using the pin set by the user and then the pin is used to decrypt the password on the fly when needed. The pin is never stored on the device. When the pin prompt is shown also a button to reset the pin and use the password instead is shown
-- [x] Verify the change password flow to check that when the password is used, all the server-side secrets encrypted with the user password get decrypted with the old password and re-encrypted with the new password, otherwise the application should raise an error and revert the password change
-- [x] Send to user transaction: add an accordion in the create transaction form with the name "Send to" and if open it contains a input to set the mail of the user that it has to send the money to. This works like the rule Transfer to another user, so use the same logic to make the transaction (invite and notify).
-- [x] Dump restore and delete features:
-  - [x] In the settings show the Download data button: The backend should dump all the data as they are and send them to the frontend. The frontend then decrypts the data and creates multiple json files and then zips them to make them downloadable by the user.
-  - [x] Implement the restore functionality: The user should be able to upload a previously dumped archive, the fronted type checks it and then restore the configuration, the transaction, the rules and everything that is contained in that archive on the database (re-encrypting everything of course). This action is destructive as all the data must deleted and overwritten by the restored archive, so double ask the user to proceed and make it type "Guacamole" as an extra confirmation after explaining the effects of this action
-  - [x] Delete account: delete all the data associated with the user (except transactions sent to another user, the other user must retain those transaction). This is an highly destructive action, use the same precaution as before.
 - [ ] Reports: create a download report button in the navbar (full text and icon on desktop but outline not solid, icon only on mobile) to go to the report page. There a create report button is present and once clicked asks the user if to generate a pdf, dump a csv of the transaction or dump some data in json. Please let him select the timerange and let him select which data to dump. The pdf report instead should be a report of the accounts balances, expenses/incomes, categories, and so on.
 
-# BUGS
+- [x] Categories management:
+  - [x] Pre-step - reorganize the settings in accordions:
+    - [x] Account - Keep it as is but make it an accordion card
+    - [x] General - merge default currency, locale and default commission
+    - [x] Appearace - keep it as is but make it an accordion card
+    - [x] Data management - make it a new unified accordion card
+  - [x] Categories - create a categories management accordion card between general and appearance
+  - [x] Allow the user to edit the categories:
+    - [x] Add categories
+    - [x] Rename, set a fixed color, set an icon (use an icon picker and use lucide-react icons and a search bar to search for them)
+    - [x] Delete categories
+  - [x] The colors of the categories in the pie charts must follow the one set by the user in the settings, If the user did not make an explicit selection, set a default color (different for each one).
+  - [x] If an Icon is selected, show the icon instead of the name in the pie chart legend. However, in the dropdowns of the categories, always keep names.
+  - [x] Add an overlay when the user taps on mobile or hovers on desktop on the + N more badge
+- [ ] Add the account creation date in the account details page
 
-- [x] The categories are now saved in the local storage of the frontend: they must be saved in the backend under the user data (associated with its profile)
-- [x] The funding transaction should not be displayed as a transaction and should not have a point in time: the account has that base opening balance as it always had it, then its value moves with the transactions added later on. (Dated to Unix epoch 1970-01-01)
-- [x] The "Average Tx Amount" card should be replaced by "Money flow" and should contain the cumulative incomes/expenses for the selected timerange
-- [x] Add the env variable `BASE_URL` to configure the base url to include in emails, notifications and so on.
-- [x] The income switch button in the new transaction form should be bright green no matter what is the theme
-- [x] The user should get an overlay when he tries to create a transaction without having at least 1 account availabl
-- [x] In account creation form remove the debit credit switch, leaving only the default mode (debit)
-- [x] Add the default currency, locale and theme switcher (light/dark) to user preferences sent to the db.
-- [x] Merge the theme switcher to the accent color card
-- [x] Change the locale/language card to locale only (add a line in the card as the example with multiple date formats, numbers, and so on). Also, the locale is not enforced in all the ui, fix that.
-- [x] The change password flow is broken: the backend never updates `password_hash` so the new password doesn't work after a password change. The flow must re-encrypt the private key with the new password AND update the bcrypt hash on the server. The user should stay logged in after the change (get a fresh JWT). See `backend/src/internal/handler/auth.go:322` and `backend/src/internal/service/auth_service.go:324`.
-- [x] The OTP prompt screen (LoginPage) lacks a "Request new code" link with a 1-minute cooldown. The backend needs a `POST /api/v1/auth/resend-otp` endpoint with Redis-based rate limiting.
-- [x] Account-to-account transfers: add a toggle in TransactionForm to flag a transaction as a transfer between own accounts, hide income/expense type and category when active, show target account dropdown, auto-fill counterparty, create two linked transactions (expense + income), edit both sides, convert regular ↔ transfer on edit, exclude transfers from dashboard/account stats. No backend changes needed — all metadata lives in the encrypted payload.
-- [x] Opening balance editable from account Edit dialog: added opening balance field to the account edit form (name/currency/type/opening balance). Instead of creating a new adjustment transaction, updates the existing Opening Balance transaction in-place (or creates one if none exists) and deletes stale adjustment transactions. Total Transactions count now explicitly excludes Opening Balance.
-- [x] Show All transactions overlay: added "Show All" button on the Recent Transactions card (AccountDetailPage) that opens a responsive overlay (bottom sheet on mobile, dialog on desktop) showing all transactions for the account. Added "Load more transactions" link at the bottom that fetches additional batches from the backend with offset-based pagination.
-- [x] PIN per-device verification: confirmed PIN storage is local-only (localStorage `budgeteer_pin_data`), never synced to backend. On a fresh device without PIN data, `isPinEnabled()` returns `false` and the PrivateKeyGate shows the password form (not PIN). Added explicit tests for new-device scenario. No code change needed — behavior was already correct.
-- [x] PIN cross-account fix: PIN data now stores the user email alongside the encrypted password. When logging in with a different account, stale PIN data is silently cleared and the password form is shown instead of the PIN prompt.
-- [x] Filter-by-category: added `FilterMenu` in the Header (right of notification bell) with date-range quick presets (7d/30d/90d), transaction type checkboxes (income/expense/transfer), and category multi-select (merged income + expense categories). New `filter-store.ts` Zustand store. Filters applied in `DashboardPage` and `AccountDetailPage` on top of the date range. Filter button shows a badge with active filter count.
-- [ ] Add password recovery flow: forgot password link on login page, token via email, reset password page.
+- [x] Categories management — remaining polish:
+  - [x] Remove clear button in color picker popover
+  - [x] Assign default deterministic color upon category creation
+  - [x] Remove surrounding box and title from "Add new category" form
+  - [x] Add global toggle switch to enable/disable icons in pie charts (fall back to names + color dots)
+  - [x] Replace per-category hide/disable (eye) button with edit (pencil) button that triggers inline rename
+  - [x] When a category is deleted, warn user then batch-update all transactions with that category to "General"
+  - [x] Account accordion in settings should be closed by default
+
+# BUGS

@@ -91,6 +91,62 @@ func CreateCategory(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(cat)
 }
 
+// UpdateCategory updates a category's name, color, icon, and/or disabled state.
+func UpdateCategory(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
+	if !ok || claims == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(model.Error{Error: "unauthorized"})
+		return
+	}
+
+	categoryID := r.PathValue("id")
+	if categoryID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "category id is required"})
+		return
+	}
+
+	var req model.UpdateUserCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body"})
+		return
+	}
+	defer r.Body.Close()
+
+	// Validate name if provided
+	if req.Name != nil {
+		*req.Name = strings.TrimSpace(*req.Name)
+		if *req.Name == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(model.Error{Error: "category name cannot be empty"})
+			return
+		}
+	}
+
+	cat, err := catRepo.Update(r.Context(), categoryID, claims.UserID, &req)
+	if err != nil {
+		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(model.Error{Error: "category name already exists"})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(model.Error{Error: "failed to update category"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cat)
+}
+
 // DeleteCategory removes a category for the authenticated user.
 func DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)

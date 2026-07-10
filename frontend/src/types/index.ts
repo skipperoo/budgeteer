@@ -85,6 +85,9 @@ export interface UserCategory {
   user_id: string;
   name: string;
   type: "income" | "expense";
+  color?: string | null;
+  icon?: string | null;
+  is_disabled: boolean;
   created_at: string;
 }
 
