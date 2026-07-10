@@ -172,7 +172,7 @@ export function CategoryPieChart({
                 style={{ backgroundColor: getCategoryColor(entry.name) }}
               />
               {showIcon ? (
-                <IconComponent className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <IconComponent className="h-4 w-4 shrink-0 text-muted-foreground" />
               ) : (
                 <span className="truncate max-w-[80px]">{entry.name}</span>
               )}
@@ -207,7 +207,7 @@ export function CategoryPieChart({
                           style={{ backgroundColor: getCategoryColor(entry.name) }}
                         />
                         {showIcon ? (
-                          <IconComponent className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <IconComponent className="h-4 w-4 shrink-0 text-muted-foreground" />
                         ) : (
                           <span className="text-foreground font-medium">{entry.name}</span>
                         )}
