@@ -142,7 +142,29 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
     set({ loading: true });
     try {
       const data = await apiFetch<UserCategory[]>(ENDPOINTS.categories);
-      set({ items: data ?? [], loaded: true, loading: false });
+      const items = data ?? [];
+
+      // Assign a persistent color to any category that doesn't have one yet.
+      // This ensures the color is saved to the backend and won't change on rename.
+      const needsColor = items.filter((c) => !c.color);
+      if (needsColor.length > 0) {
+        await Promise.all(
+          needsColor.map(async (cat) => {
+            const color = getFallbackColor(cat.name);
+            // Optimistically update in-memory
+            const idx = items.findIndex((c) => c.id === cat.id);
+            if (idx !== -1) items[idx] = { ...items[idx], color };
+            try {
+              await apiFetch(ENDPOINTS.updateCategory(cat.id), {
+                method: "PUT",
+                body: JSON.stringify({ color }),
+              });
+            } catch { /* non-critical, fallback works for this session */ }
+          }),
+        );
+      }
+
+      set({ items, loaded: true, loading: false });
     } catch {
       set({ loading: false });
     }
