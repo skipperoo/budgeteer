@@ -64,9 +64,9 @@ func AdminGetTable(w http.ResponseWriter, r *http.Request) {
 	// Get columns first
 	colQuery := `SELECT column_name, data_type, is_nullable,
 	              COALESCE(column_default, '') as col_default,
-	              (SELECT true FROM information_schema.key_column_usage kcu
+	              COALESCE((SELECT true FROM information_schema.key_column_usage kcu
 	               WHERE kcu.table_name = $1 AND kcu.column_name = c.column_name
-	               AND kcu.constraint_name LIKE '%pk%') as is_pk
+	               AND kcu.constraint_name LIKE '%pk%'), false) as is_pk
 	           FROM information_schema.columns c
 	           WHERE c.table_name = $1 AND c.table_schema = 'public'
 	           ORDER BY c.ordinal_position`
@@ -332,9 +332,9 @@ func getTableInfos(r *http.Request) ([]model.TableInfo, error) {
 		// Get columns
 		colQuery := `SELECT column_name, data_type, is_nullable,
 		              COALESCE(column_default, '') as col_default,
-		              (SELECT true FROM information_schema.key_column_usage kcu
+		              COALESCE((SELECT true FROM information_schema.key_column_usage kcu
 		               WHERE kcu.table_name = $1 AND kcu.column_name = c.column_name
-		               AND kcu.constraint_name LIKE '%pk%') as is_pk
+		               AND kcu.constraint_name LIKE '%pk%'), false) as is_pk
 		           FROM information_schema.columns c
 		           WHERE c.table_name = $1 AND c.table_schema = 'public'
 		           ORDER BY c.ordinal_position`

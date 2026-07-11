@@ -132,9 +132,9 @@ func AdminUpdateMigrationStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err := database.Pool.Exec(r.Context(),
-		`UPDATE pending_migrations SET status = $1,
-		 completed_at = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
-		 error_message = CASE WHEN $1 = 'failed' THEN 'Manually set by admin' ELSE NULL END
+		`UPDATE pending_migrations SET status = $1::text,
+		 completed_at = CASE WHEN $1::text = 'completed' THEN NOW() ELSE NULL END,
+		 error_message = CASE WHEN $1::text = 'failed' THEN 'Manually set by admin' ELSE NULL END
 		 WHERE id = $2`,
 		req.Status, migrationID)
 	if err != nil {
