@@ -14,6 +14,9 @@ import (
 
 // AdminListTables returns all public tables with their column metadata.
 func AdminListTables(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	tables, err := getTableInfos(r)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -27,6 +30,9 @@ func AdminListTables(w http.ResponseWriter, r *http.Request) {
 
 // AdminGetTable returns paginated data for a specific table.
 func AdminGetTable(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	tableName := r.PathValue("name")
 	if tableName == "" {
 		w.Header().Set("Content-Type", "application/json")
@@ -170,6 +176,9 @@ func AdminGetTable(w http.ResponseWriter, r *http.Request) {
 
 // AdminUpdateTableRow updates a single row in a table.
 func AdminUpdateTableRow(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	tableName := r.PathValue("name")
 	rowID := r.PathValue("id")
 	if tableName == "" || rowID == "" {
@@ -229,6 +238,9 @@ func AdminUpdateTableRow(w http.ResponseWriter, r *http.Request) {
 
 // AdminDeleteTableRows deletes one or more rows from a table.
 func AdminDeleteTableRows(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	tableName := r.PathValue("name")
 	if tableName == "" {
 		w.Header().Set("Content-Type", "application/json")

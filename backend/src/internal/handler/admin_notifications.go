@@ -10,6 +10,9 @@ import (
 
 // AdminDispatchNotification creates in-app notifications and/or emails for selected users.
 func AdminDispatchNotification(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	var req model.AdminDispatchNotificationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")

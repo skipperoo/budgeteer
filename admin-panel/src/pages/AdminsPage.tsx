@@ -22,7 +22,7 @@ export default function AdminsPage() {
   const fetchAdmins = async () => {
     setLoading(true);
     try {
-      setAdmins(await apiFetch<AdminUser[]>(`${API_BASE}/admin/auth/list`) ?? []);
+      setAdmins(await apiFetch<AdminUser[]>(`${API_BASE}/auth/list`) ?? []);
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -36,7 +36,7 @@ export default function AdminsPage() {
     e.preventDefault();
     setError("");
     try {
-      await apiFetch(`${API_BASE}/admin/auth/create`, {
+      await apiFetch(`${API_BASE}/auth/create`, {
         method: "POST",
         body: JSON.stringify({ email, password, display_name: displayName }),
       });
@@ -53,7 +53,7 @@ export default function AdminsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this admin?")) return;
     try {
-      await apiFetch(`${API_BASE}/admin/auth/${id}`, { method: "DELETE" });
+      await apiFetch(`${API_BASE}/auth/${id}`, { method: "DELETE" });
       await fetchAdmins();
     } catch (err: any) {
       alert(err.message);

@@ -36,7 +36,7 @@ export default function TableDetailPage() {
     if (!name) return;
     setLoading(true);
     try {
-      let url = `${API_BASE}/admin/tables/${name}?page=${page}&page_size=50`;
+      let url = `${API_BASE}/tables/${name}?page=${page}&page_size=50`;
       if (search && searchCol) url += `&search=${encodeURIComponent(search)}&search_col=${searchCol}`;
       const resp = await apiFetch<TableData>(url);
       setData(resp);
@@ -56,7 +56,7 @@ export default function TableDetailPage() {
     const row = data.rows[editingCell.row];
     const id = row.id;
     try {
-      await apiFetch(`${API_BASE}/admin/tables/${name}/${id}`, {
+      await apiFetch(`${API_BASE}/tables/${name}/${id}`, {
         method: "PUT",
         body: JSON.stringify({ [editingCell.col]: editValue }),
       });
@@ -70,7 +70,7 @@ export default function TableDetailPage() {
   const handleDeleteSelected = async () => {
     if (!name || selectedIds.size === 0) return;
     try {
-      await apiFetch(`${API_BASE}/admin/tables/${name}/rows`, {
+      await apiFetch(`${API_BASE}/tables/${name}/rows`, {
         method: "DELETE",
         body: JSON.stringify({ ids: Array.from(selectedIds) }),
       });

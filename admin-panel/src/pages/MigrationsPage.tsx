@@ -22,7 +22,7 @@ export default function MigrationsPage() {
   const fetchMigrations = async () => {
     setLoading(true);
     try {
-      const data = await apiFetch<ClientMigration[]>(`${API_BASE}/admin/client-migrations`);
+      const data = await apiFetch<ClientMigration[]>(`${API_BASE}/client-migrations`);
       setMigrations(data ?? []);
     } catch (err: any) {
       console.error(err);
@@ -39,7 +39,7 @@ export default function MigrationsPage() {
     if (!rescheduleKey.trim()) return;
     setStatusMsg(`Rescheduling "${rescheduleKey.trim()}"...`);
     try {
-      await apiFetch(`${API_BASE}/admin/client-migrations/reschedule`, {
+      await apiFetch(`${API_BASE}/client-migrations/reschedule`, {
         method: "POST",
         body: JSON.stringify({ migration_key: rescheduleKey.trim() }),
       });
@@ -54,7 +54,7 @@ export default function MigrationsPage() {
 
   const handleEditStatus = async (id: string, status: string) => {
     try {
-      await apiFetch(`${API_BASE}/admin/client-migrations/${id}/status`, {
+      await apiFetch(`${API_BASE}/client-migrations/${id}/status`, {
         method: "PUT",
         body: JSON.stringify({ status }),
       });

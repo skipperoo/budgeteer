@@ -21,7 +21,7 @@ export default function NotificationsPage() {
     setSending(true);
     try {
       const resp = await apiFetch<{ status: string; notifications_created: number }>(
-        `${API_BASE}/admin/dispatch`,
+        `${API_BASE}/dispatch`,
         {
           method: "POST",
           body: JSON.stringify({

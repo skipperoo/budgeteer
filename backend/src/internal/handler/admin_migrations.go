@@ -10,6 +10,9 @@ import (
 
 // AdminListClientMigrations returns all client-side migrations grouped by user.
 func AdminListClientMigrations(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	query := `SELECT pm.id, pm.user_id, u.email, pm.migration_key, pm.status,
 	                 pm.error_message, pm.created_at, pm.completed_at
 	          FROM pending_migrations pm
@@ -40,6 +43,9 @@ func AdminListClientMigrations(w http.ResponseWriter, r *http.Request) {
 
 // AdminBulkRescheduleMigration bulk-reschedules a migration for selected users.
 func AdminBulkRescheduleMigration(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	var req struct {
 		MigrationKey string   `json:"migration_key"`
 		UserIDs      []string `json:"user_ids"` // empty = all users
@@ -95,6 +101,9 @@ func AdminBulkRescheduleMigration(w http.ResponseWriter, r *http.Request) {
 
 // AdminUpdateMigrationStatus allows an admin to edit a migration's status directly.
 func AdminUpdateMigrationStatus(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	migrationID := r.PathValue("id")
 	if migrationID == "" {
 		w.Header().Set("Content-Type", "application/json")

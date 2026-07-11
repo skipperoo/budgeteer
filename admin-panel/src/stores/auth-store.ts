@@ -36,7 +36,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       token: string;
       must_change_password: boolean;
       display_name: string;
-    }>(`${API_BASE}/admin/auth/login`, {
+    }>(`${API_BASE}/auth/login`, {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
