@@ -13,6 +13,7 @@ import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { decryptFile } from "@/lib/crypto-file";
+import { useCategoryStore } from "@/stores/category-store";
 import { formatDate, formatCurrency } from "@/lib/format";
 import {
   ArrowUpRight,
@@ -248,9 +249,9 @@ export function TransactionDetailOverlay({
                 <span className="text-[11px] uppercase font-bold tracking-wider bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded">
                   Transfer
                 </span>
-              ) : payload.category ? (
+              ) : payload.category || payload.category_id ? (
                 <span className="text-[11px] uppercase font-bold tracking-wider bg-secondary text-secondary-foreground px-2 py-0.5 rounded">
-                  {payload.category}
+                  {useCategoryStore.getState().resolveCategoryName(payload.category, payload.category_id)}
                 </span>
               ) : (
                 <span className="text-muted-foreground italic">None</span>

@@ -37,11 +37,11 @@ interface CategoryState {
   /** Get a single category by stable id */
   getCategoryById: (id: string) => UserCategory | undefined;
   /** Resolve the current display name for a category, by id first then name fallback */
-  resolveCategoryName: (categoryName: string, categoryId?: string) => string;
+  resolveCategoryName: (categoryName?: string, categoryId?: string) => string;
   /** Get the color for a category, by id first then name fallback */
-  getCategoryColor: (name: string, categoryId?: string) => string;
+  getCategoryColor: (name?: string, categoryId?: string) => string;
   /** Get the icon name for a category, by id first then name fallback */
-  getCategoryIcon: (name: string, categoryId?: string) => string | null;
+  getCategoryIcon: (name?: string, categoryId?: string) => string | null;
   /** Add a new category under the given transaction type */
   addCategory: (type: CategoryType, category: string) => Promise<void>;
   /** Ensure a category exists and return its id (waits for creation if new) */

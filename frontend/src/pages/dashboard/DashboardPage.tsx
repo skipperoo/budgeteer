@@ -258,7 +258,7 @@ export default function DashboardPage() {
         } else {
           groups.set(key, {
             id: tx.payload.category_id,
-            name: tx.payload.category || "General",
+            name: useCategoryStore.getState().resolveCategoryName(tx.payload.category, tx.payload.category_id),
             value: Math.abs(effectiveAmount(tx.payload)),
           });
         }
@@ -281,7 +281,7 @@ export default function DashboardPage() {
         } else {
           groups.set(key, {
             id: tx.payload.category_id,
-            name: tx.payload.category || "General",
+            name: useCategoryStore.getState().resolveCategoryName(tx.payload.category, tx.payload.category_id),
             value: effectiveAmount(tx.payload),
           });
         }

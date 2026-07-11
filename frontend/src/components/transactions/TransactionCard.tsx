@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import type { TransactionPayload } from "@/lib/crypto-transaction";
 import { isTransferPayload } from "@/lib/crypto-transaction";
 import { formatDate, formatCurrency } from "@/lib/format";
+import { useCategoryStore } from "@/stores/category-store";
 import { ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Lock, Pencil, Trash2 } from "lucide-react";
 
 export interface TransactionDisplay {
@@ -48,6 +49,13 @@ export function TransactionCard({
   const isTransfer = payload ? isTransferPayload(payload) : false;
   const isIncome = payload && !isTransfer ? payload.amount >= 0 : null;
   const totalAmount = payload ? payload.amount - (payload.commission || 0) : null;
+
+  // Resolve display name from category_id first (stable across renames),
+  // fall back to stored category name (legacy), then "General".
+  const displayCategory = useCategoryStore.getState().resolveCategoryName(
+    payload?.category,
+    payload?.category_id
+  );
 
   return (
     <div
@@ -105,12 +113,12 @@ export function TransactionCard({
             {payload?.counterparty || (payload ? "Unknown Counterparty" : "Encrypted Transaction")}
           </span>
           <div className="flex items-center gap-2 mt-1">
-            {payload?.category && (
+            {(displayCategory || payload?.category) && (
               <span className={`
                 text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded
                 ${isTransfer ? "bg-blue-500/10 text-blue-600" : "bg-secondary text-secondary-foreground"}
               `}>
-                {isTransfer ? "Transfer" : payload.category}
+                {isTransfer ? "Transfer" : displayCategory}
               </span>
             )}
             {payload?.notes && !isTransfer && (

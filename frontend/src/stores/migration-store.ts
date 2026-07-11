@@ -18,6 +18,7 @@
 import { create } from "zustand";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
+import { toast } from "@/components/ui/toast";
 import { useAccountStore } from "./account-store";
 import { useCategoryStore } from "./category-store";
 import { useAuthStore } from "./auth-store";
@@ -68,11 +69,11 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
       for (const m of pending) {
         const runner = MIGRATIONS[m.migration_key];
         if (!runner) {
-          // Unknown migration — skip
           continue;
         }
 
         set({ currentMigration: m.migration_key, progress: `Running ${m.migration_key}...` });
+        toast({ title: `Migration: ${m.migration_key}`, description: "Starting…", variant: "info" });
 
         try {
           const userId = useAuthStore.getState().user?.id;
@@ -84,8 +85,10 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
             method: "POST",
             body: JSON.stringify({ migration_key: m.migration_key }),
           });
+
+          toast({ title: `Migration: ${m.migration_key}`, description: "Completed successfully", variant: "success" });
         } catch (err: any) {
-          // Mark as failed on the backend but don't block the user
+          toast({ title: `Migration: ${m.migration_key}`, description: `Failed: ${err.message}`, variant: "error" });
           try {
             await apiFetch(ENDPOINTS.failMigration, {
               method: "POST",
@@ -167,7 +170,7 @@ async function migrateAddCategoryId(_userId: string): Promise<void> {
           payload = await decryptTransactionPayload(tx.encrypted_payload, accountKey);
         }
 
-        // Skip if already has category_id
+        // Skip if already has category_id (already migrated)
         if (payload.category_id) continue;
 
         // Try to look up the category id by name
@@ -175,7 +178,12 @@ async function migrateAddCategoryId(_userId: string): Promise<void> {
         const catId = nameToId[catName];
         if (!catId) continue; // skip unmatched (will still work via name fallback)
 
+        // Add the stable category_id
         payload.category_id = catId;
+
+        // Remove the mutable category name — from now on the UI resolves
+        // the display name from category_id via the store.
+        delete payload.category;
 
         const reEncrypted = await encryptTransactionPayload(payload, accountKey);
         await apiFetch<Transaction>(ENDPOINTS.transaction(tx.id), {
