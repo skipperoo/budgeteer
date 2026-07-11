@@ -170,8 +170,8 @@ async function migrateAddCategoryId(_userId: string): Promise<void> {
           payload = await decryptTransactionPayload(tx.encrypted_payload, accountKey);
         }
 
-        // Skip if already has category_id (already migrated)
-        if (payload.category_id) continue;
+        // Skip if already fully migrated (category already removed)
+        if (!payload.category && payload.category_id) continue;
 
         // Try to look up the category id by name
         const catName = (payload.category || "").toLowerCase().trim();
