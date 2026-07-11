@@ -59,12 +59,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     setUser({ email: user.email });
     syncLocaleFromPreferences(user.preferences?.locale);
     set({ token, user, encryptedPrivateKey: encryptedKey });
-    // Run pending migrations in the background (non-blocking)
-    useMigrationStore.getState().runPendingMigrations().catch(() => {});
   },
 
   setPrivateKey: (key) => {
     set({ plaintextPrivateKey: key });
+    // Private key is now available — run pending client-side migrations
+    useMigrationStore.getState().runPendingMigrations().catch(() => {});
   },
 
   clearPrivateKey: () => {
@@ -98,8 +98,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       setUser({ email: user.email });
       syncLocaleFromPreferences(user.preferences?.locale);
       set({ user, encryptedPrivateKey: user.encrypted_private_key });
-      // Run pending migrations in the background (non-blocking)
-      useMigrationStore.getState().runPendingMigrations().catch(() => {});
     } catch {
       // Token is invalid — clear auth state
       removeToken();

@@ -53,6 +53,16 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
 
   runPendingMigrations: async () => {
     if (get().status === "running") return;
+
+    // Guard: private key must be available to decrypt transaction payloads
+    const privKey = useAuthStore.getState().plaintextPrivateKey;
+    if (!privKey) {
+      // Private key not yet decrypted (PrivateKeyGate not passed) — bail out.
+      // The migration will be triggered again by setPrivateKey when the user
+      // enters their password.
+      return;
+    }
+
     set({ status: "running", error: null });
 
     try {
