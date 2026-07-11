@@ -42,6 +42,17 @@ services:
       - backend
     restart: unless-stopped
 
+  # ── Admin Panel ────────────────────────────────────────
+  admin-panel:
+    build:
+      context: ./admin-panel
+      dockerfile: Dockerfile
+    ports:
+      - "5174:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
   # ── Backend ────────────────────────────────────────────
   backend:
     build:

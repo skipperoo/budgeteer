@@ -11,6 +11,28 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+func GenerateAdminJWT(adminID, email string) (string, time.Time, error) {
+	expiresAt := time.Now().Add(24 * time.Hour)
+	claims := jwt.MapClaims{
+		"user_id": adminID,
+		"email":   email,
+		"role":    "admin",
+		"exp":     expiresAt.Unix(),
+		"iat":     time.Now().Unix(),
+		"jti":     fmt.Sprintf("%s-%d", adminID, time.Now().UnixNano()),
+	}
+
+	jwtSecret := GetenvOrDefault("JWT_SECRET", "default-dev-secret-change-in-production")
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(jwtSecret))
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("failed to sign admin JWT: %w", err)
+	}
+
+	return tokenString, expiresAt, nil
+}
+
 func GenerateJWT(userID, email string) (string, time.Time, error) {
 	expiresAt := time.Now().Add(24 * time.Hour)
 	claims := jwt.MapClaims{
@@ -58,12 +80,13 @@ func ValidateJWT(authHeader string) (*model.UserClaims, string, time.Time, error
 
 	userID, _ := claims["user_id"].(string)
 	email, _ := claims["email"].(string)
+	role, _ := claims["role"].(string)
 	var expiresAt time.Time
 	if exp, ok := claims["exp"].(float64); ok {
 		expiresAt = time.Unix(int64(exp), 0)
 	}
 
-	return &model.UserClaims{UserID: userID, Email: email}, tokenString, expiresAt, nil
+	return &model.UserClaims{UserID: userID, Email: email, Role: role}, tokenString, expiresAt, nil
 }
 
 func ValidateUserJWT(authHeader string, role string) (bool, error) {

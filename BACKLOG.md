@@ -7,17 +7,16 @@ This is the backlog of Budgeteer
 
 - [ ] Reports: create a download report button in the navbar (full text and icon on desktop but outline not solid, icon only on mobile) to go to the report page. There a create report button is present and once clicked asks the user if to generate a pdf, dump a csv of the transaction or dump some data in json. Please let him select the timerange and let him select which data to dump. The pdf report instead should be a report of the accounts balances, expenses/incomes, categories, and so on.
 - [ ] Add the account creation date in the account details page
-- [ ] Admin panel:
-  - [ ] Use the same design language as the frontend
-  - [ ] Create a separate project served on a different port
-  - [ ] The admin panel is a simple CRUD application that allows the admin (only admin users can login). Those are stored in a different table and the first admin user is <admin@budgeteer.com> with password changeme.
-  - [ ] Admins cannot register, only the first admin can create the other admins with a password set by him, then the ui asks the user to change it upon first login (also the og admin is prompted to change it)
-  - [ ] This appication with its own backend allows the admins to manage the data on the database:
-    - [ ] All tables are reported to the frontend and can be consulted, bulk deleted, and edited
-    - [ ] DB-migration can be edited by the admin
-    - [ ] Client-side migration page shows the migrations grouped by user with the list of completed and pending migrations. Also it allows to bulk reschedule a certain migration or to edit the status of the users migration.
-    - [ ] The notification and email dispatcher page allow the admin to insert a notification ans/or an email that will be dispateched to a list of selected users (allow to select All) by the application backend (it just writes to the db).
-    - [ ] Add this new stack to both docker composes
+- [x] Admin panel:
+  - [x] Use the same design language as the frontend
+  - [x] Create a separate project served on a different port
+  - [x] The admin panel is a simple CRUD application that allows the admin (only admin users can login). Those are stored in a different table and the first admin user is <admin@budgeteer.com> with password changeme.
+  - [x] Admins cannot register, only the first admin can create the other admins with a password set by him, then the ui asks the user to change it upon first login (also the og admin is prompted to change it)
+  - [x] This appication with its own backend allows the admins to manage the data on the database:
+    - [x] All tables are reported to the frontend and can be consulted, bulk deleted, and edited
+    - [x] Client-side migration page shows the migrations grouped by user with the list of completed and pending migrations. Also it allows to bulk reschedule a certain migration or to edit the status of the users migration.
+    - [x] The notification and email dispatcher page allow the admin to insert a notification ans/or an email that will be dispateched to a list of selected users (allow to select All) by the application backend (it just writes to the db).
+    - [x] Add this new stack to both docker composes
 
 # BUGS
 

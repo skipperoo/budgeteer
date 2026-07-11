@@ -134,7 +134,31 @@ func main() {
 		AddHandler("POST   /v1/user/clear",  handler.ClearUserData).
 		AddHandler("DELETE /v1/user",        handler.DeleteUserAccount)
 
+	// --- Admin public routes (no auth) ---
+	router.AddHandler("POST /api/v1/admin/auth/login", handler.AdminLogin)
+
+	// --- Admin protected routes (JWT + admin role) ---
+	adminRouter := routy.NewRouter()
+	adminRouter.
+		AddMiddleware(middleware.AdminAuth).
+		AddHandler("POST   /v1/admin/auth/change-password", handler.AdminChangePassword).
+		AddHandler("POST   /v1/admin/auth/create",           handler.AdminCreate).
+		AddHandler("GET    /v1/admin/auth/list",              handler.AdminList).
+		AddHandler("DELETE /v1/admin/auth/{id}",              handler.AdminDelete).
+		// Table browser
+		AddHandler("GET    /v1/admin/tables",                  handler.AdminListTables).
+		AddHandler("GET    /v1/admin/tables/{name}",           handler.AdminGetTable).
+		AddHandler("PUT    /v1/admin/tables/{name}/{id}",      handler.AdminUpdateTableRow).
+		AddHandler("DELETE /v1/admin/tables/{name}/rows",      handler.AdminDeleteTableRows).
+		// Client-side migrations
+		AddHandler("GET    /v1/admin/client-migrations",                handler.AdminListClientMigrations).
+		AddHandler("POST   /v1/admin/client-migrations/reschedule",     handler.AdminBulkRescheduleMigration).
+		AddHandler("PUT    /v1/admin/client-migrations/{id}/status",    handler.AdminUpdateMigrationStatus).
+		// Notification dispatch
+		AddHandler("POST   /v1/admin/dispatch",                handler.AdminDispatchNotification)
+
 	router.AddSubroute("/api/", protected.Finalize())
+	router.AddSubroute("/api/", adminRouter.Finalize())
 	final := router.Finalize()
 
 	// --- Background workers ---
