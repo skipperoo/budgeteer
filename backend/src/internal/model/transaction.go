@@ -10,6 +10,18 @@ type CreateTransactionRequest struct {
 	ServerEncryptedPayload string  `json:"server_encrypted_payload,omitempty"`
 }
 
+// BulkTransactionItem is a single transaction update within a bulk request.
+type BulkTransactionItem struct {
+	ID               string    `json:"id"`
+	Time             time.Time `json:"time"`
+	EncryptedPayload string    `json:"encrypted_payload"`
+}
+
+// BulkUpdateTransactionsRequest wraps a batch of transaction updates.
+type BulkUpdateTransactionsRequest struct {
+	Transactions []BulkTransactionItem `json:"transactions"`
+}
+
 type Transaction struct {
 	ID               string    `json:"id"`
 	Time             time.Time `json:"time"`

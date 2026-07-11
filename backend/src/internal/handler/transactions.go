@@ -143,3 +143,52 @@ func DeleteTransaction(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// BulkUpdateTransactions updates up to 200 transactions atomically.
+func BulkUpdateTransactions(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
+	if !ok || claims == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(model.Error{Error: "unauthorized"})
+		return
+	}
+
+	var req model.BulkUpdateTransactionsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body"})
+		return
+	}
+	defer r.Body.Close()
+
+	if len(req.Transactions) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "transactions array is empty"})
+		return
+	}
+
+	if len(req.Transactions) > 200 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "max 200 transactions per request"})
+		return
+	}
+
+	if err := service.Transactions.BulkUpdate(r.Context(), req.Transactions, claims.UserID); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		code := http.StatusForbidden
+		if err.Error() == "transaction not found" {
+			code = http.StatusNotFound
+		}
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(model.Error{Error: err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+

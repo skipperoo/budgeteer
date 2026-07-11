@@ -132,7 +132,39 @@ func (s *TransactionService) Update(ctx context.Context, transactionID, userID s
 	return t, nil
 }
 
-// SoftDelete marks a transaction as deleted.
+// BulkUpdate updates multiple transactions atomically (all-or-nothing).
+// Verifies the user has access to every unique account in the batch.
+func (s *TransactionService) BulkUpdate(ctx context.Context, items []model.BulkTransactionItem, userID string) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	// Resolve each item's account and verify access
+	seenAccounts := make(map[string]bool)
+	for _, item := range items {
+		t, err := s.TransactionRepo.FindByID(ctx, item.ID)
+		if err != nil {
+			return fmt.Errorf("database error for %s: %w", item.ID, err)
+		}
+		if t == nil {
+			return fmt.Errorf("transaction not found: %s", item.ID)
+		}
+
+		if !seenAccounts[t.AccountID] {
+			au, err := s.AccountUserRepo.FindByAccountAndUser(ctx, t.AccountID, userID)
+			if err != nil {
+				return fmt.Errorf("database error: %w", err)
+			}
+			if au == nil {
+				return fmt.Errorf("access denied to account %s", t.AccountID)
+			}
+			seenAccounts[t.AccountID] = true
+		}
+	}
+
+	return s.TransactionRepo.BulkUpdateTransactions(ctx, items)
+}
+
 func (s *TransactionService) SoftDelete(ctx context.Context, transactionID, userID string) error {
 	t, err := s.TransactionRepo.FindByID(ctx, transactionID)
 	if err != nil {

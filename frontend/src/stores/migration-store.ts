@@ -26,7 +26,7 @@ import { bytesToBase64 } from "@/lib/crypto";
 import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
 import { decryptECIESPayload } from "@/lib/crypto-rules";
 import { getAccountKey } from "@/lib/decrypt-transactions";
-import type { Transaction, CreateTransactionRequest } from "@/types";
+import type { Transaction } from "@/types";
 
 export type MigrationStatus = "idle" | "running" | "done";
 
@@ -178,6 +178,9 @@ async function migrateAddCategoryId(_userId: string): Promise<void> {
 
     if (allTxs.length === 0) continue;
 
+    // Collect updated transactions in a batch, then send via bulk endpoint
+    const batch: Array<{ id: string; time: string; encrypted_payload: string }> = [];
+
     for (const tx of allTxs) {
       try {
         let payload: any;
@@ -198,32 +201,31 @@ async function migrateAddCategoryId(_userId: string): Promise<void> {
         if (!payload.category && payload.category_id) continue;
 
         if (payload.category_id) {
-          // Already has category_id from first migration run but still has
-          // the old category name (e.g. because category was renamed since).
-          // Just remove the name — the id is already correct.
           delete payload.category;
         } else {
-          // First-time migration: look up the category id by name
           const catName = (payload.category || "").toLowerCase().trim();
           const catId = nameToId[catName];
-          if (!catId) continue; // skip unmatched (will still work via name fallback)
+          if (!catId) continue;
           payload.category_id = catId;
           delete payload.category;
         }
 
         const reEncrypted = await encryptTransactionPayload(payload, accountKey);
-        await apiFetch<Transaction>(ENDPOINTS.transaction(tx.id), {
-          method: "PUT",
-          body: JSON.stringify({
-            time: tx.time,
-            encrypted_payload: reEncrypted,
-          } as CreateTransactionRequest),
-        });
-
+        batch.push({ id: tx.id, time: tx.time, encrypted_payload: reEncrypted });
         totalUpdated++;
       } catch {
         // Skip transactions we can't decrypt
       }
+    }
+
+    // Send in chunks of 200 via the bulk endpoint
+    const BULK_LIMIT = 200;
+    for (let i = 0; i < batch.length; i += BULK_LIMIT) {
+      const chunk = batch.slice(i, i + BULK_LIMIT);
+      await apiFetch(ENDPOINTS.bulkUpdateTransactions, {
+        method: "PUT",
+        body: JSON.stringify({ transactions: chunk }),
+      });
     }
   }
 }

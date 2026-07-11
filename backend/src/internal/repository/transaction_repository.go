@@ -91,6 +91,36 @@ func (r *TransactionRepository) Update(ctx context.Context, t *model.Transaction
 	return err
 }
 
+// BulkUpdateTransactions updates multiple transactions atomically in a single DB transaction.
+// All items must belong to the same user (access is verified by the caller).
+func (r *TransactionRepository) BulkUpdateTransactions(ctx context.Context, items []model.BulkTransactionItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	now := time.Now()
+	query := `UPDATE transactions SET encrypted_payload = $1, version = version + 1, updated_at = $2
+	          WHERE id = $3 AND time = $4 AND deleted_at IS NULL`
+
+	for _, item := range items {
+		res, err := tx.Exec(ctx, query, item.EncryptedPayload, now, item.ID, item.Time)
+		if err != nil {
+			return fmt.Errorf("failed to update transaction %s: %w", item.ID, err)
+		}
+		if res.RowsAffected() == 0 {
+			return fmt.Errorf("transaction %s not found or already deleted", item.ID)
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (r *TransactionRepository) ListByAccountID(ctx context.Context, accountID string, limit, offset int) ([]*model.Transaction, error) {
 	query := `SELECT id, time, account_id, created_by, encrypted_payload, version, created_at, updated_at, deleted_at
 	          FROM transactions WHERE account_id = $1 AND deleted_at IS NULL
