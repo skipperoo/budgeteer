@@ -6,30 +6,18 @@ This is the backlog of Budgeteer
 # TODO
 
 - [ ] Reports: create a download report button in the navbar (full text and icon on desktop but outline not solid, icon only on mobile) to go to the report page. There a create report button is present and once clicked asks the user if to generate a pdf, dump a csv of the transaction or dump some data in json. Please let him select the timerange and let him select which data to dump. The pdf report instead should be a report of the accounts balances, expenses/incomes, categories, and so on.
-
-- [x] Categories management:
-  - [x] Pre-step - reorganize the settings in accordions:
-    - [x] Account - Keep it as is but make it an accordion card
-    - [x] General - merge default currency, locale and default commission
-    - [x] Appearace - keep it as is but make it an accordion card
-    - [x] Data management - make it a new unified accordion card
-  - [x] Categories - create a categories management accordion card between general and appearance
-  - [x] Allow the user to edit the categories:
-    - [x] Add categories
-    - [x] Rename, set a fixed color, set an icon (use an icon picker and use lucide-react icons and a search bar to search for them)
-    - [x] Delete categories
-  - [x] The colors of the categories in the pie charts must follow the one set by the user in the settings, If the user did not make an explicit selection, set a default color (different for each one).
-  - [x] If an Icon is selected, show the icon instead of the name in the pie chart legend. However, in the dropdowns of the categories, always keep names.
-  - [x] Add an overlay when the user taps on mobile or hovers on desktop on the + N more badge
 - [ ] Add the account creation date in the account details page
-
-- [x] Categories management — remaining polish:
-  - [x] Remove clear button in color picker popover
-  - [x] Assign default deterministic color upon category creation
-  - [x] Remove surrounding box and title from "Add new category" form
-  - [x] Add global toggle switch to enable/disable icons in pie charts (fall back to names + color dots)
-  - [x] Replace per-category hide/disable (eye) button with edit (pencil) button that triggers inline rename
-  - [x] When a category is deleted, warn user then batch-update all transactions with that category to "General"
-  - [x] Account accordion in settings should be closed by default
+- [ ] Admin panel:
+  - [ ] Use the same design language as the frontend
+  - [ ] Create a separate project served on a different port
+  - [ ] The admin panel is a simple CRUD application that allows the admin (only admin users can login). Those are stored in a different table and the first admin user is <admin@budgeteer.com> with password changeme.
+  - [ ] Admins cannot register, only the first admin can create the other admins with a password set by him, then the ui asks the user to change it upon first login (also the og admin is prompted to change it)
+  - [ ] This appication with its own backend allows the admins to manage the data on the database:
+    - [ ] All tables are reported to the frontend and can be consulted, bulk deleted, and edited
+    - [ ] DB-migration can be edited by the admin
+    - [ ] Client-side migration page shows the migrations grouped by user with the list of completed and pending migrations. Also it allows to bulk reschedule a certain migration or to edit the status of the users migration.
+    - [ ] The notification and email dispatcher page allow the admin to insert a notification ans/or an email that will be dispateched to a list of selected users (allow to select All) by the application backend (it just writes to the db).
 
 # BUGS
+
+- [ ] UI: remove internal title from data management accordion and remove the internal cards, use a line separator between the 3 actions
