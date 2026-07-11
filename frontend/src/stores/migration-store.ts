@@ -166,10 +166,21 @@ async function migrateAddCategoryId(_userId: string): Promise<void> {
       continue; // skip accounts we can't access
     }
 
-    const txs = await apiFetch<Transaction[]>(ENDPOINTS.transactions(acc.id));
-    if (!txs || txs.length === 0) continue;
+    // Fetch ALL transactions for this account via pagination (backend default limit is 50, max 200)
+    let offset = 0;
+    const PAGE_SIZE = 200;
+    let allTxs: Transaction[] = [];
+    while (true) {
+      const page = await apiFetch<Transaction[]>(`${ENDPOINTS.transactions(acc.id)}?limit=${PAGE_SIZE}&offset=${offset}`);
+      if (!page || page.length === 0) break;
+      allTxs = allTxs.concat(page);
+      if (page.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
 
-    for (const tx of txs) {
+    if (allTxs.length === 0) continue;
+
+    for (const tx of allTxs) {
       try {
         let payload: any;
 
