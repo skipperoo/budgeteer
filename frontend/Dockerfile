@@ -1,6 +1,9 @@
 # -------- Build Stage --------
 FROM node:22-alpine AS builder
 
+ARG VITE_BUDGETEER_DEBUG_CONSOLE=0
+ENV VITE_BUDGETEER_DEBUG_CONSOLE=$VITE_BUDGETEER_DEBUG_CONSOLE
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./

@@ -11,6 +11,7 @@ import DashboardPage from "@/pages/dashboard/DashboardPage";
 import AccountListPage from "@/pages/accounts/AccountListPage";
 import AccountDetailPage from "@/pages/accounts/AccountDetailPage";
 import SettingsPage from "@/pages/settings/SettingsPage";
+import DebugPage from "@/pages/debug/DebugPage";
 import RulesPage from "@/pages/rules/RulesPage";
 import NotificationsPage from "@/pages/notifications/NotificationsPage";
 import BudgetsPage from "@/pages/budgets/BudgetsPage";
@@ -71,6 +72,9 @@ export default function App() {
         <Route path="budgets" element={<BudgetsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        {import.meta.env.VITE_BUDGETEER_DEBUG_CONSOLE === "1" && (
+          <Route path="debug" element={<DebugPage />} />
+        )}
       </Route>
     </Routes>
   );

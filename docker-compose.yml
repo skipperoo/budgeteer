@@ -3,6 +3,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_BUDGETEER_DEBUG_CONSOLE: "0"
     ports:
       - "80:80"
     depends_on:
@@ -41,7 +43,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: timescale/timescaledb:latest-pg18
+    image: timescale/timescaledb:2.28.1-pg18
     secrets:
       - db_password
     environment:

@@ -14,7 +14,8 @@ import { isPinEnabled, storePinData, clearPinData, getPinData, clearDeviceFinger
 import type { UserPreferences } from "@/types";
 import { DataManagementSection } from "./DataManagementSection";
 import { CategoryManagementSection } from "@/components/shared/CategoryManagementSection";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Bug } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const CURRENCIES = [
   { code: "EUR", symbol: "€", name: "Euro" },
@@ -287,6 +288,17 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pb-8">
       <h1 className="text-3xl font-bold mb-6">Settings</h1>
+
+      {/* Debug link (only in dev mode) */}
+      {import.meta.env.VITE_BUDGETEER_DEBUG_CONSOLE === "1" && (
+        <Link
+          to="/debug"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-muted-foreground/30 text-sm text-muted-foreground hover:text-foreground hover:border-muted-foreground/60 transition-colors mb-6"
+        >
+          <Bug className="h-4 w-4" />
+          Debug Console
+        </Link>
+      )}
 
       <div className="space-y-4">
         {/* ── Account Accordion ── */}

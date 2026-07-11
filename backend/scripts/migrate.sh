@@ -38,7 +38,7 @@ export PGDATABASE="$DB_NAME"
 
 # --- Helper --------------------------------------------------------
 psql_exec() {
-  PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -q -1 -w -X "$@"
+  PGPASSWORD="$DB_PASSWORD" psql -h "${DB_HOST}" -q -1 -w -X "$@"
 }
 
 echo "📦 Budgeteer Migration Script"

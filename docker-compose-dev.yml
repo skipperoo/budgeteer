@@ -30,6 +30,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_BUDGETEER_DEBUG_CONSOLE: "1"
     develop:
       watch:
         - action: rebuild
@@ -78,7 +80,7 @@ services:
 
   # ── PostgreSQL (TimescaleDB) ───────────────────────────
   postgres:
-    image: timescale/timescaledb:latest-pg18
+    image: timescale/timescaledb:2.28.1-pg18
     secrets:
       - db_password
     environment:
