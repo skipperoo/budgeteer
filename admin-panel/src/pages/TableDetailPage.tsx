@@ -112,7 +112,7 @@ export default function TableDetailPage() {
             className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 transition-colors cursor-pointer"
           >
             <Trash2 className="h-4 w-4" />
-            Delete ({selectedIds.size})
+            Delete
           </button>
         )}
       </div>
@@ -154,6 +154,7 @@ export default function TableDetailPage() {
                   <th className="py-2 px-2 text-left w-8">
                     <input
                       type="checkbox"
+                      disabled={!data.rows?.some((r: any) => r.id)}
                       onChange={(e) => {
                         if (e.target.checked) {
                           setSelectedIds(new Set(data.rows?.map((r: any) => r.id).filter(Boolean)));
@@ -161,7 +162,7 @@ export default function TableDetailPage() {
                           setSelectedIds(new Set());
                         }
                       }}
-                      checked={selectedIds.size === data.rows?.filter((r: any) => r.id).length && (data.rows?.length ?? 0) > 0}
+                      checked={selectedIds.size > 0 && selectedIds.size === data.rows?.filter((r: any) => r.id).length}
                     />
                   </th>
                   {data.columns.map((col) => (
