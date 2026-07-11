@@ -68,8 +68,8 @@ export default function LoginPage() {
 
   if (changingPassword) {
     return (
-      <div className="h-screen flex items-center justify-center bg-white">
-        <form onSubmit={handleChangePassword} className="w-full max-w-sm mx-4 bg-white p-8 rounded-xl border border-border/50">
+      <div className="h-screen flex items-center justify-center bg-background">
+        <form onSubmit={handleChangePassword} className="w-full max-w-sm mx-4 bg-background p-8 rounded-xl border border-border/50">
           <h1 className="text-xl font-bold mb-2">Change Password</h1>
           <p className="text-sm text-muted-foreground mb-6">
             You must change your password before continuing.
@@ -111,8 +111,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="h-screen flex items-center justify-center bg-white">
-      <form onSubmit={handleLogin} className="w-full max-w-sm mx-4 bg-white p-8 rounded-xl border border-border/50">
+    <div className="h-screen flex items-center justify-center bg-background">
+      <form onSubmit={handleLogin} className="w-full max-w-sm mx-4 bg-background p-8 rounded-xl border border-border/50">
         <h1 className="text-xl font-bold mb-1">Admin Login</h1>
         <p className="text-sm text-muted-foreground mb-6">Budgeteer Admin Panel — enter your credentials</p>
         <div className="space-y-4">

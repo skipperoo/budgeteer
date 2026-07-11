@@ -70,7 +70,7 @@ func AdminBulkRescheduleMigration(w http.ResponseWriter, r *http.Request) {
 		for _, uid := range req.UserIDs {
 			_, err := database.Pool.Exec(r.Context(),
 				`INSERT INTO pending_migrations (user_id, migration_key, status)
-				 VALUES ($1, $2, 'pending')
+				 VALUES ($1, $2::text, 'pending')
 				 ON CONFLICT (user_id, migration_key) DO UPDATE SET status = 'pending', error_message = NULL, completed_at = NULL`,
 				uid, req.MigrationKey)
 			if err != nil {
@@ -84,7 +84,7 @@ func AdminBulkRescheduleMigration(w http.ResponseWriter, r *http.Request) {
 		// Reschedule for all users
 		_, err := database.Pool.Exec(r.Context(),
 			`INSERT INTO pending_migrations (user_id, migration_key, status)
-			 SELECT id, $1, 'pending' FROM users
+			 SELECT id, $1::text, 'pending' FROM users
 			 ON CONFLICT (user_id, migration_key) DO UPDATE SET status = 'pending', error_message = NULL, completed_at = NULL`,
 			req.MigrationKey)
 		if err != nil {

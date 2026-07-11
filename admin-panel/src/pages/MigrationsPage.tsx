@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { apiFetch, API_BASE } from "@/lib/api";
-import { RefreshCw, RotateCcw } from "lucide-react";
+import { RefreshCw, RotateCcw, Search } from "lucide-react";
 
 interface ClientMigration {
   id: string;
@@ -18,6 +18,7 @@ export default function MigrationsPage() {
   const [loading, setLoading] = useState(true);
   const [rescheduleKey, setRescheduleKey] = useState("");
   const [statusMsg, setStatusMsg] = useState("");
+  const [search, setSearch] = useState("");
 
   const fetchMigrations = async () => {
     setLoading(true);
@@ -34,6 +35,12 @@ export default function MigrationsPage() {
   useEffect(() => {
     fetchMigrations();
   }, []);
+
+  // Unique migration keys for the dropdown
+  const migrationKeys = useMemo(() => {
+    const keys = new Set(migrations.map((m) => m.migration_key));
+    return Array.from(keys).sort();
+  }, [migrations]);
 
   const handleBulkReschedule = async () => {
     if (!rescheduleKey.trim()) return;
@@ -64,9 +71,14 @@ export default function MigrationsPage() {
     }
   };
 
+  // Filter by user email
+  const filtered = migrations.filter((m) =>
+    m.user_email.toLowerCase().includes(search.toLowerCase())
+  );
+
   // Group by user
   const grouped: Record<string, ClientMigration[]> = {};
-  for (const m of migrations) {
+  for (const m of filtered) {
     const key = `${m.user_email} (${m.user_id.slice(0, 8)}...)`;
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(m);
@@ -89,16 +101,19 @@ export default function MigrationsPage() {
       <div className="bg-card border border-border/50 rounded-xl p-4 mb-6">
         <h2 className="text-sm font-semibold mb-2">Bulk Reschedule Migration</h2>
         <div className="flex items-center gap-2">
-          <input
-            type="text"
+          <select
             value={rescheduleKey}
             onChange={(e) => setRescheduleKey(e.target.value)}
-            placeholder="e.g. add_category_id"
             className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
-          />
+          >
+            <option value="">Select a migration...</option>
+            {migrationKeys.map((key) => (
+              <option key={key} value={key}>{key}</option>
+            ))}
+          </select>
           <button
             onClick={handleBulkReschedule}
-            disabled={!rescheduleKey.trim()}
+            disabled={!rescheduleKey}
             className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
           >
             <RotateCcw className="h-4 w-4" />
@@ -106,6 +121,18 @@ export default function MigrationsPage() {
           </button>
         </div>
         {statusMsg && <p className="text-xs text-muted-foreground mt-2">{statusMsg}</p>}
+      </div>
+
+      {/* Search */}
+      <div className="relative mb-4 max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by user email..."
+          className="w-full h-9 pl-9 rounded-md border border-input bg-background text-sm"
+        />
       </div>
 
       {loading ? (
@@ -135,10 +162,10 @@ export default function MigrationsPage() {
                         <td className="py-1.5 px-2">
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                             m.status === "completed"
-                              ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200"
+                              ? "bg-green-900 text-green-200"
                               : m.status === "failed"
-                              ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200"
-                              : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200"
+                              ? "bg-red-900 text-red-200"
+                              : "bg-amber-900 text-amber-200"
                           }`}>
                             {m.status}
                           </span>
@@ -159,13 +186,13 @@ export default function MigrationsPage() {
                             </button>
                             <button
                               onClick={() => handleEditStatus(m.id, "completed")}
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 cursor-pointer"
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-green-800 text-green-200 hover:bg-green-700 cursor-pointer"
                             >
                               Complete
                             </button>
                             <button
                               onClick={() => handleEditStatus(m.id, "failed")}
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 cursor-pointer"
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-red-800 text-red-200 hover:bg-red-700 cursor-pointer"
                             >
                               Fail
                             </button>

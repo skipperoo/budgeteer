@@ -154,6 +154,7 @@ func main() {
 		AddHandler("POST /client-migrations/reschedule", handler.AdminBulkRescheduleMigration).
 		AddHandler("PUT  /client-migrations/{id}/status", handler.AdminUpdateMigrationStatus).
 		AddHandler("POST /dispatch",                handler.AdminDispatchNotification)
+		adminRouter.AddHandler("GET  /users", handler.AdminListUsers)
 
 	router.AddSubroute("/admin/api/", adminRouter.Finalize())
 	router.AddSubroute("/api/", protected.Finalize())

@@ -53,7 +53,7 @@ export default function TableDetailPage() {
 
   const handleSaveCell = async () => {
     if (!editingCell || !data || !name) return;
-    const row = data.rows[editingCell.row];
+    const row = data.rows?.[editingCell.row];
     const id = row.id;
     try {
       await apiFetch(`${API_BASE}/tables/${name}/${id}`, {
@@ -144,7 +144,7 @@ export default function TableDetailPage() {
 
       {loading ? (
         <p className="text-muted-foreground">Loading...</p>
-      ) : data && data.columns.length > 0 ? (
+      ) : data && data.columns?.length > 0 && data.rows ? (
         <>
           <div className="overflow-x-auto border border-border/50 rounded-lg">
             <table className="w-full text-xs border-collapse">
@@ -155,12 +155,12 @@ export default function TableDetailPage() {
                       type="checkbox"
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedIds(new Set(data.rows.map((r: any) => r.id).filter(Boolean)));
+                          setSelectedIds(new Set(data.rows?.map((r: any) => r.id).filter(Boolean)));
                         } else {
                           setSelectedIds(new Set());
                         }
                       }}
-                      checked={selectedIds.size === data.rows.filter((r: any) => r.id).length && data.rows.length > 0}
+                      checked={selectedIds.size === data.rows?.filter((r: any) => r.id).length && (data.rows?.length ?? 0) > 0}
                     />
                   </th>
                   {data.columns.map((col) => (
@@ -172,7 +172,7 @@ export default function TableDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.rows.map((row: any, i: number) => (
+                {data.rows?.map((row: any, i: number) => (
                   <tr key={row.id || i} className="border-t border-border/20 hover:bg-secondary/30">
                     <td className="py-1.5 px-2">
                       {row.id && (

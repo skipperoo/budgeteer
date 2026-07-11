@@ -20,7 +20,7 @@ export default function Layout() {
   const logout = useAuthStore((s) => s.logout);
 
   return (
-    <div className="flex h-screen bg-[#f8f9fa] dark:bg-[#1a1b1e]">
+    <div className="flex h-screen bg-background">
       {/* Sidebar */}
       <aside className="w-64 border-r border-border/30 bg-card flex flex-col">
         <div className="p-6">

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -157,6 +158,18 @@ func AdminGetTable(w http.ResponseWriter, r *http.Request) {
 			switch val := v.(type) {
 			case []byte:
 				row[columns[i].Name] = string(val)
+			case [16]byte:
+				var buf [36]byte
+				hex.Encode(buf[:8], val[:4])
+				buf[8] = '-'
+				hex.Encode(buf[9:13], val[4:6])
+				buf[13] = '-'
+				hex.Encode(buf[14:18], val[6:8])
+				buf[18] = '-'
+				hex.Encode(buf[19:23], val[8:10])
+				buf[23] = '-'
+				hex.Encode(buf[24:], val[10:16])
+				row[columns[i].Name] = string(buf[:])
 			default:
 				row[columns[i].Name] = v
 			}
