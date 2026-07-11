@@ -109,7 +109,7 @@ export default function AdminsPage() {
                       onClick={() => handleDelete(a.id)}
                       className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
                     </button>
                   </td>
                 </tr>
