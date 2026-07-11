@@ -170,6 +170,11 @@ async function migrateAddCategoryId(_userId: string): Promise<void> {
           payload = await decryptTransactionPayload(tx.encrypted_payload, accountKey);
         }
 
+        // Skip transfers — they use "Transfer" as a label, not a real category
+        if (payload.is_transfer && payload.transfer_pair_id) continue;
+        // Skip opening balance — not a user-managed category
+        if (payload.category === "Opening Balance") continue;
+
         // Skip if already fully migrated (category already removed)
         if (!payload.category && payload.category_id) continue;
 
