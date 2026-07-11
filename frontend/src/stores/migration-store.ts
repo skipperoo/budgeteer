@@ -173,17 +173,19 @@ async function migrateAddCategoryId(_userId: string): Promise<void> {
         // Skip if already fully migrated (category already removed)
         if (!payload.category && payload.category_id) continue;
 
-        // Try to look up the category id by name
-        const catName = (payload.category || "").toLowerCase().trim();
-        const catId = nameToId[catName];
-        if (!catId) continue; // skip unmatched (will still work via name fallback)
-
-        // Add the stable category_id
-        payload.category_id = catId;
-
-        // Remove the mutable category name — from now on the UI resolves
-        // the display name from category_id via the store.
-        delete payload.category;
+        if (payload.category_id) {
+          // Already has category_id from first migration run but still has
+          // the old category name (e.g. because category was renamed since).
+          // Just remove the name — the id is already correct.
+          delete payload.category;
+        } else {
+          // First-time migration: look up the category id by name
+          const catName = (payload.category || "").toLowerCase().trim();
+          const catId = nameToId[catName];
+          if (!catId) continue; // skip unmatched (will still work via name fallback)
+          payload.category_id = catId;
+          delete payload.category;
+        }
 
         const reEncrypted = await encryptTransactionPayload(payload, accountKey);
         await apiFetch<Transaction>(ENDPOINTS.transaction(tx.id), {
