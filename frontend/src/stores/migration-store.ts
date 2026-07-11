@@ -130,12 +130,11 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
  * (they'll continue to work via name-based fallback).
  */
 async function migrateAddCategoryId(_userId: string): Promise<void> {
-  // Ensure categories are loaded
-  const catStore = useCategoryStore.getState();
-  if (!catStore.loaded) {
-    await catStore.fetchCategories();
+  // Ensure categories are loaded — re-read state after fetch (getState() is stale)
+  if (!useCategoryStore.getState().loaded) {
+    await useCategoryStore.getState().fetchCategories();
   }
-  const categories = catStore.items;
+  const categories = useCategoryStore.getState().items;
 
   // Build a reverse-lookup map: lowercase name → id
   const nameToId: Record<string, string> = {};
@@ -143,12 +142,11 @@ async function migrateAddCategoryId(_userId: string): Promise<void> {
     nameToId[cat.name.toLowerCase()] = cat.id;
   }
 
-  // Get all accounts
-  const accStore = useAccountStore.getState();
-  if (accStore.accounts.length === 0) {
-    await accStore.fetchAccounts();
+  // Get all accounts — re-read state after fetch to avoid stale snapshot
+  if (useAccountStore.getState().accounts.length === 0) {
+    await useAccountStore.getState().fetchAccounts();
   }
-  const accounts = accStore.accounts;
+  const accounts = useAccountStore.getState().accounts;
   if (accounts.length === 0) return;
 
   const authStore = useAuthStore.getState();
