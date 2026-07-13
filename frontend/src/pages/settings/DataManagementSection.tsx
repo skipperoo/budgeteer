@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback } from "react";
 import { useDataManagementStore } from "../../stores/data-management-store";
 import { useAuthStore } from "../../stores/auth-store";
+import { Separator } from "@/components/ui/separator";
 
 export const DataManagementSection: React.FC = () => {
   const {
@@ -34,13 +35,11 @@ export const DataManagementSection: React.FC = () => {
       setRestoreFile(file);
       setRestoreConfirmOpen(true);
       setRestoreConfirmText("");
-      // Reset file input so the same file can be selected again
       if (fileInputRef.current) fileInputRef.current.value = "";
     },
     []
   );
 
-  // Confirm and execute restore
   const handleConfirmRestore = useCallback(async () => {
     if (restoreConfirmText.trim() !== "Guacamole" || !restoreFile) return;
     setRestoreConfirmOpen(false);
@@ -49,7 +48,6 @@ export const DataManagementSection: React.FC = () => {
     setRestoreFile(null);
   }, [restoreConfirmText, restoreFile, restoreFromZip]);
 
-  // Confirm and execute account deletion
   const handleConfirmDelete = useCallback(async () => {
     if (deleteConfirmText.trim() !== "DELETE") return;
     setDeleteConfirmOpen(false);
@@ -57,13 +55,10 @@ export const DataManagementSection: React.FC = () => {
     await deleteAccount("DELETE");
   }, [deleteConfirmText, deleteAccount]);
 
-  // Handle logout after deletion
   const logout = useAuthStore((s) => s.logout);
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-semibold">Data Management</h2>
-
+    <div className="space-y-4">
       {/* Success/Error messages */}
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
@@ -95,9 +90,9 @@ export const DataManagementSection: React.FC = () => {
       )}
 
       {/* Download Section */}
-      <div className="rounded-lg bg-card raised p-4">
-        <h3 className="mb-1 font-medium">Download Data</h3>
-        <p className="mb-3 text-sm text-muted-foreground">
+      <div>
+        <h3 className="text-sm font-medium mb-1">Download Data</h3>
+        <p className="text-sm text-muted-foreground mb-3">
           Export all your data as a zip archive. The archive contains your
           accounts, transactions, budgets, rules, and more in JSON format.
         </p>
@@ -110,10 +105,12 @@ export const DataManagementSection: React.FC = () => {
         </button>
       </div>
 
+      <Separator />
+
       {/* Restore Section */}
-      <div className="rounded-lg bg-card raised p-4">
-        <h3 className="mb-1 font-medium">Restore Data</h3>
-        <p className="mb-3 text-sm text-muted-foreground">
+      <div>
+        <h3 className="text-sm font-medium mb-1">Restore Data</h3>
+        <p className="text-sm text-muted-foreground mb-3">
           Upload a previously downloaded archive to restore your data.
           <span className="block mt-1 font-semibold text-destructive">
             This will replace ALL your current data. This action cannot be undone.
@@ -133,10 +130,12 @@ export const DataManagementSection: React.FC = () => {
         )}
       </div>
 
+      <Separator />
+
       {/* Delete Account Section */}
-      <div className="rounded-lg bg-destructive/5 raised p-4">
-        <h3 className="mb-1 font-medium text-destructive">Delete Account</h3>
-        <p className="mb-3 text-sm text-muted-foreground">
+      <div>
+        <h3 className="text-sm font-medium mb-1 text-destructive">Delete Account</h3>
+        <p className="text-sm text-muted-foreground mb-3">
           Permanently delete your account and all associated data. Transactions
           sent to other users will be preserved in their accounts.
           <span className="block mt-1 font-semibold text-destructive">
