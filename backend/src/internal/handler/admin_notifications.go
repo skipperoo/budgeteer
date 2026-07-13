@@ -10,6 +10,9 @@ import (
 
 // AdminDispatchNotification creates in-app notifications and/or emails for selected users.
 func AdminDispatchNotification(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	var req model.AdminDispatchNotificationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -108,4 +111,34 @@ func AdminDispatchNotification(w http.ResponseWriter, r *http.Request) {
 		"status":         "ok",
 		"notifications_created": len(userIDs),
 	})
+}
+
+// AdminListUsers returns all registered users (id, email) for the dispatch page.
+func AdminListUsers(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
+	rows, err := database.Pool.Query(r.Context(), `SELECT id, email FROM users ORDER BY email ASC`)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(model.Error{Error: err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	type userEntry struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+	}
+	var users []userEntry
+	for rows.Next() {
+		var u userEntry
+		if err := rows.Scan(&u.ID, &u.Email); err != nil {
+			continue
+		}
+		users = append(users, u)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
 }

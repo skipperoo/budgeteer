@@ -3,29 +3,28 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-display: "Lora", Georgia, serif;
-  --font-body: "DM Sans", system-ui, -apple-system, sans-serif;
   --font-sans: "DM Sans", system-ui, sans-serif;
 
-  --color-background: oklch(0.97 0.012 25);
-  --color-foreground: oklch(0.22 0.025 15);
-  --color-card: oklch(0.97 0.012 25);
-  --color-card-foreground: oklch(0.22 0.025 15);
-  --color-popover: oklch(0.97 0.012 25);
-  --color-popover-foreground: oklch(0.22 0.025 15);
-  --color-primary: oklch(0.4 0.06 260);
-  --color-primary-foreground: oklch(0.97 0.005 260);
-  --color-secondary: oklch(0.93 0.018 22);
-  --color-secondary-foreground: oklch(0.3 0.03 15);
-  --color-muted: oklch(0.93 0.018 22);
-  --color-muted-foreground: oklch(0.48 0.025 15);
-  --color-accent: oklch(0.91 0.022 25);
-  --color-accent-foreground: oklch(0.25 0.03 15);
-  --color-destructive: oklch(0.56 0.15 22);
-  --color-destructive-foreground: oklch(0.97 0.02 22);
-  --color-border: oklch(0.85 0.015 22);
-  --color-input: oklch(0.85 0.015 22);
-  --color-ring: oklch(0.4 0.06 260);
+  /* Dark zinc palette (matches shadcn/ui zinc) */
+  --color-background: oklch(0.141 0.005 285.823);
+  --color-foreground: oklch(0.985 0 0);
+  --color-card: oklch(0.21 0.006 285.885);
+  --color-card-foreground: oklch(0.985 0 0);
+  --color-popover: oklch(0.21 0.006 285.885);
+  --color-popover-foreground: oklch(0.985 0 0);
+  --color-primary: oklch(0.985 0 0);
+  --color-primary-foreground: oklch(0.141 0.005 285.823);
+  --color-secondary: oklch(0.274 0.006 286.033);
+  --color-secondary-foreground: oklch(0.985 0 0);
+  --color-muted: oklch(0.274 0.006 286.033);
+  --color-muted-foreground: oklch(0.705 0.015 286.067);
+  --color-accent: oklch(0.274 0.006 286.033);
+  --color-accent-foreground: oklch(0.985 0 0);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(0.577 0.245 27.325);
+  --color-border: oklch(0.274 0.006 286.033);
+  --color-input: oklch(0.274 0.006 286.033);
+  --color-ring: oklch(0.871 0.006 286.033);
   --color-income: oklch(0.55 0.16 145);
   --color-expense: oklch(0.55 0.20 25);
   --color-income-foreground: #fff;
@@ -35,28 +34,6 @@
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
-}
-
-.dark {
-  --color-background: oklch(0.145 0.015 260);
-  --color-foreground: oklch(0.92 0.01 260);
-  --color-card: oklch(0.165 0.015 260);
-  --color-card-foreground: oklch(0.92 0.01 260);
-  --color-popover: oklch(0.165 0.015 260);
-  --color-popover-foreground: oklch(0.92 0.01 260);
-  --color-primary: oklch(0.62 0.12 260);
-  --color-primary-foreground: oklch(0.145 0.015 260);
-  --color-secondary: oklch(0.25 0.02 260);
-  --color-secondary-foreground: oklch(0.92 0.01 260);
-  --color-muted: oklch(0.25 0.02 260);
-  --color-muted-foreground: oklch(0.6 0.02 260);
-  --color-accent: oklch(0.25 0.02 260);
-  --color-accent-foreground: oklch(0.92 0.01 260);
-  --color-destructive: oklch(0.56 0.15 22);
-  --color-destructive-foreground: oklch(0.92 0.01 260);
-  --color-border: oklch(0.25 0.02 260);
-  --color-input: oklch(0.25 0.02 260);
-  --color-ring: oklch(0.62 0.12 260);
 }
 
 body {

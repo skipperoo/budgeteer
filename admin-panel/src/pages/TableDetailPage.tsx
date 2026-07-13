@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiFetch, API_BASE } from "@/lib/api";
-import { ArrowLeft, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, Search, Trash2, X, Code } from "lucide-react";
 
 interface ColumnInfo {
   name: string;
@@ -31,12 +31,13 @@ export default function TableDetailPage() {
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [jsonEditor, setJsonEditor] = useState<{ row: number; col: string; val: any } | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!name) return;
     setLoading(true);
     try {
-      let url = `${API_BASE}/admin/tables/${name}?page=${page}&page_size=50`;
+      let url = `${API_BASE}/tables/${name}?page=${page}&page_size=50`;
       if (search && searchCol) url += `&search=${encodeURIComponent(search)}&search_col=${searchCol}`;
       const resp = await apiFetch<TableData>(url);
       setData(resp);
@@ -53,10 +54,10 @@ export default function TableDetailPage() {
 
   const handleSaveCell = async () => {
     if (!editingCell || !data || !name) return;
-    const row = data.rows[editingCell.row];
+    const row = data.rows?.[editingCell.row];
     const id = row.id;
     try {
-      await apiFetch(`${API_BASE}/admin/tables/${name}/${id}`, {
+      await apiFetch(`${API_BASE}/tables/${name}/${id}`, {
         method: "PUT",
         body: JSON.stringify({ [editingCell.col]: editValue }),
       });
@@ -70,7 +71,7 @@ export default function TableDetailPage() {
   const handleDeleteSelected = async () => {
     if (!name || selectedIds.size === 0) return;
     try {
-      await apiFetch(`${API_BASE}/admin/tables/${name}/rows`, {
+      await apiFetch(`${API_BASE}/tables/${name}/rows`, {
         method: "DELETE",
         body: JSON.stringify({ ids: Array.from(selectedIds) }),
       });
@@ -111,7 +112,7 @@ export default function TableDetailPage() {
             className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 transition-colors cursor-pointer"
           >
             <Trash2 className="h-4 w-4" />
-            Delete ({selectedIds.size})
+            Delete
           </button>
         )}
       </div>
@@ -144,7 +145,7 @@ export default function TableDetailPage() {
 
       {loading ? (
         <p className="text-muted-foreground">Loading...</p>
-      ) : data && data.columns.length > 0 ? (
+      ) : data && data.columns?.length > 0 && data.rows ? (
         <>
           <div className="overflow-x-auto border border-border/50 rounded-lg">
             <table className="w-full text-xs border-collapse">
@@ -153,14 +154,15 @@ export default function TableDetailPage() {
                   <th className="py-2 px-2 text-left w-8">
                     <input
                       type="checkbox"
+                      disabled={!data.rows?.some((r: any) => r.id)}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedIds(new Set(data.rows.map((r: any) => r.id).filter(Boolean)));
+                          setSelectedIds(new Set(data.rows?.map((r: any) => r.id).filter(Boolean)));
                         } else {
                           setSelectedIds(new Set());
                         }
                       }}
-                      checked={selectedIds.size === data.rows.filter((r: any) => r.id).length && data.rows.length > 0}
+                      checked={selectedIds.size > 0 && selectedIds.size === data.rows?.filter((r: any) => r.id).length}
                     />
                   </th>
                   {data.columns.map((col) => (
@@ -172,7 +174,7 @@ export default function TableDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.rows.map((row: any, i: number) => (
+                {data.rows?.map((row: any, i: number) => (
                   <tr key={row.id || i} className="border-t border-border/20 hover:bg-secondary/30">
                     <td className="py-1.5 px-2">
                       {row.id && (
@@ -194,8 +196,14 @@ export default function TableDetailPage() {
                             : ""
                         }`}
                         onDoubleClick={() => {
-                          setEditingCell({ row: i, col: col.name });
-                          setEditValue(String(row[col.name] ?? ""));
+                          const val = row[col.name];
+                          if (val !== null && typeof val === "object") {
+                            setEditValue(JSON.stringify(val, null, 2));
+                            setJsonEditor({ row: i, col: col.name, val });
+                          } else {
+                            setEditingCell({ row: i, col: col.name });
+                            setEditValue(String(val ?? ""));
+                          }
                         }}
                       >
                         {editingCell?.row === i && editingCell?.col === col.name ? (
@@ -253,6 +261,57 @@ export default function TableDetailPage() {
         <p className="text-muted-foreground italic">Table not found or empty.</p>
       )}
 
+      {/* JSON editor modal */}
+      {jsonEditor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setJsonEditor(null)}>
+          <div className="mx-4 w-full max-w-2xl bg-card p-6 rounded-lg elevated" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold">
+                Editing <span className="font-mono text-primary">{jsonEditor.col}</span>
+                {' '}(row {jsonEditor.row})
+              </h3>
+              <button onClick={() => setJsonEditor(null)} className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <textarea
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              className="w-full min-h-[200px] font-mono text-xs rounded-md border border-input bg-background p-3"
+              spellCheck={false}
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setJsonEditor(null)}
+                className="px-3 py-1.5 rounded-md text-xs font-medium border border-input hover:bg-secondary cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!jsonEditor || !name) return;
+                  try {
+                    // Validate JSON
+                    JSON.parse(editValue);
+                    await apiFetch(`${API_BASE}/tables/${name}/${data?.rows?.[jsonEditor.row]?.id}`, {
+                      method: "PUT",
+                      body: JSON.stringify({ [jsonEditor.col]: editValue }),
+                    });
+                    setJsonEditor(null);
+                    fetchData();
+                  } catch (err: any) {
+                    alert(err.message || "Invalid JSON");
+                  }
+                }}
+                className="px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete confirmation modal */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setConfirmDelete(false)}>
@@ -284,7 +343,10 @@ function formatCellValue(val: any): string {
   if (val === null || val === undefined) return <span className="text-muted-foreground italic">NULL</span> as any;
   if (typeof val === "boolean") return val ? "true" : "false";
   if (typeof val === "object") {
-    try { return JSON.stringify(val).slice(0, 100); } catch { return String(val); }
+    try {
+      const preview = JSON.stringify(val);
+      return <span className="flex items-center gap-1 text-primary underline underline-offset-2 decoration-dotted decoration-primary/40"><Code className="h-3 w-3 shrink-0" />{preview.length > 60 ? preview.slice(0, 57) + "..." : preview}</span> as any;
+    } catch { return String(val); }
   }
   return String(val);
 }

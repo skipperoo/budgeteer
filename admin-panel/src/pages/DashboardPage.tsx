@@ -16,7 +16,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    apiFetch<TableInfo[]>(`${API_BASE}/admin/tables`)
+    apiFetch<TableInfo[]>(`${API_BASE}/tables`)
       .then(setTables)
       .catch(console.error)
       .finally(() => setLoading(false));

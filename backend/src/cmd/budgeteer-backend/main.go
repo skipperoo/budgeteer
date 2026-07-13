@@ -134,31 +134,30 @@ func main() {
 		AddHandler("POST   /v1/user/clear",  handler.ClearUserData).
 		AddHandler("DELETE /v1/user",        handler.DeleteUserAccount)
 
-	// --- Admin public routes (no auth) ---
-	router.AddHandler("POST /api/v1/admin/auth/login", handler.AdminLogin)
+	// --- Admin routes ---
+	// Public: login (no auth).
+	router.AddHandler("POST /admin/api/auth/login", handler.AdminLogin)
 
-	// --- Admin protected routes (JWT + admin role) ---
+	// Protected admin routes (JWT + admin role via AdminAuth middleware).
 	adminRouter := routy.NewRouter()
 	adminRouter.
 		AddMiddleware(middleware.AdminAuth).
-		AddHandler("POST   /v1/admin/auth/change-password", handler.AdminChangePassword).
-		AddHandler("POST   /v1/admin/auth/create",           handler.AdminCreate).
-		AddHandler("GET    /v1/admin/auth/list",              handler.AdminList).
-		AddHandler("DELETE /v1/admin/auth/{id}",              handler.AdminDelete).
-		// Table browser
-		AddHandler("GET    /v1/admin/tables",                  handler.AdminListTables).
-		AddHandler("GET    /v1/admin/tables/{name}",           handler.AdminGetTable).
-		AddHandler("PUT    /v1/admin/tables/{name}/{id}",      handler.AdminUpdateTableRow).
-		AddHandler("DELETE /v1/admin/tables/{name}/rows",      handler.AdminDeleteTableRows).
-		// Client-side migrations
-		AddHandler("GET    /v1/admin/client-migrations",                handler.AdminListClientMigrations).
-		AddHandler("POST   /v1/admin/client-migrations/reschedule",     handler.AdminBulkRescheduleMigration).
-		AddHandler("PUT    /v1/admin/client-migrations/{id}/status",    handler.AdminUpdateMigrationStatus).
-		// Notification dispatch
-		AddHandler("POST   /v1/admin/dispatch",                handler.AdminDispatchNotification)
+		AddHandler("POST /auth/change-password", handler.AdminChangePassword).
+		AddHandler("POST /auth/create",           handler.AdminCreate).
+		AddHandler("GET  /auth/list",              handler.AdminList).
+		AddHandler("DELETE /auth/{id}",            handler.AdminDelete).
+		AddHandler("GET  /tables",                  handler.AdminListTables).
+		AddHandler("GET  /tables/{name}",           handler.AdminGetTable).
+		AddHandler("PUT  /tables/{name}/{id}",      handler.AdminUpdateTableRow).
+		AddHandler("DELETE /tables/{name}/rows",    handler.AdminDeleteTableRows).
+		AddHandler("GET  /client-migrations",       handler.AdminListClientMigrations).
+		AddHandler("POST /client-migrations/reschedule", handler.AdminBulkRescheduleMigration).
+		AddHandler("PUT  /client-migrations/{id}/status", handler.AdminUpdateMigrationStatus).
+		AddHandler("POST /dispatch",                handler.AdminDispatchNotification)
+		adminRouter.AddHandler("GET  /users", handler.AdminListUsers)
 
+	router.AddSubroute("/admin/api/", adminRouter.Finalize())
 	router.AddSubroute("/api/", protected.Finalize())
-	router.AddSubroute("/api/", adminRouter.Finalize())
 	final := router.Finalize()
 
 	// --- Background workers ---

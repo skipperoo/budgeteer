@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth-store";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("admin@budgeteer.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,7 +46,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const token = useAuthStore.getState().token;
-      await fetch("/api/v1/admin/auth/change-password", {
+      await fetch("/admin/api/auth/change-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -68,8 +68,8 @@ export default function LoginPage() {
 
   if (changingPassword) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-[#1a1b1e]">
-        <form onSubmit={handleChangePassword} className="w-full max-w-sm mx-4 bg-card p-8 rounded-xl border border-border/50">
+      <div className="h-screen flex items-center justify-center bg-background">
+        <form onSubmit={handleChangePassword} className="w-full max-w-sm mx-4 bg-background p-8 rounded-xl border border-border/50">
           <h1 className="text-xl font-bold mb-2">Change Password</h1>
           <p className="text-sm text-muted-foreground mb-6">
             You must change your password before continuing.
@@ -111,10 +111,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-[#1a1b1e]">
-      <form onSubmit={handleLogin} className="w-full max-w-sm mx-4 bg-card p-8 rounded-xl border border-border/50">
+    <div className="h-screen flex items-center justify-center bg-background">
+      <form onSubmit={handleLogin} className="w-full max-w-sm mx-4 bg-background p-8 rounded-xl border border-border/50">
         <h1 className="text-xl font-bold mb-1">Admin Login</h1>
-        <p className="text-sm text-muted-foreground mb-6">Budgeteer Admin Panel</p>
+        <p className="text-sm text-muted-foreground mb-6">Budgeteer Admin Panel — enter your credentials</p>
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Email</label>

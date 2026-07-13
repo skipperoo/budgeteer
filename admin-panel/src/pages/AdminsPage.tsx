@@ -22,7 +22,7 @@ export default function AdminsPage() {
   const fetchAdmins = async () => {
     setLoading(true);
     try {
-      setAdmins(await apiFetch<AdminUser[]>(`${API_BASE}/admin/auth/list`) ?? []);
+      setAdmins(await apiFetch<AdminUser[]>(`${API_BASE}/auth/list`) ?? []);
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -36,7 +36,7 @@ export default function AdminsPage() {
     e.preventDefault();
     setError("");
     try {
-      await apiFetch(`${API_BASE}/admin/auth/create`, {
+      await apiFetch(`${API_BASE}/auth/create`, {
         method: "POST",
         body: JSON.stringify({ email, password, display_name: displayName }),
       });
@@ -53,7 +53,7 @@ export default function AdminsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this admin?")) return;
     try {
-      await apiFetch(`${API_BASE}/admin/auth/${id}`, { method: "DELETE" });
+      await apiFetch(`${API_BASE}/auth/${id}`, { method: "DELETE" });
       await fetchAdmins();
     } catch (err: any) {
       alert(err.message);
@@ -109,7 +109,7 @@ export default function AdminsPage() {
                       onClick={() => handleDelete(a.id)}
                       className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
                     </button>
                   </td>
                 </tr>

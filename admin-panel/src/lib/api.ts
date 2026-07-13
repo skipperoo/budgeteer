@@ -1,4 +1,4 @@
-const API_BASE = "/api/v1";
+const API_BASE = "/admin/api";
 
 function getToken(): string | null {
   try {

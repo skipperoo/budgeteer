@@ -62,13 +62,27 @@ func AdminLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// AdminChangePassword allows an admin to change their password.
-func AdminChangePassword(w http.ResponseWriter, r *http.Request) {
+func requireAdmin(w http.ResponseWriter, r *http.Request) *model.UserClaims {
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
 	if !ok || claims == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(model.Error{Error: "unauthorized"})
+		return nil
+	}
+	if claims.Role != "admin" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(model.Error{Error: "admin access required"})
+		return nil
+	}
+	return claims
+}
+
+// AdminChangePassword allows an admin to change their password.
+func AdminChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims := requireAdmin(w, r)
+	if claims == nil {
 		return
 	}
 
@@ -109,11 +123,8 @@ func AdminChangePassword(w http.ResponseWriter, r *http.Request) {
 
 // AdminCreate creates a new admin user. Only existing admins can call this.
 func AdminCreate(w http.ResponseWriter, r *http.Request) {
-	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
-	if !ok || claims == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(model.Error{Error: "unauthorized"})
+	claims := requireAdmin(w, r)
+	if claims == nil {
 		return
 	}
 
@@ -148,6 +159,10 @@ func AdminCreate(w http.ResponseWriter, r *http.Request) {
 
 // AdminList returns all admin users.
 func AdminList(w http.ResponseWriter, r *http.Request) {
+	claims := requireAdmin(w, r)
+	if claims == nil {
+		return
+	}
 	admins, err := adminRepo.ListAll(r.Context())
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -173,11 +188,8 @@ func AdminList(w http.ResponseWriter, r *http.Request) {
 
 // AdminDelete removes an admin user.
 func AdminDelete(w http.ResponseWriter, r *http.Request) {
-	claims, ok := r.Context().Value(middleware.ClaimsKey).(*model.UserClaims)
-	if !ok || claims == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(model.Error{Error: "unauthorized"})
+	claims := requireAdmin(w, r)
+	if claims == nil {
 		return
 	}
 

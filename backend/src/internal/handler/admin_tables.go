@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -14,6 +15,9 @@ import (
 
 // AdminListTables returns all public tables with their column metadata.
 func AdminListTables(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	tables, err := getTableInfos(r)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -27,6 +31,9 @@ func AdminListTables(w http.ResponseWriter, r *http.Request) {
 
 // AdminGetTable returns paginated data for a specific table.
 func AdminGetTable(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	tableName := r.PathValue("name")
 	if tableName == "" {
 		w.Header().Set("Content-Type", "application/json")
@@ -57,9 +64,9 @@ func AdminGetTable(w http.ResponseWriter, r *http.Request) {
 	// Get columns first
 	colQuery := `SELECT column_name, data_type, is_nullable,
 	              COALESCE(column_default, '') as col_default,
-	              (SELECT true FROM information_schema.key_column_usage kcu
+	              COALESCE((SELECT true FROM information_schema.key_column_usage kcu
 	               WHERE kcu.table_name = $1 AND kcu.column_name = c.column_name
-	               AND kcu.constraint_name LIKE '%pk%') as is_pk
+	               AND kcu.constraint_name LIKE '%pk%'), false) as is_pk
 	           FROM information_schema.columns c
 	           WHERE c.table_name = $1 AND c.table_schema = 'public'
 	           ORDER BY c.ordinal_position`
@@ -151,6 +158,18 @@ func AdminGetTable(w http.ResponseWriter, r *http.Request) {
 			switch val := v.(type) {
 			case []byte:
 				row[columns[i].Name] = string(val)
+			case [16]byte:
+				var buf [36]byte
+				hex.Encode(buf[:8], val[:4])
+				buf[8] = '-'
+				hex.Encode(buf[9:13], val[4:6])
+				buf[13] = '-'
+				hex.Encode(buf[14:18], val[6:8])
+				buf[18] = '-'
+				hex.Encode(buf[19:23], val[8:10])
+				buf[23] = '-'
+				hex.Encode(buf[24:], val[10:16])
+				row[columns[i].Name] = string(buf[:])
 			default:
 				row[columns[i].Name] = v
 			}
@@ -170,6 +189,9 @@ func AdminGetTable(w http.ResponseWriter, r *http.Request) {
 
 // AdminUpdateTableRow updates a single row in a table.
 func AdminUpdateTableRow(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	tableName := r.PathValue("name")
 	rowID := r.PathValue("id")
 	if tableName == "" || rowID == "" {
@@ -229,6 +251,9 @@ func AdminUpdateTableRow(w http.ResponseWriter, r *http.Request) {
 
 // AdminDeleteTableRows deletes one or more rows from a table.
 func AdminDeleteTableRows(w http.ResponseWriter, r *http.Request) {
+	if requireAdmin(w, r) == nil {
+		return
+	}
 	tableName := r.PathValue("name")
 	if tableName == "" {
 		w.Header().Set("Content-Type", "application/json")
@@ -307,9 +332,9 @@ func getTableInfos(r *http.Request) ([]model.TableInfo, error) {
 		// Get columns
 		colQuery := `SELECT column_name, data_type, is_nullable,
 		              COALESCE(column_default, '') as col_default,
-		              (SELECT true FROM information_schema.key_column_usage kcu
+		              COALESCE((SELECT true FROM information_schema.key_column_usage kcu
 		               WHERE kcu.table_name = $1 AND kcu.column_name = c.column_name
-		               AND kcu.constraint_name LIKE '%pk%') as is_pk
+		               AND kcu.constraint_name LIKE '%pk%'), false) as is_pk
 		           FROM information_schema.columns c
 		           WHERE c.table_name = $1 AND c.table_schema = 'public'
 		           ORDER BY c.ordinal_position`
