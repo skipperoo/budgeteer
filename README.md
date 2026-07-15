@@ -2,7 +2,7 @@
 
 A collaborative, offline-first personal finance tracker with end-to-end encryption.
 
-Budgeteer puts you in full control of your finances. Every cent of sensitive data — amounts, categories, notes, counterparties — is encrypted before it leaves your browser. The server stores only what it needs for routing and indexing (timestamps, account IDs). Not even the database administrator can read your transactions.
+Budgeteer puts you in full control of your finances. Every cent of sensitive data - amounts, categories, notes, counterparties - is encrypted before it leaves your browser. The server stores only what it needs for routing and indexing (timestamps, account IDs). Not even the database administrator can read your transactions.
 
 ---
 
@@ -12,7 +12,7 @@ Budgeteer puts you in full control of your finances. Every cent of sensitive dat
 | :------- | :----------- |
 | **Accounts** | Personal, joint (with cryptographic key distribution), and savings accounts. Create, edit (name, currency, type, opening balance), soft-delete. |
 | **Transactions** | Income, expense, and account-to-account transfers. Encrypted payloads (AES-256-GCM). Soft-delete + re-insert for corrections. |
-| **Categories** | Per-user income/expense categories with custom colours (hex) and icons (lucide-react). Enable/disable toggle. Stable `category_id` resolution — rename or delete a category and all transactions update instantly. |
+| **Categories** | Per-user income/expense categories with custom colours (hex) and icons (lucide-react). Enable/disable toggle. Stable `category_id` resolution - rename or delete a category and all transactions update instantly. |
 | **Filters** | Date-range quick presets (7d/30d/90d), transaction type checkboxes, category multi-select. Filter button shows active count badge. |
 | **Rules** | Automated recurring transactions: `payment` (expense), `transfer` (between own accounts), `user_transfer` (cross-user), `income` (positive), `mortgage` (amortized loan). Commission tracking. Alert offset for pre-fire notifications (1h–2wk). Payloads encrypted with the server's X25519 public key. |
 | **Mortgage Rules** | French (fixed payment) or Italian (decreasing) amortization. Monthly payment computed server-side via amortization formula. `interest_amount` shown separately from principal in transaction cards. Auto-deactivates when balance reaches zero. |
@@ -23,7 +23,7 @@ Budgeteer puts you in full control of your finances. Every cent of sensitive dat
 | **Invitations** | Pending/accept/decline/expire workflow for accounts, rules, and transaction invitations. 30-day automatic expiry. |
 | **Notifications** | In-app notification panel with unread badge (polled every 30 s). Email outbox dispatched via background worker. |
 | **Data Management** | Download all data (encrypted JSON zip archive), restore from a previous dump, or permanently delete your account (all soft-deleted). |
-| **PIN Unlock** | Device-local PIN (stored in localStorage, never synced) as a convenience to skip password entry on trusted devices. Per-user isolation — PIN from one user is silently cleared when another user logs in. |
+| **PIN Unlock** | Device-local PIN (stored in localStorage, never synced) as a convenience to skip password entry on trusted devices. Per-user isolation - PIN from one user is silently cleared when another user logs in. |
 | **Remember Device** | Skip OTP on trusted devices via device fingerprint (`@fingerprintjs/fingerprintjs`) and SHA-256 device tokens stored in the `access_secrets` table. |
 | **Admin Panel** | Standalone Vite + React app on port 5174. Table browser (schema introspection, inline editing, bulk deletion), client migration management (grouped by user, reschedule, edit status), notification/email dispatch to selected users or everyone. Default admin: `admin@budgeteer.com` / `changeme` (must change on first login). |
 | **Offline Sync** | Push/pull with cursor-based pagination (max 500 items/page). Last-Write-Wins conflict resolution. Immutable transactions (soft-delete + re-insert). |
@@ -52,9 +52,9 @@ JSON Payload → LZ4 Compress → AES-256-GCM Encrypt → Base64 Encode
 ```
 
 - **Data splitting:** Metadata for routing and time-series indexing (`transaction_id`, `account_id`, `timestamp`) stays in plaintext. All financial data goes into the encrypted payload.
-- **Key management:** Each user generates an X25519 keypair on registration. The private key is symmetrically encrypted with the user's password via Argon2id + AES-256-GCM and stored server-side. It is decrypted client-side on login and **held in memory only** — never persisted to IndexedDB, localStorage, or any persistent storage.
+- **Key management:** Each user generates an X25519 keypair on registration. The private key is symmetrically encrypted with the user's password via Argon2id + AES-256-GCM and stored server-side. It is decrypted client-side on login and **held in memory only** - never persisted to IndexedDB, localStorage, or any persistent storage.
 - **ECIES prefix routing:** Payloads starting with `"1|"` were encrypted via ECIES (X25519 + AES-GCM) using the user's X25519 public key (rule-generated transactions). Otherwise, they were encrypted with the account key (AES-GCM). The frontend detects the prefix and uses the correct decryption path transparently.
-- **Account keys:** Joint accounts use a random AES-256 key. When inviting a user, the key is encrypted with the recipient's X25519 public key via ECIES. Alternatively, the inviter can encrypt with the **server's** X25519 public key, allowing invitations to unregistered users — the server re-encrypts with the recipient's key on acceptance.
+- **Account keys:** Joint accounts use a random AES-256 key. When inviting a user, the key is encrypted with the recipient's X25519 public key via ECIES. Alternatively, the inviter can encrypt with the **server's** X25519 public key, allowing invitations to unregistered users - the server re-encrypts with the recipient's key on acceptance.
 - **Budget encryption:** Budget payloads use the same ECIES scheme with the user's own X25519 public key, since budgets are personal settings (not shared account data).
 - **Session model:** Zustand store holds the decrypted private key in memory during the session. Cleared on logout or tab close.
 
@@ -104,7 +104,7 @@ cd admin-panel && npm run dev
 
 > **Development with HTTPS:** Web Crypto API requires a secure context. Use `docker compose -f docker-compose-dev.yml up -d` for local development with HTTPS (Angie/nginx reverse proxy on port 8443). Run `./gen_certs.sh <your-dev-ip>` first to generate self-signed certificates.
 
-> **Admin Panel:** After starting the stack, visit `http://localhost:5174` (or `https://<ip>:8443/admin` in dev mode). Default credentials: `admin@budgeteer.com` / `changeme` — you will be prompted to change the password on first login.
+> **Admin Panel:** After starting the stack, visit `http://localhost:5174` (or `https://<ip>:8443/admin` in dev mode). Default credentials: `admin@budgeteer.com` / `changeme` - you will be prompted to change the password on first login.
 
 ---
 
@@ -265,9 +265,9 @@ docker compose -f docker-compose-dev.yml up -d
 | `DB_USER` | `budgeteer` | PostgreSQL user |
 | `DB_NAME` | `budgeteer` | PostgreSQL database |
 | `REDIS_HOST` | `redis` | Redis host |
-| `SMTP_HOST` | — | SMTP server hostname |
+| `SMTP_HOST` | - | SMTP server hostname |
 | `SMTP_PORT` | `587` | SMTP port |
-| `SMTP_USER` | — | SMTP username |
+| `SMTP_USER` | - | SMTP username |
 | `SMTP_FROM` | `noreply@budgeteer.app` | From address for sent emails |
 | `SMTP_SSL` | `false` | Use SSL for SMTP |
 | `LOG_LEVEL` | `INFO` | Log level (`DEBUG`, `INFO`, `WARN`, `ERROR`) |
