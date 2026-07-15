@@ -214,52 +214,6 @@ Migrations are incremental SQL files in `backend/src/migrations/`. Apply with:
 
 ---
 
-## Development
-
-### Branching Strategy
-
-`master` is stable and deployable — promoted from `develop` via human-reviewed PRs. No direct pushes to `master`.
-
-| Type | Convention | Example |
-| :--- | :--------- | :------ |
-| `feature/` | New functionality | `feature/savings-plan-cron` |
-| `fix/` | Bug fixes | `fix/sync-queue-consumed-at` |
-| `refactor/` | Internal restructuring | `refactor/crypto-service` |
-| `migration/` | Database schema changes | `migration/add-otps-table` |
-| `chore/` | Tooling, deps, CI | `chore/update-deps` |
-
-### Testing
-
-Every PR must ship its tests in the same commit. Minimum requirements:
-
-| Layer | Tool | Coverage |
-| :---- | :--- | :------- |
-| **Backend unit** | Go `testing` | Pure functions: crypto, payload serialisation, cron predicates |
-| **Backend integration** | `testcontainers-go` | Each handler: happy + error path against real PostgreSQL + Redis |
-| **Frontend unit** | Vitest | Crypto pipeline (encrypt → decrypt round-trip), LWW conflict resolver, offline queue logic |
-| **Frontend component** | React Testing Library | Form validation, error states, loading states |
-| **E2E** | Playwright | Critical user journeys: register → login → create account → add transaction → joint account invite |
-
-Run the full suite with a single command:
-
-```bash
-./run_tests.sh
-```
-
-### CI Pipeline (GitHub Actions)
-
-```
-1. Lint       — golangci-lint (Go), ESLint + tsc --noEmit (TS)
-2. Unit tests — go test ./... (Go), vitest run (TS)
-3. Integration — testcontainers suite against postgres + redis
-4. E2E tests   — Playwright against a docker-compose stack
-5. Build       — go build (Go), vite build (TS)
-```
-
-All five steps must be green before merge.
-
----
-
 ## Deployment
 
 ### Production (`docker-compose.yml`)
@@ -291,7 +245,7 @@ Web Crypto API requires a secure context. For local development:
 
 ```bash
 # 1. Generate self-signed certificates for your dev machine IP
-./gen_certs.sh 10.23.12.2
+./gen_certs.sh <your-machine-ip>
 
 # 2. Start the dev stack
 docker compose -f docker-compose-dev.yml up -d
