@@ -1,45 +1,44 @@
 # Budgeteer
 
-A collaborative, offline-first personal finance tracker with end-to-end encryption.
+A collaborative, personal finance tracker with end-to-end encryption.
 
-Budgeteer puts you in full control of your finances. Every cent of sensitive data - amounts, categories, notes, counterparties - is encrypted before it leaves your browser. The server stores only what it needs for routing and indexing (timestamps, account IDs). Not even the database administrator can read your transactions.
+Budgeteer puts you in full control of your finances: every cent of sensitive data is encrypted before it leaves your browser. The server stores only what it needs for routing and indexing (timestamps, account IDs). Not even the administrator can read your transactions.
 
 ---
 
 ## Features
 
-| Category | Capabilities |
-| :------- | :----------- |
-| **Accounts** | Personal, joint (with cryptographic key distribution), and savings accounts. Create, edit (name, currency, type, opening balance), soft-delete. |
-| **Transactions** | Income, expense, and account-to-account transfers. Encrypted payloads (AES-256-GCM). Soft-delete + re-insert for corrections. |
-| **Categories** | Per-user income/expense categories with custom colours (hex) and icons (lucide-react). Enable/disable toggle. Stable `category_id` resolution - rename or delete a category and all transactions update instantly. |
-| **Filters** | Date-range quick presets (7d/30d/90d), transaction type checkboxes, category multi-select. Filter button shows active count badge. |
-| **Rules** | Automated recurring transactions: `payment` (expense), `transfer` (between own accounts), `user_transfer` (cross-user), `income` (positive), `mortgage` (amortized loan). Commission tracking. Alert offset for pre-fire notifications (1h–2wk). Payloads encrypted with the server's X25519 public key. |
-| **Mortgage Rules** | French (fixed payment) or Italian (decreasing) amortization. Monthly payment computed server-side via amortization formula. `interest_amount` shown separately from principal in transaction cards. Auto-deactivates when balance reaches zero. |
-| **Budgets** | Per-account or global spending limits with E2E-encrypted payloads. Threshold notifications at 50 % / 80 % / 100 %. Progress computed client-side. |
-| **Savings Plans** | Track savings goals with source account deductions, target amount, and time horizon. |
-| **Send to User** | One-time transactions to other users via email. Double-encrypted payloads (sender → server → recipient). |
-| **Joint Accounts** | Invite users via email. AES-256 Account Key distributed via ECIES (X25519 + AES-GCM). |
-| **Invitations** | Pending/accept/decline/expire workflow for accounts, rules, and transaction invitations. 30-day automatic expiry. |
-| **Notifications** | In-app notification panel with unread badge (polled every 30 s). Email outbox dispatched via background worker. |
-| **Data Management** | Download all data (encrypted JSON zip archive), restore from a previous dump, or permanently delete your account (all soft-deleted). |
-| **PIN Unlock** | Device-local PIN (stored in localStorage, never synced) as a convenience to skip password entry on trusted devices. Per-user isolation - PIN from one user is silently cleared when another user logs in. |
-| **Remember Device** | Skip OTP on trusted devices via device fingerprint (`@fingerprintjs/fingerprintjs`) and SHA-256 device tokens stored in the `access_secrets` table. |
-| **Admin Panel** | Standalone Vite + React app on port 5174. Table browser (schema introspection, inline editing, bulk deletion), client migration management (grouped by user, reschedule, edit status), notification/email dispatch to selected users or everyone. Default admin: `admin@budgeteer.com` / `changeme` (must change on first login). |
-| **Offline Sync** | Push/pull with cursor-based pagination (max 500 items/page). Last-Write-Wins conflict resolution. Immutable transactions (soft-delete + re-insert). |
+| Category            | Capabilities                                                                                                                                                                                                                                                                                                                      |
+| :------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Accounts**        | Personal, joint (with cryptographic key distribution), and savings accounts. Create, edit (name, currency, type, opening balance), soft-delete.                                                                                                                                                                                   |
+| **Transactions**    | Income, expense, and account-to-account transfers. Encrypted payloads (AES-256-GCM). Soft-delete + re-insert for corrections.                                                                                                                                                                                                     |
+| **Categories**      | Per-user income/expense categories with custom colours (hex) and icons (lucide-react). Enable/disable toggle. Stable `category_id` resolution - rename or delete a category and all transactions update instantly.                                                                                                                |
+| **Filters**         | Date-range quick presets (7d/30d/90d), transaction type checkboxes, category multi-select. Filter button shows active count badge.                                                                                                                                                                                                |
+| **Rules**           | Automated recurring transactions: `payment` (expense), `transfer` (between own accounts), `user_transfer` (cross-user), `income` (positive), `mortgage` (amortized loan). Commission tracking. Alert offset for pre-fire notifications (1h–2wk). Payloads encrypted with the server's X25519 public key.                          |
+| **Mortgage Rules**  | French (fixed payment) or Italian (decreasing) amortization. Monthly payment computed server-side via amortization formula. `interest_amount` shown separately from principal in transaction cards. Auto-deactivates when balance reaches zero.                                                                                   |
+| **Budgets**         | Per-account or global spending limits with E2E-encrypted payloads. Threshold notifications at 50 % / 80 % / 100 %. Progress computed client-side.                                                                                                                                                                                 |
+| **Savings Plans**   | Track savings goals with source account deductions, target amount, and time horizon.                                                                                                                                                                                                                                              |
+| **Send to User**    | One-time transactions to other users via email. Double-encrypted payloads (sender → server → recipient).                                                                                                                                                                                                                          |
+| **Joint Accounts**  | Invite users via email. AES-256 Account Key distributed via ECIES (X25519 + AES-GCM).                                                                                                                                                                                                                                             |
+| **Invitations**     | Pending/accept/decline/expire workflow for accounts, rules, and transaction invitations. 30-day automatic expiry.                                                                                                                                                                                                                 |
+| **Notifications**   | In-app notification panel with unread badge (polled every 30 s). Email outbox dispatched via background worker.                                                                                                                                                                                                                   |
+| **Data Management** | Download all data (encrypted JSON zip archive), restore from a previous dump, or permanently delete your account (all soft-deleted).                                                                                                                                                                                              |
+| **PIN Unlock**      | Device-local PIN (stored in localStorage, never synced) as a convenience to skip password entry on trusted devices. Per-user isolation - PIN from one user is silently cleared when another user logs in.                                                                                                                         |
+| **Remember Device** | Skip OTP on trusted devices via device fingerprint (`@fingerprintjs/fingerprintjs`) and SHA-256 device tokens stored in the `access_secrets` table.                                                                                                                                                                               |
+| **Admin Panel**     | Standalone Vite + React app on port 5174. Table browser (schema introspection, inline editing, bulk deletion), client migration management (grouped by user, reschedule, edit status), notification/email dispatch to selected users or everyone. Default admin: `admin@budgeteer.com` / `changeme` (must change on first login). |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-| :---- | :--------- |
-| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS v4, Shadcn UI, Zustand, Recharts |
-| **Backend** | Go 1.26+, `routy` router, PostgreSQL / TimescaleDB (hypertable), Redis |
-| **Admin Panel** | Vite + React (standalone, served on port 5174) |
-| **Crypto** | Web Crypto API (AES-256-GCM), `@noble/ciphers`, `@noble/curves` (X25519, Ed25519), Argon2id, ECIES prefix routing |
-| **Deployment** | Docker Compose with Docker secrets (two compose files available) |
-| **CI/CD** | GitHub Actions (lint, unit, integration, E2E, build) |
+| Layer           | Technology                                                                                                        |
+| :-------------- | :---------------------------------------------------------------------------------------------------------------- |
+| **Frontend**    | React 19, TypeScript, Vite, Tailwind CSS v4, Shadcn UI, Zustand, Recharts                                         |
+| **Backend**     | Go 1.26+, `routy` router, PostgreSQL / TimescaleDB (hypertable), Redis                                            |
+| **Admin Panel** | Vite + React (standalone, served on port 5174)                                                                    |
+| **Crypto**      | Web Crypto API (AES-256-GCM), `@noble/ciphers`, `@noble/curves` (X25519, Ed25519), Argon2id, ECIES prefix routing |
+| **Deployment**  | Docker Compose with Docker secrets (two compose files available)                                                  |
+| **CI/CD**       | GitHub Actions (lint, unit, integration, E2E, build)                                                              |
 
 ---
 
@@ -62,14 +61,14 @@ JSON Payload → LZ4 Compress → AES-256-GCM Encrypt → Base64 Encode
 
 All workers run as goroutines alongside the HTTP server.
 
-| Worker | Interval | Description |
-| :----- | :------- | :---------- |
-| **Email Dispatcher** | Continuous (poll) | Sends pending emails from `email_outbox` via SMTP. Max 5 retries, then marks as failed. |
-| **Rule Scheduler** | Configurable (default 300 s) | Polls `rules` for active rules where `next_occurrence <= NOW()`. Decrypts payload with server's X25519 private key, checks preconditions, creates transactions (encrypted with user's X25519 public key via ECIES), updates balances. Handles mortgage amortization (French/Italian), user transfer target resolution, and commission. |
-| **Rule Notifier** | Configurable (default 300 s) | Polls `rules` for active rules with `alert_offset`. Sends in-app notification + queues email when `(next_occurrence - alert_offset) <= NOW()`. |
-| **Invitation Expiry** | Every 6 h | Expires pending invitations older than 30 days. Deletes associated rules. Notifies inviters. |
-| **Savings Plan Cron** | Daily | Checks savings plans where `tracking_end` passed or no activity in 30 days. Queues reminder emails. |
-| **Sync Queue Cleanup** | Daily | Deletes consumed sync queue entries older than 30 days. |
+| Worker                 | Interval                     | Description                                                                                                                                                                                                                                                                                                                            |
+| :--------------------- | :--------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Email Dispatcher**   | Continuous (poll)            | Sends pending emails from `email_outbox` via SMTP. Max 5 retries, then marks as failed.                                                                                                                                                                                                                                                |
+| **Rule Scheduler**     | Configurable (default 300 s) | Polls `rules` for active rules where `next_occurrence <= NOW()`. Decrypts payload with server's X25519 private key, checks preconditions, creates transactions (encrypted with user's X25519 public key via ECIES), updates balances. Handles mortgage amortization (French/Italian), user transfer target resolution, and commission. |
+| **Rule Notifier**      | Configurable (default 300 s) | Polls `rules` for active rules with `alert_offset`. Sends in-app notification + queues email when `(next_occurrence - alert_offset) <= NOW()`.                                                                                                                                                                                         |
+| **Invitation Expiry**  | Every 6 h                    | Expires pending invitations older than 30 days. Deletes associated rules. Notifies inviters.                                                                                                                                                                                                                                           |
+| **Savings Plan Cron**  | Daily                        | Checks savings plans where `tracking_end` passed or no activity in 30 days. Queues reminder emails.                                                                                                                                                                                                                                    |
+| **Sync Queue Cleanup** | Daily                        | Deletes consumed sync queue entries older than 30 days.                                                                                                                                                                                                                                                                                |
 
 ---
 
@@ -155,56 +154,32 @@ budgeteer/
 
 ---
 
-## API Overview
-
-All routes are under `/api/v1/`. Authenticated routes require a `Bearer <JWT>` header. Unauthenticated routes: registration, login, OTP verification, health check, and the server's public key.
-
-| Group | Key Endpoints |
-| :---- | :------------ |
-| **Auth** | `POST register`, `POST verify-otp`, `POST login`, `POST login-with-device`, `POST login-verify-otp`, `POST logout`, `GET keys`, `PUT password`, `GET me`, `GET/PUT preferences` |
-| **Users** | `GET lookup?email=` (returns public key) |
-| **Sync** | `GET pull?since=<ts>` (paginated), `POST push` (batch offline ops) |
-| **Accounts** | `GET`, `POST`, `PUT /{id}`, `DELETE /{id}`, `POST /{id}/invite`, `PUT /{id}/key`, `GET /{id}/users`, `DELETE /{id}/users/{uid}` |
-| **Transactions** | `GET /accounts/{id}/transactions`, `POST /accounts/{id}/transactions`, `PUT /transactions/{id}`, `DELETE /transactions/{id}` |
-| **Documents** | `POST /transactions/{id}/documents`, `GET /transactions/{id}/documents`, `GET /transactions/{id}/documents/{docId}/data`, `DELETE /transactions/{id}/documents/{docId}` |
-| **Categories** | `GET`, `POST`, `PUT /{id}`, `DELETE /{id}` |
-| **Budgets** | `GET`, `POST`, `PUT /{id}`, `DELETE /{id}`, `POST /{id}/notify` |
-| **Rules** | `GET public-key` (unauthenticated), `GET`, `POST`, `PUT /{id}`, `DELETE /{id}` |
-| **Notifications** | `GET`, `GET /count`, `PUT /{id}/read` |
-| **Invitations** | `GET`, `POST /{id}/accept`, `POST /{id}/decline` |
-| **User Data** | `GET /user/dump`, `POST /user/restore`, `DELETE /user` |
-| **Admin** | `POST /admin/auth/login`, `POST /admin/auth/change-password`, `GET/POST/DELETE /admin/admins`, `GET /admin/tables`, `GET /admin/tables/{name}/data` (paginated), `PUT /admin/tables/{name}/data/{id}`, `DELETE /admin/tables/{name}/data`, `GET /admin/migrations`, `PUT /admin/migrations/{id}`, `POST /admin/dispatch` |
-
-See `AGENTS.md` §4 for full route specifications.
-
----
-
 ## Database
 
 Uses **TimescaleDB** (PostgreSQL extension) with a hypertable for transactions.
 
 **Key tables:**
 
-| Table | Purpose |
-| :---- | :------ |
-| `users` | User accounts, password hash, X25519 keypair |
-| `otps` | Hashed one-time passwords for email verification |
-| `accounts` | Personal/joint/savings accounts (soft-delete) |
-| `account_users` | Joint account membership + encrypted account key |
-| `user_categories` | Per-user income/expense categories (colour, icon, is_disabled) |
-| `transactions` | Hypertable: encrypted payloads with plaintext routing metadata |
-| `transaction_documents` | Encrypted receipt/invoice files |
-| `recurring_transactions` | Template + schedule for auto-generated transactions |
-| `rules` | Automated rules: payment, transfer, user_transfer, income, mortgage |
-| `budgets` | E2E-encrypted spending limits with threshold notification flags |
-| `savings_plans` | Savings goals with source account, target, timeline |
-| `notifications` | In-app notification panel |
-| `invitations` | Polymorphic invitations (account, rule, transaction) |
-| `sync_queue` | Offline operation delivery for joint account members |
-| `email_outbox` | Email dispatch queue (polled by worker) |
-| `access_secrets` | Device tokens for "remember this device" |
-| `admin_users` | Admin credentials (bcrypt-hashed), seeded with `admin@budgeteer.com` |
-| `_migrations` | Tracks which SQL migration files have been applied |
+| Table                    | Purpose                                                              |
+| :----------------------- | :------------------------------------------------------------------- |
+| `users`                  | User accounts, password hash, X25519 keypair                         |
+| `otps`                   | Hashed one-time passwords for email verification                     |
+| `accounts`               | Personal/joint/savings accounts (soft-delete)                        |
+| `account_users`          | Joint account membership + encrypted account key                     |
+| `user_categories`        | Per-user income/expense categories (colour, icon, is_disabled)       |
+| `transactions`           | Hypertable: encrypted payloads with plaintext routing metadata       |
+| `transaction_documents`  | Encrypted receipt/invoice files                                      |
+| `recurring_transactions` | Template + schedule for auto-generated transactions                  |
+| `rules`                  | Automated rules: payment, transfer, user_transfer, income, mortgage  |
+| `budgets`                | E2E-encrypted spending limits with threshold notification flags      |
+| `savings_plans`          | Savings goals with source account, target, timeline                  |
+| `notifications`          | In-app notification panel                                            |
+| `invitations`            | Polymorphic invitations (account, rule, transaction)                 |
+| `sync_queue`             | Offline operation delivery for joint account members                 |
+| `email_outbox`           | Email dispatch queue (polled by worker)                              |
+| `access_secrets`         | Device tokens for "remember this device"                             |
+| `admin_users`            | Admin credentials (bcrypt-hashed), seeded with `admin@budgeteer.com` |
+| `_migrations`            | Tracks which SQL migration files have been applied                   |
 
 Migrations are incremental SQL files in `backend/src/migrations/`. Apply with:
 
@@ -259,18 +234,18 @@ docker compose -f docker-compose-dev.yml up -d
 
 ## Environment Variables
 
-| Variable | Default | Description |
-| :------- | :------ | :---------- |
-| `DB_HOST` | `postgres` | PostgreSQL host |
-| `DB_USER` | `budgeteer` | PostgreSQL user |
-| `DB_NAME` | `budgeteer` | PostgreSQL database |
-| `REDIS_HOST` | `redis` | Redis host |
-| `SMTP_HOST` | - | SMTP server hostname |
-| `SMTP_PORT` | `587` | SMTP port |
-| `SMTP_USER` | - | SMTP username |
-| `SMTP_FROM` | `noreply@budgeteer.app` | From address for sent emails |
-| `SMTP_SSL` | `false` | Use SSL for SMTP |
-| `LOG_LEVEL` | `INFO` | Log level (`DEBUG`, `INFO`, `WARN`, `ERROR`) |
-| `RULES_CHECK_INTERVAL` | `300` | Rule scheduler/notifier poll interval (seconds) |
+| Variable               | Default                 | Description                                     |
+| :--------------------- | :---------------------- | :---------------------------------------------- |
+| `DB_HOST`              | `postgres`              | PostgreSQL host                                 |
+| `DB_USER`              | `budgeteer`             | PostgreSQL user                                 |
+| `DB_NAME`              | `budgeteer`             | PostgreSQL database                             |
+| `REDIS_HOST`           | `redis`                 | Redis host                                      |
+| `SMTP_HOST`            | -                       | SMTP server hostname                            |
+| `SMTP_PORT`            | `587`                   | SMTP port                                       |
+| `SMTP_USER`            | -                       | SMTP username                                   |
+| `SMTP_FROM`            | `noreply@budgeteer.app` | From address for sent emails                    |
+| `SMTP_SSL`             | `false`                 | Use SSL for SMTP                                |
+| `LOG_LEVEL`            | `INFO`                  | Log level (`DEBUG`, `INFO`, `WARN`, `ERROR`)    |
+| `RULES_CHECK_INTERVAL` | `300`                   | Rule scheduler/notifier poll interval (seconds) |
 
 Sensitive values (DB password, JWT secret, SMTP password, Redis password, server encryption key) are read from Docker secrets at `/run/secrets/`.
