@@ -23,6 +23,8 @@ export interface Account {
   currency: string;
   type: AccountType;
   created_by: string;
+  /** AES-GCM(account-key) JSON {opening_balance_cents,...}. Nullable until migrated. */
+  encrypted_metadata?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string;
@@ -55,7 +57,11 @@ export interface SyncQueueItem {
   account_id: string;
   action: "INSERT" | "UPDATE" | "DELETE";
   entity_type: string;
+  /** For entity_type "checkpoint": the affected month-end ("YYYY-MM-DD"). */
+  checkpoint_month?: string;
   encrypted_payload?: string;
+  /** Originating row updated_at; LWW tiebreaker for checkpoint/account_metadata. */
+  source_updated_at?: string;
   created_at: string;
   consumed_at?: string;
 }
@@ -64,6 +70,10 @@ export interface SyncOperation {
   action: "INSERT" | "UPDATE" | "DELETE";
   entity_type: string;
   entity_id: string;
+  /** Explicit account id for checkpoint / account_metadata ops. */
+  account_id?: string;
+  /** For entity_type "checkpoint": the affected month-end ("YYYY-MM-DD"). */
+  checkpoint_month?: string;
   encrypted_payload: string;
   timestamp: string;
 }
@@ -96,6 +106,31 @@ export interface CreateAccountRequest {
   currency: string;
   type: string;
   encrypted_account_key: string;
+  encrypted_metadata?: string | null;
+}
+
+/** Monthly balance checkpoint (plain metadata + encrypted value). */
+export interface Checkpoint {
+  account_id: string;
+  /** Last UTC day of the month, "YYYY-MM-DD". */
+  checkpoint_month: string;
+  /** AES-GCM(account-key) JSON {balance, tx_count}. */
+  encrypted_balance: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Plaintext shape inside a checkpoint's encrypted_balance blob. */
+export interface CheckpointBlob {
+  /** Running balance through the end of this month (float, 2-dp). */
+  balance: number;
+  /** Count of non-deleted transactions with month-of-time <= this month. */
+  tx_count: number;
+}
+
+/** Plaintext shape inside accounts.encrypted_metadata. */
+export interface AccountMetadataBlob {
+  opening_balance_cents: number;
 }
 
 export interface CreateTransactionRequest {

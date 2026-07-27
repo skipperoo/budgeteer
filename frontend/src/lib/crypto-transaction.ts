@@ -101,3 +101,92 @@ export async function decryptTransactionPayload(
   const decompressed = decompress(decrypted);
   return JSON.parse(decompressed) as TransactionPayload;
 }
+
+// ============================================================
+// Monthly balance checkpoint crypto (see /spec.md perf/checkpointing).
+//
+// The checkpoint blob uses the SAME AES-256-GCM account-key format as
+// transaction payloads (NOT the ECIES "1|" format). The encrypted JSON is
+// { balance: number (float, 2-dp), tx_count: number }.
+// ============================================================
+
+import type { CheckpointBlob } from "@/types";
+
+/** Encrypt a checkpoint blob with the account key. */
+export async function encryptCheckpointBlob(
+  blob: CheckpointBlob,
+  accountKeyBase64: string,
+): Promise<string> {
+  return encryptData(JSON.stringify(blob), accountKeyBase64);
+}
+
+/** Decrypt a checkpoint blob. Returns null on failure. */
+export async function decryptCheckpointBlob(
+  encryptedBalance: string,
+  accountKeyBase64: string,
+): Promise<CheckpointBlob | null> {
+  try {
+    const decrypted = await decryptData(encryptedBalance, accountKeyBase64);
+    return JSON.parse(decrypted) as CheckpointBlob;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
+// UTC month-bucketing helpers (see spec §2.3).
+// Months are identified by their LAST UTC day as "YYYY-MM-DD".
+// ============================================================
+
+/**
+ * Return the last UTC calendar day of the month containing `date`, as a
+ * "YYYY-MM-DD" string (the checkpoint month identifier).
+ */
+export function monthEndOf(date: Date | string): string {
+  const d = date instanceof Date ? date : new Date(date);
+  // Set to first day of next month (UTC), then subtract one day (UTC).
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth(); // 0-11
+  const firstOfNext = new Date(Date.UTC(year, month + 1, 1));
+  const last = new Date(firstOfNext.getTime() - 24 * 60 * 60 * 1000);
+  return last.toISOString().slice(0, 10);
+}
+
+/**
+ * Return the checkpoint month (last UTC day) of a transaction's time.
+ */
+export function transactionMonthEnd(time: string): string {
+  return monthEndOf(new Date(time));
+}
+
+/**
+ * Return the checkpoint month-end of the *current* UTC month (the live month).
+ */
+export function currentMonthEnd(): string {
+  return monthEndOf(new Date());
+}
+
+/**
+ * Return the checkpoint month-end of the month BEFORE the one containing `date`.
+ */
+export function previousMonthEnd(date: Date | string): string {
+  const d = date instanceof Date ? date : new Date(date);
+  const prev = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) - 24 * 60 * 60 * 1000);
+  return monthEndOf(prev);
+}
+
+/**
+ * Iterate every month-end from `fromMonthEnd` to `toMonthEnd` inclusive,
+ * ascending. Caller guarantees fromMonthEnd <= toMonthEnd.
+ */
+export function* iterMonthEnds(fromMonthEnd: string, toMonthEnd: string): Generator<string> {
+  let [y, m] = fromMonthEnd.split("-").map(Number); // m is 1-12 here
+  // Normalise: month-end of an existing month maps to that month.
+  let cur = new Date(Date.UTC(y, m - 1, 1));
+  // Convert to first-of-month of `fromMonthEnd`'s month.
+  while (cur.toISOString().slice(0, 10) <= toMonthEnd) {
+    yield monthEndOf(cur);
+    // Advance one month.
+    cur = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1));
+  }
+}
