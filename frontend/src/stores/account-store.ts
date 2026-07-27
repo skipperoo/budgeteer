@@ -12,7 +12,13 @@ interface AccountState {
   error: string | null;
   fetchAccounts: () => Promise<void>;
   createAccount: (name: string, currency: string, type: string) => Promise<Account | void>;
-  updateAccount: (id: string, name: string, currency: string, type: string) => Promise<void>;
+  updateAccount: (
+    id: string,
+    name: string,
+    currency: string,
+    type: string,
+    encryptedMetadata?: string | null,
+  ) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   fetchAccountUsers: (id: string) => Promise<void>;
   inviteUser: (accountId: string, userEmail: string, encryptedKey: string) => Promise<void>;
@@ -60,12 +66,16 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     }
   },
 
-  updateAccount: async (id, name, currency, type) => {
+  updateAccount: async (id, name, currency, type, encryptedMetadata) => {
     set({ loading: true, error: null });
     try {
+      const body: Record<string, unknown> = { name, currency, type };
+      // Only send encrypted_metadata when the caller explicitly passes a value
+      // (string or null) — null clears it.
+      if (encryptedMetadata !== undefined) body.encrypted_metadata = encryptedMetadata;
       const updated = await apiFetch<Account>(ENDPOINTS.account(id), {
         method: "PUT",
-        body: JSON.stringify({ name, currency, type }),
+        body: JSON.stringify(body),
       });
       set((s) => ({
         accounts: s.accounts.map((a) => (a.id === id ? updated : a)),
