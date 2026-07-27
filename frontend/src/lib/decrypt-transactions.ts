@@ -215,9 +215,15 @@ export async function getAccountKey(
   );
 }
 
+const TRANSACTION_PAGE_SIZE = 200;
+
 /**
- * Fetch transactions for an account and decrypt them all.
+ * Fetch ALL transactions for an account via pagination, then decrypt them.
  * Returns transactions sorted by time descending (newest first).
+ *
+ * Pagination is necessary because the backend defaults to a 50-item limit
+ * and the Opening Balance transaction (epoch time "1970-01-01") would be
+ * excluded when an account has more than 50 transactions.
  */
 export async function fetchAndDecryptTransactions(
   accountId: string,
@@ -225,11 +231,24 @@ export async function fetchAndDecryptTransactions(
   userPublicKey?: string
 ): Promise<DecryptedTransaction[]> {
   const accountKey = await getAccountKey(accountId, userPrivateKeyBase64, userPublicKey);
-  const txs = await apiFetch<Transaction[]>(ENDPOINTS.transactions(accountId));
-  if (!txs || txs.length === 0) return [];
+
+  // Paginate through all transactions
+  const allTxs: Transaction[] = [];
+  let offset = 0;
+  while (true) {
+    const page = await apiFetch<Transaction[]>(
+      `${ENDPOINTS.transactions(accountId)}?limit=${TRANSACTION_PAGE_SIZE}&offset=${offset}`
+    );
+    if (!page || page.length === 0) break;
+    allTxs.push(...page);
+    if (page.length < TRANSACTION_PAGE_SIZE) break;
+    offset += TRANSACTION_PAGE_SIZE;
+  }
+
+  if (allTxs.length === 0) return [];
 
   const results = await Promise.all(
-    txs.map((tx) => decryptTx(tx, accountKey, userPrivateKeyBase64))
+    allTxs.map((tx) => decryptTx(tx, accountKey, userPrivateKeyBase64))
   );
   return filterDecrypted(results).sort(
     (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()
@@ -246,11 +265,24 @@ export async function fetchAndDecryptTransactionsWithErrors(
   userPublicKey?: string
 ): Promise<DecryptResult[]> {
   const accountKey = await getAccountKey(accountId, userPrivateKeyBase64, userPublicKey);
-  const txs = await apiFetch<Transaction[]>(ENDPOINTS.transactions(accountId));
-  if (!txs || txs.length === 0) return [];
+
+  // Paginate through all transactions
+  const allTxs: Transaction[] = [];
+  let offset = 0;
+  while (true) {
+    const page = await apiFetch<Transaction[]>(
+      `${ENDPOINTS.transactions(accountId)}?limit=${TRANSACTION_PAGE_SIZE}&offset=${offset}`
+    );
+    if (!page || page.length === 0) break;
+    allTxs.push(...page);
+    if (page.length < TRANSACTION_PAGE_SIZE) break;
+    offset += TRANSACTION_PAGE_SIZE;
+  }
+
+  if (allTxs.length === 0) return [];
 
   const results = await Promise.all(
-    txs.map((tx) => decryptTx(tx, accountKey, userPrivateKeyBase64))
+    allTxs.map((tx) => decryptTx(tx, accountKey, userPrivateKeyBase64))
   );
   return results.sort(
     (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()

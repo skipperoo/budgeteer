@@ -154,17 +154,31 @@ export default function AccountDetailPage() {
     }
   }, [id, account, accounts.length, fetchAccounts]);
 
+  const TRANSACTION_PAGE_SIZE = 200;
+
   const fetchTransactions = async (key?: string) => {
     if (!id) return;
     const keyToUse = key ?? accountKeyBase64;
     setTxLoading(true);
     setTxError("");
     try {
-      const data = await apiFetch<Transaction[]>(ENDPOINTS.transactions(id));
-      const raw = data ?? [];
+      // Paginate through ALL transactions so the Opening Balance
+      // (with epoch time "1970-01-01") is always included, even when
+      // the account has more than the backend's default limit (50).
+      const allRaw: Transaction[] = [];
+      let offset = 0;
+      while (true) {
+        const page = await apiFetch<Transaction[]>(
+          `${ENDPOINTS.transactions(id)}?limit=${TRANSACTION_PAGE_SIZE}&offset=${offset}`
+        );
+        if (!page || page.length === 0) break;
+        allRaw.push(...page);
+        if (page.length < TRANSACTION_PAGE_SIZE) break;
+        offset += TRANSACTION_PAGE_SIZE;
+      }
 
       const decrypted: TransactionDisplay[] = await Promise.all(
-        raw.map(async (tx) => {
+        allRaw.map(async (tx) => {
           // Rule-generated transactions use ECIES (encrypted with user's X25519 public key)
           // and have the "1|" prefix. User-created transactions use AES-GCM with the account key
           // and have no prefix.
