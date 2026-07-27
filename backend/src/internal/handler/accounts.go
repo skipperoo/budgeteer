@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"budgeteer-backend/internal/middleware"
@@ -72,8 +73,8 @@ func UpdateAccount(w http.ResponseWriter, r *http.Request) {
 
 	accountID := r.PathValue("id")
 
-	var req model.CreateAccountRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body"})
@@ -81,7 +82,25 @@ func UpdateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	account, err := service.Accounts.Update(r.Context(), accountID, claims.UserID, req.Name, req.Currency, req.Type)
+	req := model.CreateAccountRequest{}
+	if err := json.Unmarshal(body, &req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(model.Error{Error: "invalid request body"})
+		return
+	}
+
+	// Detect whether the client explicitly sent the optional encrypted_metadata
+	// key, so we only overwrite the column when the client intends to change it.
+	updateMetadata := false
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(body, &raw) == nil {
+		if _, present := raw["encrypted_metadata"]; present {
+			updateMetadata = true
+		}
+	}
+
+	account, err := service.Accounts.Update(r.Context(), accountID, claims.UserID, req.Name, req.Currency, req.Type, req.EncryptedMetadata, updateMetadata)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)

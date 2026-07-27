@@ -121,11 +121,29 @@ func (r *TransactionRepository) BulkUpdateTransactions(ctx context.Context, item
 	return tx.Commit(ctx)
 }
 
-func (r *TransactionRepository) ListByAccountID(ctx context.Context, accountID string, limit, offset int) ([]*model.Transaction, error) {
+func (r *TransactionRepository) ListByAccountID(ctx context.Context, accountID string, limit, offset int, from, to string) ([]*model.Transaction, error) {
+	args := []interface{}{accountID}
 	query := `SELECT id, time, account_id, created_by, encrypted_payload, version, created_at, updated_at, deleted_at
-	          FROM transactions WHERE account_id = $1 AND deleted_at IS NULL
-	          ORDER BY time DESC LIMIT $2 OFFSET $3`
-	rows, err := database.Pool.Query(ctx, query, accountID, limit, offset)
+	          FROM transactions WHERE account_id = $1 AND deleted_at IS NULL`
+	if from != "" {
+		args = append(args, from)
+		query += fmt.Sprintf(" AND time >= $%d", len(args))
+	}
+	if to != "" {
+		args = append(args, to)
+		query += fmt.Sprintf(" AND time <= $%d", len(args))
+	}
+	query += " ORDER BY time DESC"
+	if limit >= 0 {
+		args = append(args, limit)
+		query += fmt.Sprintf(" LIMIT $%d", len(args))
+		if offset > 0 {
+			args = append(args, offset)
+			query += fmt.Sprintf(" OFFSET $%d", len(args))
+		}
+	}
+
+	rows, err := database.Pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -1170,7 +1170,7 @@ func TestInvitationServiceAcceptTransactionInvitation_Success(t *testing.T) {
 
 	// Verify income transaction was created in receiver's account
 	txRepo := &repository.TransactionRepository{}
-	allTXs, err := txRepo.ListByAccountID(ctx, receiverAccount.ID, 100, 0)
+	allTXs, err := txRepo.ListByAccountID(ctx, receiverAccount.ID, 100, 0, "", "")
 	if err != nil {
 		t.Fatalf("ListByAccountID failed: %v", err)
 	}

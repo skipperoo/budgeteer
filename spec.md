@@ -424,24 +424,18 @@ in many places. After migration they must stop appearing. Tasks:
 
 Do not delete or disable existing tests to make the suite pass.
 
-## 9. Open questions (ask before/while implementing)
+## 9. Open questions (RESOLVED)
 
-1. **New accounts after rollout** have no transactions and no checkpoints until
-   the user adds the first transaction. Until then, opening balance lives in
-   metadata and balance = opening balance (no checkpoint row). Confirm: do we
-   create a current-month checkpoint with `tx_count:0` on account creation, or
-   only on first transaction? Spec assumes: create on first transaction add
-   (§4.4), and treat "no checkpoint row" as balance = metadata opening balance.
-   Implement that; flag if a simpler "always create empty current-month
-   checkpoint at creation" is preferred.
-2. **Float vs cents in the encrypted `balance`:** spec stores a float
-   (consistency with `effectiveAmount`). If the agent prefers, store integer
-   cents and convert at display time — both are acceptable; pick one and stay
-   consistent, and document it in the `checkpoint-store` JSDoc.
-3. **LWW for propagated checkpoints:** confirm whether incoming-synced
-   checkpoints use `updated_at` LWW or "incoming always wins" (§3.5). Prefer
-   LWW.
-4. **Verify round trip batch limit:** a user with years of history has many
-   checkpoint months; the `/verify` and `/checkpoints` calls return all of them.
-   Add `from/to` filtering to `/verify` too if this becomes large; for now the
-   agent may cap the request to 36 months back and page. Confirm acceptable.
+1. **New accounts after rollout** — RESOLVED: **On first tx add.** Create the
+   current-month checkpoint only when the user adds their first transaction
+   (§4.4). Treat "no checkpoint row" as balance = metadata opening balance.
+2. **Float vs cents in the encrypted `balance`** — RESOLVED: **Float** (JSON
+   number, 2-dp), matching existing `effectiveAmount` arithmetic. Document this
+   in the `checkpoint-store` JSDoc.
+3. **LWW for propagated checkpoints** — RESOLVED: **LWW by `updated_at`.**
+   Incoming checkpoint overwrites local only if its `updated_at` is newer; the
+   sync payload must carry `updated_at` for checkpoint/account_metadata ops.
+4. **Verify round trip batch limit** — RESOLVED: **Return all, no cap.** The
+   `/verify` and `/checkpoints` endpoints return all queried months; do not add
+   a default cap. (Optional `from/to` filtering remains supported on both for
+   future use.)

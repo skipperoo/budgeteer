@@ -98,6 +98,10 @@ func main() {
 		AddHandler("DELETE /v1/accounts/{id}/users/{uid}",   handler.RemoveAccountUser).
 		AddHandler("GET    /v1/accounts/{id}/transactions",  handler.ListTransactions).
 		AddHandler("POST   /v1/accounts/{id}/transactions",  handler.CreateTransaction).
+		// Checkpoints (monthly encrypted balance prefix-sum).
+		AddHandler("GET    /v1/accounts/{id}/checkpoints",          handler.ListCheckpoints).
+		AddHandler("PUT    /v1/accounts/{id}/checkpoints",          handler.UpsertCheckpoints).
+		AddHandler("POST   /v1/accounts/{id}/checkpoints/verify",  handler.VerifyCheckpoints).
 		AddHandler("PUT    /v1/transactions/bulk",             handler.BulkUpdateTransactions).
 		AddHandler("PUT    /v1/transactions/{id}",           handler.UpdateTransaction).
 		AddHandler("DELETE /v1/transactions/{id}",           handler.DeleteTransaction).

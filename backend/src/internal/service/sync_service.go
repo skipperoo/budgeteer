@@ -75,7 +75,17 @@ func (s *SyncService) Push(ctx context.Context, userID string, operations []mode
 			}
 		}
 
-		accountUsers, err := s.AccountUserRepo.ListByAccount(ctx, op.EntityType)
+		// Determine the owning account for the fan-out.
+		//  - For legacy "transaction" ops the account id is carried in
+		//    op.EntityType (existing quirk).
+		//  - For checkpoint/account_metadata ops the account id is the
+		//    explicit op.AccountID field.
+		accountID := op.EntityType
+		if op.EntityType == "checkpoint" || op.EntityType == "account_metadata" {
+			accountID = op.AccountID
+		}
+
+		accountUsers, err := s.AccountUserRepo.ListByAccount(ctx, accountID)
 		if err != nil {
 			continue
 		}
@@ -85,11 +95,11 @@ func (s *SyncService) Push(ctx context.Context, userID string, operations []mode
 				continue
 			}
 			payload := op.EncryptedPayload
-			accountID := op.EntityType
+			accountIDCopy := accountID
 			item := &model.SyncQueueItem{
 				ID:               uuid.New().String(),
 				TargetUserID:     au.UserID,
-				AccountID:        &accountID,
+				AccountID:        &accountIDCopy,
 				Action:           op.Action,
 				EntityType:       op.EntityType,
 				EncryptedPayload: &payload,
@@ -97,6 +107,17 @@ func (s *SyncService) Push(ctx context.Context, userID string, operations []mode
 			}
 			if op.Action == "DELETE" {
 				item.EncryptedPayload = nil
+			}
+			// Carry the month for checkpoint ops.
+			if op.EntityType == "checkpoint" && op.CheckpointMonth != "" {
+				m := op.CheckpointMonth
+				item.CheckpointMonth = &m
+			}
+			// Carry a source updated_at for LWW on checkpoint/account_metadata.
+			if (op.EntityType == "checkpoint" || op.EntityType == "account_metadata") && op.Timestamp != "" {
+				if t, err := time.Parse(time.RFC3339, op.Timestamp); err == nil {
+					item.SourceUpdatedAt = &t
+				}
 			}
 			if err := s.SyncRepo.Create(ctx, item); err != nil {
 				return fmt.Errorf("failed to create sync item: %w", err)

@@ -35,13 +35,14 @@ func (s *AccountService) List(ctx context.Context, userID string) ([]*model.Acco
 func (s *AccountService) Create(ctx context.Context, userID string, req *model.CreateAccountRequest) (*model.Account, error) {
 	now := time.Now()
 	account := &model.Account{
-		ID:        uuid.New().String(),
-		Name:      req.Name,
-		Currency:  req.Currency,
-		Type:      req.Type,
-		CreatedBy: userID,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:                uuid.New().String(),
+		Name:              req.Name,
+		Currency:          req.Currency,
+		Type:              req.Type,
+		CreatedBy:         userID,
+		EncryptedMetadata: req.EncryptedMetadata,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 
 	if err := s.AccountRepo.Create(ctx, account); err != nil {
@@ -83,7 +84,10 @@ func (s *AccountService) SoftDelete(ctx context.Context, accountID, userID strin
 	return s.AccountRepo.SoftDelete(ctx, accountID)
 }
 
-func (s *AccountService) Update(ctx context.Context, accountID, userID, name, currency, accountType string) (*model.Account, error) {
+// Update modifies an account. The encrypted_metadata is written only when
+// updateMetadata is true (the handler passes true when the client supplied a
+// value). Only the owner/admin may edit the account.
+func (s *AccountService) Update(ctx context.Context, accountID, userID, name, currency, accountType string, encryptedMetadata *string, updateMetadata bool) (*model.Account, error) {
 	account, err := s.AccountRepo.FindByID(ctx, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("database error: %w", err)
@@ -103,7 +107,10 @@ func (s *AccountService) Update(ctx context.Context, accountID, userID, name, cu
 	account.Name = name
 	account.Currency = currency
 	account.Type = accountType
-	if err := s.AccountRepo.Update(ctx, account); err != nil {
+	if updateMetadata {
+		account.EncryptedMetadata = encryptedMetadata
+	}
+	if err := s.AccountRepo.Update(ctx, account, updateMetadata); err != nil {
 		return nil, fmt.Errorf("failed to update account: %w", err)
 	}
 

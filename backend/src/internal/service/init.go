@@ -17,6 +17,7 @@ func InitServices() {
 	InitRuleService()
 	InitNotificationService()
 	InitBudgetService()
+	InitCheckpointService()
 
 	// Seed default admin user if the admin_users table is empty
 	adminRepo := &repository.AdminRepository{}

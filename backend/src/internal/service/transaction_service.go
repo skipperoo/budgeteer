@@ -86,8 +86,10 @@ func (s *TransactionService) Create(ctx context.Context, req *model.CreateTransa
 	return t, nil
 }
 
-// ListByAccount returns all non-deleted transactions for an account.
-func (s *TransactionService) ListByAccount(ctx context.Context, accountID, userID string, limit, offset int) ([]*model.Transaction, error) {
+// ListByAccount returns non-deleted transactions for an account. When from/to
+// (ISO timestamps, inclusive) are provided, results are filtered to that time
+// window (used by the checkpointing UI to download only the active window).
+func (s *TransactionService) ListByAccount(ctx context.Context, accountID, userID string, limit, offset int, from, to string) ([]*model.Transaction, error) {
 	// Verify access
 	au, err := s.AccountUserRepo.FindByAccountAndUser(ctx, accountID, userID)
 	if err != nil {
@@ -97,7 +99,7 @@ func (s *TransactionService) ListByAccount(ctx context.Context, accountID, userI
 		return nil, fmt.Errorf("account not found or access denied")
 	}
 
-	return s.TransactionRepo.ListByAccountID(ctx, accountID, limit, offset)
+	return s.TransactionRepo.ListByAccountID(ctx, accountID, limit, offset, from, to)
 }
 
 // Update modifies an existing encrypted transaction (time, encrypted_payload).

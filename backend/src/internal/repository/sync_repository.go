@@ -8,16 +8,17 @@ import (
 	"budgeteer-backend/internal/model"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type SyncRepository struct{}
 
 func (r *SyncRepository) Create(ctx context.Context, item *model.SyncQueueItem) error {
-	query := `INSERT INTO sync_queue (id, target_user_id, account_id, action, entity_type, encrypted_payload, created_at)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	query := `INSERT INTO sync_queue (id, target_user_id, account_id, action, entity_type, checkpoint_month, encrypted_payload, source_updated_at, created_at)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 	_, err := database.Pool.Exec(ctx, query,
 		item.ID, item.TargetUserID, item.AccountID, item.Action,
-		item.EntityType, item.EncryptedPayload, item.CreatedAt)
+		item.EntityType, item.CheckpointMonth, item.EncryptedPayload, item.SourceUpdatedAt, item.CreatedAt)
 	return err
 }
 
@@ -26,13 +27,13 @@ func (r *SyncRepository) ListPendingByUserID(ctx context.Context, userID string,
 	var err error
 
 	if cursor != nil && *cursor != "" {
-		query := `SELECT id, target_user_id, account_id, action, entity_type, encrypted_payload, created_at, consumed_at
+		query := `SELECT id, target_user_id, account_id, action, entity_type, checkpoint_month, encrypted_payload, source_updated_at, created_at, consumed_at
 		          FROM sync_queue
 		          WHERE target_user_id = $1 AND consumed_at IS NULL AND id > $2
 		          ORDER BY id LIMIT $3`
 		rows, err = database.Pool.Query(ctx, query, userID, *cursor, limit+1)
 	} else {
-		query := `SELECT id, target_user_id, account_id, action, entity_type, encrypted_payload, created_at, consumed_at
+		query := `SELECT id, target_user_id, account_id, action, entity_type, checkpoint_month, encrypted_payload, source_updated_at, created_at, consumed_at
 		          FROM sync_queue
 		          WHERE target_user_id = $1 AND consumed_at IS NULL
 		          ORDER BY id LIMIT $2`
@@ -46,9 +47,19 @@ func (r *SyncRepository) ListPendingByUserID(ctx context.Context, userID string,
 	var items []*model.SyncQueueItem
 	for rows.Next() {
 		item := &model.SyncQueueItem{}
+		var month pgtype.Date
+		var srcUA pgtype.Timestamp
 		if err := rows.Scan(&item.ID, &item.TargetUserID, &item.AccountID, &item.Action,
-			&item.EntityType, &item.EncryptedPayload, &item.CreatedAt, &item.ConsumedAt); err != nil {
+			&item.EntityType, &month, &item.EncryptedPayload, &srcUA, &item.CreatedAt, &item.ConsumedAt); err != nil {
 			return nil, nil, err
+		}
+		if month.Valid {
+			s := month.Time.Format("2006-01-02")
+			item.CheckpointMonth = &s
+		}
+		if srcUA.Valid {
+			t := srcUA.Time
+			item.SourceUpdatedAt = &t
 		}
 		items = append(items, item)
 	}

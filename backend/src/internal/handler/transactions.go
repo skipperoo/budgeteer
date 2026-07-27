@@ -22,6 +22,8 @@ func ListTransactions(w http.ResponseWriter, r *http.Request) {
 	accountID := r.PathValue("id")
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
+	from := r.URL.Query().Get("from") // optional ISO timestamp; lower bound (inclusive) on tx.time
+	to := r.URL.Query().Get("to")     // optional ISO timestamp; upper bound (inclusive) on tx.time
 
 	limit := 50
 	offset := 0
@@ -32,7 +34,7 @@ func ListTransactions(w http.ResponseWriter, r *http.Request) {
 		offset = v
 	}
 
-	transactions, err := service.Transactions.ListByAccount(r.Context(), accountID, claims.UserID, limit, offset)
+	transactions, err := service.Transactions.ListByAccount(r.Context(), accountID, claims.UserID, limit, offset, from, to)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
