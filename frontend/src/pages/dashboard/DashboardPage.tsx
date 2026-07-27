@@ -23,7 +23,7 @@ import type { CreateTransactionRequest, Transaction } from "@/types";
 import type { DecryptedTransaction } from "@/lib/decrypt-transactions";
 import { BalanceChart } from "@/components/shared/BalanceChart";
 import { BudgetProgressSection } from "@/components/shared/BudgetProgressSection";
-import { getCurrencySymbol, formatCurrency, formatNumber, formatDate } from "@/lib/format";
+import { getCurrencySymbol, formatCurrency, formatNumber, formatDate, parseLocaleNumber } from "@/lib/format";
 import { CategoryPieChart } from "@/components/shared/CategoryPieChart";
 
 export default function DashboardPage() {
@@ -335,10 +335,10 @@ export default function DashboardPage() {
     setTxCreating(true);
 
     try {
-      const rawAmount = parseFloat(data.amount);
+      const rawAmount = parseLocaleNumber(data.amount);
       if (isNaN(rawAmount)) throw new Error("Invalid amount");
       const absAmount = Math.abs(rawAmount);
-      const commission = data.commission ? parseFloat(data.commission) : 0;
+      const commission = data.commission ? parseLocaleNumber(data.commission) : 0;
       const time = new Date(data.date + "T12:00:00Z").toISOString();
 
       if (data.isTransfer && data.targetAccountId) {
@@ -467,11 +467,11 @@ export default function DashboardPage() {
     setTxUpdating(true);
 
     try {
-      const rawAmount = parseFloat(data.amount);
+      const rawAmount = parseLocaleNumber(data.amount);
       if (isNaN(rawAmount)) throw new Error("Invalid amount");
       const absAmount = Math.abs(rawAmount);
-      const commission = data.commission ? parseFloat(data.commission) : 0;
-      const interest = data.interest_amount ? parseFloat(data.interest_amount) : 0;
+      const commission = data.commission ? parseLocaleNumber(data.commission) : 0;
+      const interest = data.interest_amount ? parseLocaleNumber(data.interest_amount) : 0;
       const time = new Date(data.date + "T12:00:00Z").toISOString();
 
       const existingPayload = editTx.payload;

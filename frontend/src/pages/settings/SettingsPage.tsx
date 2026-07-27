@@ -11,6 +11,7 @@ import PinSetupSection from "@/components/auth/PinSetupSection";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { useAccent, type ThemeKey } from "@/hooks/use-accent";
 import { isPinEnabled, storePinData, clearPinData, getPinData, clearDeviceFingerprint } from "@/lib/utils";
+import { parseLocaleNumber } from "@/lib/format";
 import type { UserPreferences } from "@/types";
 import { DataManagementSection } from "./DataManagementSection";
 import { CategoryManagementSection } from "@/components/shared/CategoryManagementSection";
@@ -182,7 +183,7 @@ export default function SettingsPage() {
   // Save default commission to backend when it changes (debounced save)
   const [commissionSaving, setCommissionSaving] = useState(false);
   const saveCommission = useCallback(async (value: string) => {
-    const numValue = value ? parseFloat(value) : 0;
+    const numValue = value ? parseLocaleNumber(value) : 0;
     if (isNaN(numValue) || numValue < 0) return;
     setCommissionSaving(true);
     try {
@@ -462,9 +463,8 @@ export default function SettingsPage() {
             </p>
             <div className="flex items-center gap-2">
               <Input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={defaultCommission}
                 onChange={(e) => setDefaultCommission(e.target.value)}
                 placeholder="0.00"

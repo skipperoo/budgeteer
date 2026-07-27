@@ -24,7 +24,7 @@ import { useRuleStore } from "@/stores/rule-store";
 import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
 import { TransactionDetailOverlay } from "@/components/transactions/TransactionDetailOverlay";
 import { TransactionForm, type TransactionFormData } from "@/components/transactions/TransactionForm";
-import { CURRENCIES, getCurrencySymbol, formatCurrency, formatNumber, formatDate } from "@/lib/format";
+import { CURRENCIES, getCurrencySymbol, formatCurrency, formatNumber, formatDate, parseLocaleNumber } from "@/lib/format";
 import type { Transaction, CreateTransactionRequest, DocumentMetadata } from "@/types";
 import { CategoryPieChart } from "@/components/shared/CategoryPieChart";
 
@@ -255,7 +255,7 @@ export default function AccountDetailPage() {
       await updateAccount(id, editName, editCurrency, editType);
 
       // Handle opening balance change — edit the existing OB transaction or create one
-      const rawOB = parseFloat(editOpeningBalance);
+      const rawOB = parseLocaleNumber(editOpeningBalance);
       if (!isNaN(rawOB) && rawOB >= 0) {
         const desiredOB = rawOB;
         const currentOB = openingBalance;
@@ -418,11 +418,11 @@ export default function AccountDetailPage() {
     setEditTxSaving(true);
 
     try {
-      const rawAmount = parseFloat(data.amount);
+      const rawAmount = parseLocaleNumber(data.amount);
       if (isNaN(rawAmount)) throw new Error("Invalid amount");
       const absAmount = Math.abs(rawAmount);
-      const commission = data.commission ? parseFloat(data.commission) : 0;
-      const interest = data.interest_amount ? parseFloat(data.interest_amount) : 0;
+      const commission = data.commission ? parseLocaleNumber(data.commission) : 0;
+      const interest = data.interest_amount ? parseLocaleNumber(data.interest_amount) : 0;
       const time = new Date(data.date + "T12:00:00Z").toISOString();
 
       // Find the existing transaction being edited
@@ -596,10 +596,10 @@ export default function AccountDetailPage() {
     setTxCreating(true);
 
     try {
-      const rawAmount = parseFloat(data.amount);
+      const rawAmount = parseLocaleNumber(data.amount);
       if (isNaN(rawAmount)) throw new Error("Invalid amount");
       const absAmount = Math.abs(rawAmount);
-      const commission = data.commission ? parseFloat(data.commission) : 0;
+      const commission = data.commission ? parseLocaleNumber(data.commission) : 0;
       const time = new Date(data.date + "T12:00:00Z").toISOString();
 
       if (data.isTransfer && data.targetAccountId) {
@@ -696,7 +696,7 @@ export default function AccountDetailPage() {
 
   const handleEditOpeningBalance = async () => {
     setOpeningBalanceError("");
-    const raw = parseFloat(openingBalanceInput);
+    const raw = parseLocaleNumber(openingBalanceInput);
     if (isNaN(raw) || raw < 0) {
       setOpeningBalanceError("Please enter a valid positive amount");
       return;
@@ -1131,9 +1131,8 @@ export default function AccountDetailPage() {
                   +
                 </span>
                 <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={editOpeningBalance}
                   onChange={(e) => setEditOpeningBalance(e.target.value)}
                   placeholder="0.00"
@@ -1276,9 +1275,8 @@ export default function AccountDetailPage() {
               Current: {formatCurrency(openingBalance, account?.currency ?? "EUR", true)}
             </label>
             <Input
-              type="number"
-              step="0.01"
-              min="0"
+              type="text"
+              inputMode="decimal"
               value={openingBalanceInput}
               onChange={(e) => setOpeningBalanceInput(e.target.value)}
               placeholder="0.00"

@@ -9,7 +9,7 @@ import { useRuleStore, type Rule, type CreateRuleRequest } from "@/stores/rule-s
 import { useAccountStore } from "@/stores/account-store";
 import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { encryptForRecipient } from "@/lib/crypto-rules";
-import { formatDate, formatDateTimeWithOffset, formatCurrency, utcToLocalDatetime, getGMTOffset } from "@/lib/format";
+import { formatDate, formatDateTimeWithOffset, formatCurrency, utcToLocalDatetime, getGMTOffset, parseLocaleNumber } from "@/lib/format";
 import { Trash2, Plus, Pencil, Loader2, AlertCircle, Info } from "lucide-react";
 
 type RuleType = "payment" | "income" | "transfer" | "user_transfer" | "mortgage";
@@ -161,7 +161,7 @@ export default function RulesPage() {
       setFormError("Name is required");
       return;
     }
-    if (formType !== "mortgage" && (!formAmount || parseFloat(formAmount) <= 0)) {
+    if (formType !== "mortgage" && (!formAmount || parseLocaleNumber(formAmount) <= 0)) {
       setFormError("Amount must be positive");
       return;
     }
@@ -185,11 +185,11 @@ export default function RulesPage() {
       return;
     }
     if (formType === "mortgage") {
-      if (!formMortgageTotalAmount || parseFloat(formMortgageTotalAmount) <= 0) {
+      if (!formMortgageTotalAmount || parseLocaleNumber(formMortgageTotalAmount) <= 0) {
         setFormError("Total mortgage amount is required");
         return;
       }
-      if (!formMortgageInterestRate || parseFloat(formMortgageInterestRate) < 0) {
+      if (!formMortgageInterestRate || parseLocaleNumber(formMortgageInterestRate) < 0) {
         setFormError("Interest rate is required");
         return;
       }
@@ -205,7 +205,7 @@ export default function RulesPage() {
 
     setSaving(true);
     try {
-      const commission = formCommission ? parseFloat(formCommission) : 0;
+      const commission = formCommission ? parseLocaleNumber(formCommission) : 0;
 
       let payload: Record<string, unknown>;
 
@@ -217,17 +217,17 @@ export default function RulesPage() {
           notes: formNotes || undefined,
           counterparty: formCounterparty || undefined,
           commission: commission > 0 ? commission : undefined,
-          mortgage_total_amount: parseFloat(formMortgageTotalAmount),
-          mortgage_interest_rate: parseFloat(formMortgageInterestRate),
+          mortgage_total_amount: parseLocaleNumber(formMortgageTotalAmount),
+          mortgage_interest_rate: parseLocaleNumber(formMortgageInterestRate),
           mortgage_term_months: parseInt(formMortgageTermMonths, 10),
           mortgage_payment_day: parseInt(formMortgagePaymentDay, 10),
           mortgage_amortization_type: formMortgageAmortizationType,
-          mortgage_remaining_balance: parseFloat(formMortgageTotalAmount),
+          mortgage_remaining_balance: parseLocaleNumber(formMortgageTotalAmount),
         };
       } else {
         payload = {
           type: formType,
-          amount: parseFloat(formAmount),
+          amount: parseLocaleNumber(formAmount),
           source_account_id: formSourceAccountId,
           target_account_id:
             formType === "transfer"
@@ -564,9 +564,8 @@ export default function RulesPage() {
                 <Label htmlFor="rule-amount">Amount</Label>
                 <Input
                   id="rule-amount"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={formAmount}
                   onChange={(e) => setFormAmount(e.target.value)}
                   placeholder="100.00"
@@ -599,9 +598,8 @@ export default function RulesPage() {
                   <Label htmlFor="rule-mortgage-total">Total Mortgage Amount</Label>
                   <Input
                     id="rule-mortgage-total"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={formMortgageTotalAmount}
                     onChange={(e) => setFormMortgageTotalAmount(e.target.value)}
                     placeholder="200000.00"
@@ -611,9 +609,8 @@ export default function RulesPage() {
                   <Label htmlFor="rule-mortgage-rate">Interest Rate (% per year)</Label>
                   <Input
                     id="rule-mortgage-rate"
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    type="text"
+                    inputMode="decimal"
                     value={formMortgageInterestRate}
                     onChange={(e) => setFormMortgageInterestRate(e.target.value)}
                     placeholder="3.5"
@@ -802,9 +799,8 @@ export default function RulesPage() {
               <Label htmlFor="rule-commission">Commission / Fee (optional)</Label>
               <Input
                 id="rule-commission"
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={formCommission}
                 onChange={(e) => setFormCommission(e.target.value)}
                 placeholder="0.00 — additional fee added to the amount"

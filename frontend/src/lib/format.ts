@@ -49,6 +49,40 @@ export function getCurrencySymbol(code: string): string {
 }
 
 /**
+ * Parse a locale-formatted number string into a JavaScript number.
+ *
+ * Detects the decimal separator by probing the user's stored locale:
+ *   - en → decimal is ".", thousand separator is ","
+ *   - it → decimal is ",", thousand separator is "."
+ *
+ * Strips thousand separators and replaces the locale decimal separator
+ * with "." before passing to parseFloat.
+ *
+ * Returns 0 for empty or unparseable input.
+ */
+export function parseLocaleNumber(text: string): number {
+  if (!text) return 0;
+  const locale = getStoredLocale();
+  let cleaned = text.trim().replace(/\s/g, "");
+  if (!cleaned) return 0;
+
+  // Detect decimal separator from locale by formatting a known value
+  const testFormat = (1.1).toLocaleString(locale);
+  const decimalSep = testFormat.includes(",") ? "," : ".";
+  const thousandSep = decimalSep === "." ? "," : ".";
+
+  // Remove thousand separators
+  cleaned = cleaned.split(thousandSep).join("");
+  // Replace locale decimal separator with JS standard
+  if (decimalSep !== ".") {
+    cleaned = cleaned.replace(decimalSep, ".");
+  }
+
+  const result = parseFloat(cleaned);
+  return isNaN(result) ? 0 : result;
+}
+
+/**
  * Format a number using the user's stored locale.
  * Falls back to "en" if the stored locale is not supported.
  */

@@ -11,7 +11,7 @@ import { ENDPOINTS } from "@/lib/constants";
 import { generateAccountKey, encryptAccountKeyForRecipient, bytesToBase64 } from "@/lib/crypto";
 import { encryptTransactionPayload, effectiveAmount } from "@/lib/crypto-transaction";
 import { getAccountKey, fetchAndDecryptTransactions } from "@/lib/decrypt-transactions";
-import { formatDate, CURRENCIES, getCurrencySymbol, formatNumber } from "@/lib/format";
+import { formatDate, CURRENCIES, getCurrencySymbol, formatNumber, parseLocaleNumber } from "@/lib/format";
 import type { CreateTransactionRequest } from "@/types";
 
 type AccountType = "personal" | "joint" | "savings";
@@ -89,7 +89,7 @@ export default function AccountListPage() {
       const created = await createAccount(name, currency, type);
       
       // Handle initial balance if provided
-      const rawAmount = parseFloat(initialBalance);
+      const rawAmount = parseLocaleNumber(initialBalance);
       if (created?.id && !isNaN(rawAmount) && rawAmount > 0) {
         const amount = rawAmount;
         const accountKey = await getAccountKey(created.id, privKeyBase64 ?? undefined, user?.public_key);
@@ -175,8 +175,8 @@ export default function AccountListPage() {
                     +
                   </span>
                   <Input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={initialBalance}
                     onChange={(e) => setInitialBalance(e.target.value)}
                     placeholder="0.00"

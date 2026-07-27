@@ -10,7 +10,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { encryptForRecipient, decryptECIESPayload } from "@/lib/crypto-rules";
 import { bytesToBase64 } from "@/lib/crypto";
-import { formatDate } from "@/lib/format";
+import { formatDate, parseLocaleNumber } from "@/lib/format";
 import { Plus, Trash2, Pencil, Loader2 } from "lucide-react";
 import { BudgetProgressBar } from "@/components/shared/BudgetProgressBar";
 import type { Budget, BudgetPayload } from "@/types";
@@ -161,7 +161,7 @@ export default function BudgetsPage() {
   const handleSave = async () => {
     setFormError("");
 
-    const rawAmount = parseFloat(formAmount);
+    const rawAmount = parseLocaleNumber(formAmount);
     if (isNaN(rawAmount) || rawAmount <= 0) {
       setFormError("Please enter a valid amount");
       return;
@@ -356,9 +356,8 @@ export default function BudgetsPage() {
             <Label htmlFor="budget-amount">Budget Amount</Label>
             <Input
               id="budget-amount"
-              type="number"
-              step="0.01"
-              min="0.01"
+              type="text"
+              inputMode="decimal"
               value={formAmount}
               onChange={(e) => setFormAmount(e.target.value)}
               placeholder="0.00"

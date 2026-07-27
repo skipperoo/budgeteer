@@ -237,8 +237,8 @@ export function TransactionForm({
               {type === "expense" ? "-" : "+"}
             </span>
             <Input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
@@ -258,9 +258,8 @@ export function TransactionForm({
       <div className="space-y-2">
         <label className="text-sm font-medium">Commission / Fee (optional)</label>
         <Input
-          type="number"
-          step="0.01"
-          min="0"
+          type="text"
+          inputMode="decimal"
           value={commission}
           onChange={(e) => setCommission(e.target.value)}
           placeholder="0.00"
@@ -272,9 +271,8 @@ export function TransactionForm({
         <div className="space-y-2">
           <label className="text-sm font-medium">Interest Paid</label>
           <Input
-            type="number"
-            step="0.01"
-            min="0"
+            type="text"
+            inputMode="decimal"
             value={interestAmount}
             onChange={(e) => setInterestAmount(e.target.value)}
             placeholder="0.00"
