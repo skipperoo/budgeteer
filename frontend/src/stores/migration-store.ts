@@ -23,10 +23,13 @@ import { useAccountStore } from "./account-store";
 import { useCategoryStore } from "./category-store";
 import { useAuthStore } from "./auth-store";
 import { bytesToBase64 } from "@/lib/crypto";
-import { encryptTransactionPayload, decryptTransactionPayload } from "@/lib/crypto-transaction";
+import { encryptTransactionPayload, decryptTransactionPayload, transactionMonthEnd, currentMonthEnd } from "@/lib/crypto-transaction";
 import { decryptECIESPayload } from "@/lib/crypto-rules";
 import { getAccountKey } from "@/lib/decrypt-transactions";
-import type { Transaction } from "@/types";
+import { encryptAccountMetadata } from "@/lib/account-metadata";
+import { buildCheckpointsFromTxs, fetchAndDecryptAllTransactions as fetchAndDecryptAll } from "@/lib/checkpoint-recompute";
+import { useCheckpointStore } from "./checkpoint-store";
+import type { CheckpointBlob, Transaction } from "@/types";
 
 export type MigrationStatus = "idle" | "running" | "done";
 
@@ -43,6 +46,7 @@ interface MigrationState {
 /** Known migration keys and their runner functions. */
 const MIGRATIONS: Record<string, (userId: string) => Promise<void>> = {
   add_category_id: migrateAddCategoryId,
+  build_checkpoints_and_move_opening_balance: migrateBuildCheckpointsAndMoveOpeningBalance,
 };
 
 export const useMigrationStore = create<MigrationState>((set, get) => ({
@@ -227,5 +231,93 @@ async function migrateAddCategoryId(_userId: string): Promise<void> {
         body: JSON.stringify({ transactions: chunk }),
       });
     }
+  }
+}
+
+// ─── Migration: build_checkpoints_and_move_opening_balance ────────────────
+//
+// Moves the legacy "Opening Balance" transaction out of the transactions
+// table into accounts.encrypted_metadata, and builds contiguous monthly
+// balance checkpoints for every account the user can access.
+//
+// See /spec.md (perf/checkpointing) §6.
+async function migrateBuildCheckpointsAndMoveOpeningBalance(_userId: string): Promise<void> {
+  if (useAccountStore.getState().accounts.length === 0) {
+    await useAccountStore.getState().fetchAccounts();
+  }
+  const accounts = useAccountStore.getState().accounts;
+  if (accounts.length === 0) return;
+
+  const authStore = useAuthStore.getState();
+  const privKey = authStore.plaintextPrivateKey;
+  const privKeyBase64 = privKey ? bytesToBase64(new Uint8Array(privKey)) : null;
+  const userPubKey = authStore.user?.public_key;
+
+  for (const acc of accounts) {
+    let accountKey: string;
+    try {
+      accountKey = await getAccountKey(acc.id, privKeyBase64 ?? undefined, userPubKey);
+    } catch {
+      continue; // skip accounts we can't decrypt
+    }
+
+    // 1. Download ALL transactions (paginated) and decrypt.
+    // `fetchAndDecryptAll` adds a decrypted `payload` field to each tx.
+    const allRaw = (await fetchAndDecryptAll(acc.id, accountKey)) as unknown as Array<Transaction & { payload: any }>;
+    const hasMeta = !!(acc.encrypted_metadata);
+    if (allRaw.length === 0 && !hasMeta) {
+      // Nothing to do for an empty, unmigrated account.
+      continue;
+    }
+
+    // 2. Separate legacy Opening Balance transactions from the rest.
+    const obTxs = allRaw.filter((t) => t.payload?.category === "Opening Balance");
+    const realTxs = allRaw.filter((t) => !(t.payload?.category === "Opening Balance"));
+
+    // 3. Compute opening_balance_cents from the OB transactions (signed sum).
+    let openingBalance = 0;
+    for (const t of obTxs) {
+      if (t.payload) openingBalance += t.payload.amount;
+    }
+    const openingBalanceCents = Math.round(openingBalance * 100);
+
+    // 4. Soft-delete each Opening Balance transaction.
+    for (const t of obTxs) {
+      await apiFetch(ENDPOINTS.transaction(t.id), { method: "DELETE" });
+    }
+
+    // 5. Write encrypted_metadata on the account (idempotent: only if the
+    //    account doesn't already have metadata, or its value would change).
+    const metaBlob = { opening_balance_cents: openingBalanceCents };
+    const encMeta = await encryptAccountMetadata(metaBlob, accountKey);
+    await apiFetch(ENDPOINTS.account(acc.id), {
+      method: "PUT",
+      body: JSON.stringify({
+        name: acc.name,
+        currency: acc.currency,
+        type: acc.type,
+        encrypted_metadata: encMeta,
+      }),
+    });
+
+    // 6. Build contiguous monthly checkpoints from the first real tx month
+    //    through the current month (empty months included).
+    let fromMonthEnd = currentMonthEnd();
+    for (const t of realTxs) {
+      const me = transactionMonthEnd(t.time);
+      if (me < fromMonthEnd) fromMonthEnd = me;
+    }
+    const toMonthEnd = currentMonthEnd();
+
+    const computed = buildCheckpointsFromTxs(
+      realTxs.map((t) => ({ time: t.time, payload: t.payload })),
+      openingBalance, // float base
+      fromMonthEnd,
+      toMonthEnd,
+      0,
+    );
+
+    // 7. Bulk-PUT (and cache) the checkpoints via the checkpoint store.
+    await useCheckpointStore.getState().upsertMany(acc.id, computed, accountKey);
   }
 }
