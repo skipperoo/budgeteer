@@ -891,9 +891,9 @@ export default function DashboardPage() {
             accountId={editTx.account_id}
             initialValues={{
               type: editTx.payload.amount >= 0 ? "income" : "expense",
-              amount: String(Math.abs(editTx.payload.amount)),
-              commission: editTx.payload.commission ? String(editTx.payload.commission) : "",
-              interest_amount: editTx.payload.interest_amount ? String(editTx.payload.interest_amount) : "",
+              amount: formatNumber(Math.abs(editTx.payload.amount)),
+              commission: editTx.payload.commission ? formatNumber(editTx.payload.commission) : "",
+              interest_amount: editTx.payload.interest_amount ? formatNumber(editTx.payload.interest_amount) : "",
               date: editTx.time.slice(0, 10),
               category: editTx.payload.category ?? "",
               counterparty: editTx.payload.counterparty ?? "",

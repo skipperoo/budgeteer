@@ -10,7 +10,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { encryptForRecipient, decryptECIESPayload } from "@/lib/crypto-rules";
 import { bytesToBase64 } from "@/lib/crypto";
-import { formatDate, parseLocaleNumber } from "@/lib/format";
+import { formatDate, parseLocaleNumber, formatNumber } from "@/lib/format";
 import { Plus, Trash2, Pencil, Loader2 } from "lucide-react";
 import { BudgetProgressBar } from "@/components/shared/BudgetProgressBar";
 import type { Budget, BudgetPayload } from "@/types";
@@ -123,7 +123,7 @@ export default function BudgetsPage() {
           budget.encrypted_payload,
           privKeyBase64,
         );
-        setFormAmount(String(payload.amount));
+        setFormAmount(formatNumber(payload.amount));
         setFormCategory(payload.category || "");
       }
     } catch {

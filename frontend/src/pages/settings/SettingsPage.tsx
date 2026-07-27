@@ -11,7 +11,7 @@ import PinSetupSection from "@/components/auth/PinSetupSection";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { useAccent, type ThemeKey } from "@/hooks/use-accent";
 import { isPinEnabled, storePinData, clearPinData, getPinData, clearDeviceFingerprint } from "@/lib/utils";
-import { parseLocaleNumber } from "@/lib/format";
+import { parseLocaleNumber, formatNumber } from "@/lib/format";
 import type { UserPreferences } from "@/types";
 import { DataManagementSection } from "./DataManagementSection";
 import { CategoryManagementSection } from "@/components/shared/CategoryManagementSection";
@@ -122,7 +122,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const fromPrefs = user?.preferences?.default_commission;
     if (fromPrefs != null && fromPrefs > 0) {
-      setDefaultCommission(String(fromPrefs));
+      setDefaultCommission(formatNumber(fromPrefs));
     }
   }, [user?.preferences?.default_commission]);
 

@@ -242,7 +242,7 @@ export default function AccountDetailPage() {
     setEditName(account.name);
     setEditCurrency(account.currency);
     setEditType(account.type);
-    setEditOpeningBalance(String(Math.abs(openingBalance)));
+    setEditOpeningBalance(formatNumber(Math.abs(openingBalance)));
     setEditError("");
     setEditOpen(true);
   };
@@ -381,9 +381,9 @@ export default function AccountDetailPage() {
     setEditTxId(txId);
     setEditTxInitialValues({
       type: tx.payload.amount >= 0 ? "income" : "expense",
-      amount: String(Math.abs(tx.payload.amount)),
-      commission: tx.payload.commission ? String(tx.payload.commission) : "",
-      interest_amount: tx.payload.interest_amount ? String(tx.payload.interest_amount) : "",
+      amount: formatNumber(Math.abs(tx.payload.amount)),
+      commission: tx.payload.commission ? formatNumber(tx.payload.commission) : "",
+      interest_amount: tx.payload.interest_amount ? formatNumber(tx.payload.interest_amount) : "",
       date: tx.time.slice(0, 10),
       category: tx.payload.category ?? "",
       counterparty: tx.payload.counterparty ?? "",
@@ -1242,7 +1242,7 @@ export default function AccountDetailPage() {
         <Card
           className="cursor-pointer hover:bg-accent/40 transition-all duration-200"
           onClick={() => {
-            setOpeningBalanceInput(String(Math.abs(openingBalance)));
+            setOpeningBalanceInput(formatNumber(Math.abs(openingBalance)));
             setOpeningBalanceError("");
             setOpeningBalanceEditOpen(true);
           }}
