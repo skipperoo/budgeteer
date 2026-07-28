@@ -185,15 +185,24 @@ export default function AccountDetailPage() {
     setTxLoading(true);
     setTxError("");
     try {
-      // Paginate through ALL transactions so the Opening Balance
-      // (with epoch time "1970-01-01") is always included, even when
-      // the account has more than the backend's default limit (50).
+      // When checkpoints are loaded, download only the active window (§5.2)
+      // + the start-month before windowStart for the partial-month sum.
+      // Otherwise paginate through ALL transactions (pre-migration fallback;
+      // needed for the classic opening‑balance sum).
+      const cpEntries = useCheckpointStore.getState().getEntries(id);
+      const hasCheckpoints = cpEntries.length > 0;
+      const rangeStart = dateRange.start;
       const allRaw: Transaction[] = [];
       let offset = 0;
+      // eslint-disable-next-line no-constant-condition
       while (true) {
-        const page = await apiFetch<Transaction[]>(
-          `${ENDPOINTS.transactions(id)}?limit=${TRANSACTION_PAGE_SIZE}&offset=${offset}`
-        );
+        let url = `${ENDPOINTS.transactions(id)}?limit=${TRANSACTION_PAGE_SIZE}&offset=${offset}`;
+        if (hasCheckpoints) {
+          // Only fetch what's needed: the active window.
+          url += `&from=${encodeURIComponent(new Date(rangeStart + "T00:00:00.000Z").toISOString())}`;
+          url += `&to=${encodeURIComponent(new Date(dateRange.end + "T23:59:59.999Z").toISOString())}`;
+        }
+        const page = await apiFetch<Transaction[]>(url);
         if (!page || page.length === 0) break;
         allRaw.push(...page);
         if (page.length < TRANSACTION_PAGE_SIZE) break;
@@ -879,23 +888,36 @@ export default function AccountDetailPage() {
   const accountChartData = (() => {
     const startDate = new Date(dateRange.start + "T12:00:00");
     const endDate = new Date(dateRange.end + "T12:00:00");
-
-    // Opening balance for the window: checkpoint of the last month before the
-    // window start + sum of in-month transactions whose date is before the
-    // window start. (Spec §4.5 — the perf win; replaces the O(n) full scan.)
-    const lastMonthEnd = id ? useCheckpointStore.getState().balanceThrough(id, previousMonthEnd(dateRange.start)) : null;
-    const checkpointBase = lastMonthEnd ?? 0;
     const windowStartEpoch = startDate.getTime();
-    const startMonth = transactionMonthEnd(new Date(windowStartEpoch).toISOString());
-    let partialMonth = 0;
-    for (const tx of transactions) {
-      if (!tx.payload) continue;
-      const txTime = new Date(tx.time).getTime();
-      if (txTime < windowStartEpoch && transactionMonthEnd(tx.time) === startMonth) {
-        partialMonth += effectiveAmount(tx.payload);
+
+    // Opening balance: prefer checkpoint (range-sum) when available; fall back
+    // to the classic pre-window sum from downloaded transactions.
+    const cpEntries = id ? useCheckpointStore.getState().getEntries(id) : [];
+    let openingBalance = 0;
+    if (cpEntries.length > 0) {
+      // Spec §4.5: checkpoint of the month before window start + partial month.
+      const lastMonthEnd = previousMonthEnd(dateRange.start);
+      const checkpointBase = id
+        ? (useCheckpointStore.getState().balanceThrough(id, lastMonthEnd) ?? 0)
+        : 0;
+      const startMonth = transactionMonthEnd(new Date(windowStartEpoch).toISOString());
+      let partialMonth = 0;
+      for (const tx of transactions) {
+        if (!tx.payload) continue;
+        const txTime = new Date(tx.time).getTime();
+        if (txTime < windowStartEpoch && transactionMonthEnd(tx.time) === startMonth) {
+          partialMonth += effectiveAmount(tx.payload);
+        }
+      }
+      openingBalance = checkpointBase + partialMonth;
+    } else {
+      // Classic fallback: sum all pre-window transactions from downloaded data.
+      for (const tx of transactions) {
+        if (tx.payload && new Date(tx.time).getTime() < windowStartEpoch) {
+          openingBalance += effectiveAmount(tx.payload);
+        }
       }
     }
-    let openingBalance = checkpointBase + partialMonth;
 
     // Build contiguous calendar
     const dayTotals: Record<string, number> = {};
@@ -1017,6 +1039,17 @@ export default function AccountDetailPage() {
       setShowAllLoading(false);
     }
   }, [id, showAllLoading, showAllRawOffset, accountKeyBase64, privKeyBase64, dateRange]);
+
+  // Re-fetch window-only transactions when dateRange changes (checkpoint mode).
+  useEffect(() => {
+    if (accountKeyBase64) {
+      const cpEntries = useCheckpointStore.getState().getEntries(id ?? "");
+      if (cpEntries.length > 0 && id) {
+        fetchTransactions(accountKeyBase64);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountKeyBase64, id, dateRange.start, dateRange.end]);
 
   return (
     <div className="space-y-3">

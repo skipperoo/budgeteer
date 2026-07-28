@@ -100,64 +100,104 @@ export default function DashboardPage() {
     loadData().finally(() => setLoading(false));
   }, [loadData]);
 
-  // Fetch and decrypt transactions when accounts are loaded. Only the active
-  // window is downloaded per account; balances for closed months come from
-  // checkpoints (loaded per account). See spec §5.2.
+  // Fetch and decrypt transactions when accounts are loaded.
+  // When ALL accounts have checkpoints loaded, only the active window is
+  // downloaded (balances for closed months come from checkpoints).
+  // Otherwise, fall back to downloading ALL transactions (pre-migration).
   const refreshTransactions = useCallback(async () => {
     if (accounts.length === 0) return;
 
-    // Window bounds; include the whole month containing window start so the
-    // §4.5 partial-month sum works; checkpoints cover the rest.
-    const winStart = dateRange.start;
-    const fromIso = new Date(winStart + "T00:00:00.000Z").toISOString();
-    const toIso = new Date(dateRange.end + "T23:59:59.999Z").toISOString();
-
-    let accountCounts = 0;
-    const allDecrypted: DecryptedTransaction[] = [];
-
+    // First, load checkpoints for all accounts to determine the mode.
     await Promise.all(
-      accounts.map(async (acc) => {
-        try {
-          // Load checkpoints (lazy verify happens in AccountDetailPage; here we
-          // just load for the RangeSum in the chart).
-          await useCheckpointStore.getState().loadCheckpoints(acc.id);
-
-          // Fetch only the window transactions (paginated, decrypted).
-          let offset = 0;
-          const PAGE = 200;
-          const key = await getAccountKey(acc.id, privKeyBase64 ?? undefined, user?.public_key);
-          // eslint-disable-next-line no-constant-condition
-          while (true) {
-            const page = await apiFetch<Transaction[]>(
-              `${ENDPOINTS.transactions(acc.id)}?limit=${PAGE}&offset=${offset}&from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
-            );
-            if (!page || page.length === 0) break;
-            const results = await Promise.all(
-              page.map((tx) => decryptTx(tx, key, privKeyBase64 ?? undefined)),
-            );
-            for (const r of results) {
-              if (r.payload) {
-                allDecrypted.push({
-                  id: r.id,
-                  time: r.time,
-                  account_id: r.account_id,
-                  created_by: r.created_by,
-                  payload: r.payload,
-                });
-                accountCounts += 1;
-              }
-            }
-            if (page.length < PAGE) break;
-            offset += PAGE;
-          }
-        } catch {
-          // Skip accounts we can't decrypt
-        }
-      })
+      accounts.map((acc) =>
+        useCheckpointStore.getState().loadCheckpoints(acc.id).catch(() => {}),
+      ),
+    );
+    const allHaveCkpts = accounts.every(
+      (acc) => useCheckpointStore.getState().getEntries(acc.id).length > 0,
     );
 
-    // Count transactions excluding transfers (opening balance is no longer a
-    // transaction after migration).
+    let allDecrypted: DecryptedTransaction[] = [];
+
+    if (allHaveCkpts) {
+      // Checkpoint path: download only the active window (§5.2).
+      const winStart = dateRange.start;
+      const fromIso = new Date(winStart + "T00:00:00.000Z").toISOString();
+      const toIso = new Date(dateRange.end + "T23:59:59.999Z").toISOString();
+
+      await Promise.all(
+        accounts.map(async (acc) => {
+          try {
+            let offset = 0;
+            const PAGE = 200;
+            const key = await getAccountKey(acc.id, privKeyBase64 ?? undefined, user?.public_key);
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
+              const page = await apiFetch<Transaction[]>(
+                `${ENDPOINTS.transactions(acc.id)}?limit=${PAGE}&offset=${offset}&from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
+              );
+              if (!page || page.length === 0) break;
+              const results = await Promise.all(
+                page.map((tx) => decryptTx(tx, key, privKeyBase64 ?? undefined)),
+              );
+              for (const r of results) {
+                if (r.payload) {
+                  allDecrypted.push({
+                    id: r.id,
+                    time: r.time,
+                    account_id: r.account_id,
+                    created_by: r.created_by,
+                    payload: r.payload,
+                  });
+                }
+              }
+              if (page.length < PAGE) break;
+              offset += PAGE;
+            }
+          } catch {
+            // Skip accounts we can't decrypt
+          }
+        }),
+      );
+    } else {
+      // Classic path: download ALL transactions (paginated) when checkpoints
+      // aren't yet available (pre-migration accounts).
+      await Promise.all(
+        accounts.map(async (acc) => {
+          try {
+            const key = await getAccountKey(acc.id, privKeyBase64 ?? undefined, user?.public_key);
+            let offset = 0;
+            const PAGE = 200;
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
+              const page = await apiFetch<Transaction[]>(
+                `${ENDPOINTS.transactions(acc.id)}?limit=${PAGE}&offset=${offset}`,
+              );
+              if (!page || page.length === 0) break;
+              const results = await Promise.all(
+                page.map((tx) => decryptTx(tx, key, privKeyBase64 ?? undefined)),
+              );
+              for (const r of results) {
+                if (r.payload) {
+                  allDecrypted.push({
+                    id: r.id,
+                    time: r.time,
+                    account_id: r.account_id,
+                    created_by: r.created_by,
+                    payload: r.payload,
+                  });
+                }
+              }
+              if (page.length < PAGE) break;
+              offset += PAGE;
+            }
+          } catch {
+            // Skip accounts we can't decrypt
+          }
+        }),
+      );
+    }
+
     const nonTransferCount = allDecrypted.filter(
       (tx) => tx.payload && !isTransferPayload(tx.payload)
     ).length;
@@ -217,14 +257,22 @@ export default function DashboardPage() {
 
   // Total net worth per currency. The per-account balance is the live
   // current-month checkpoint (the running balance) when available; otherwise
-  // the sum of downloaded window transactions (best-effort before a user runs
-  // the client-side migration / opens each account).
+  // the sum of downloaded transactions (pre-migration fallback).
   const netWorthByCurrency = (() => {
     const byCur: Record<string, number> = {};
     const curMonthEnd = transactionMonthEnd(new Date().toISOString());
     for (const acc of accounts) {
-      const cp = useCheckpointStore.getState().balanceThrough(acc.id, curMonthEnd);
-      const balance = cp ?? 0;
+      const entries = useCheckpointStore.getState().getEntries(acc.id);
+      let balance: number;
+      if (entries.length > 0) {
+        balance = useCheckpointStore.getState().balanceThrough(acc.id, curMonthEnd) ?? 0;
+      } else {
+        // Fallback: sum account's window-transactions (pre-migration or not yet loaded).
+        const accountTxs = allTxs.filter((t) => t.account_id === acc.id);
+        balance = accountTxs.reduce(
+          (sum, tx) => sum + (tx.payload ? effectiveAmount(tx.payload) : 0), 0,
+        );
+      }
       const cur = acc.currency;
       byCur[cur] = (byCur[cur] || 0) + balance;
     }
@@ -237,25 +285,39 @@ export default function DashboardPage() {
   // Cumulative starts from the day before the window; the pre-window balance is
   // Σ_accounts [ checkpoint(account, lastMonthEndBefore(windowStart))
   //              + Σ in-month tx before windowStart ] (spec §4.5).
+  // Falls back to the classic pre-window sum when checkpoints are unavailable.
   const balanceChartData = (() => {
     const startDate = new Date(dateRange.start + "T12:00:00");
     const endDate = new Date(dateRange.end + "T12:00:00");
-
-    // 1. Compute the cumulative balance up to the day BEFORE the window starts,
-    //    using checkpoints + the partial start month (the downloaded window txs
-    //    include the start month, so we can sum those before windowStart).
-    let openingBalance = 0;
     const windowStartEpoch = startDate.getTime();
-    const startMonthEnd = transactionMonthEnd(new Date(windowStartEpoch).toISOString());
-    const lastMonthEnd = previousMonthEnd(dateRange.start);
-    for (const acc of accounts) {
-      const cp = useCheckpointStore.getState().balanceThrough(acc.id, lastMonthEnd);
-      openingBalance += cp ?? 0;
-    }
-    for (const tx of allTxs) {
-      const txTime = new Date(tx.time).getTime();
-      if (txTime < windowStartEpoch && transactionMonthEnd(tx.time) === startMonthEnd) {
-        openingBalance += tx.payload ? effectiveAmount(tx.payload) : 0;
+
+    // 1. Compute the cumulative balance up to the day BEFORE the window starts.
+    let openingBalance = 0;
+
+    // Check if ANY account has loaded checkpoints. If all do, use checkpoint
+    // path; otherwise, fall back to the classic sum for all accounts.
+    const allHaveCheckpoints = accounts.every(
+      (acc) => useCheckpointStore.getState().getEntries(acc.id).length > 0,
+    );
+    if (allHaveCheckpoints) {
+      const startMonthEnd = transactionMonthEnd(new Date(windowStartEpoch).toISOString());
+      const lastMonthEnd = previousMonthEnd(dateRange.start);
+      for (const acc of accounts) {
+        const cp = useCheckpointStore.getState().balanceThrough(acc.id, lastMonthEnd);
+        openingBalance += cp ?? 0;
+      }
+      for (const tx of allTxs) {
+        const txTime = new Date(tx.time).getTime();
+        if (txTime < windowStartEpoch && transactionMonthEnd(tx.time) === startMonthEnd) {
+          openingBalance += tx.payload ? effectiveAmount(tx.payload) : 0;
+        }
+      }
+    } else {
+      // Classic fallback: sum all pre-window transactions from downloaded data.
+      for (const tx of allTxs) {
+        if (tx.payload && new Date(tx.time).getTime() < windowStartEpoch) {
+          openingBalance += effectiveAmount(tx.payload);
+        }
       }
     }
 
