@@ -804,14 +804,31 @@ export default function AccountDetailPage() {
   const { selectedCategories, selectedTypes } = useFilterStore();
 
   // All-time balance for this account
-  // Live balance: the current-month checkpoint when available (post-migration),
-  // otherwise the sum of all decrypted transactions (pre-migration fallback).
-  const liveCheckpoint = id ? useCheckpointStore.getState().balanceThrough(id, currentMonthEnd()) : null;
-  const totalBalance = liveCheckpoint !== null
-    ? liveCheckpoint
-    : transactions
-        .filter((tx) => tx.payload)
-        .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
+  // Live balance: the latest checkpoint balance + any current-month
+  // transactions that aren't yet reflected in a checkpoint.
+  // This catches the case where the current-month checkpoint doesn't
+  // exist yet (July transparent) and only June's checkpoint is available.
+  const totalBalance = (() => {
+    const ckpts = id ? useCheckpointStore.getState().getEntries(id) : [];
+    if (ckpts.length > 0) {
+      const lastCp = ckpts[ckpts.length - 1];
+      const lastMonthEnd = lastCp.checkpoint_month;
+      const baseBalance = lastCp.blob?.balance ?? 0;
+      // Add any transactions whose month is AFTER the last checkpoint month
+      // (i.e., the current open month).
+      let extra = 0;
+      for (const tx of transactions) {
+        if (tx.payload && tx.time.slice(0, 7) > lastMonthEnd.slice(0, 7)) {
+          extra += effectiveAmount(tx.payload);
+        }
+      }
+      return baseBalance + extra;
+    }
+    // Pre-migration fallback: sum all decrypted transactions.
+    return transactions
+      .filter((tx) => tx.payload)
+      .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
+  })();
 
   // Date-range-only filter (used for stats: counts, money flow, balance chart)
   const filteredTxs = transactions.filter((tx) => {
