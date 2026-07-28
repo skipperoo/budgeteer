@@ -23,7 +23,9 @@ import {
 import type { TransactionPayload } from "@/lib/crypto-transaction";
 import { decryptECIESPayload } from "@/lib/crypto-rules";
 import { getAccountKey } from "@/lib/decrypt-transactions";
+import { decryptAccountMetadata } from "@/lib/account-metadata";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
+import { useAccountStore } from "@/stores/account-store";
 import type { CheckpointBlob, Transaction } from "@/types";
 
 /** A transaction reduced to the fields needed for checkpoint math. */
@@ -204,10 +206,24 @@ export async function applyCheckpointUpdateAfterTxChange(
   const cur = currentMonthEnd();
   if (txMonthEnd > cur) return; // future month, no checkpoints
   const entries = useCheckpointStore.getState().getEntries(accountId);
-  if (entries.length === 0) return; // nothing to propagate yet
-  // Recompute from txMonthEnd forward; recomputeFrom finds the prior verified
-  // checkpoint automatically (or full-seeds if none).
-  await recomputeFrom(accountId, txMonthEnd);
+  if (entries.length > 0) {
+    // Normal path: existing checkpoints — recompute from the changed month.
+    await recomputeFrom(accountId, txMonthEnd);
+    return;
+  }
+  // Bootstrap: no checkpoints yet (new account, first transaction).
+  // Use the account's encrypted_metadata (opening balance) as the seed.
+  const privKey = useAuthStore.getState().plaintextPrivateKey;
+  const privKeyBase64 = privKey ? bytesToBase64(new Uint8Array(privKey)) : null;
+  const userPubKey = useAuthStore.getState().user?.public_key;
+  const accountKey = await getAccountKey(accountId, privKeyBase64 ?? undefined, userPubKey);
+  const acc = useAccountStore.getState().accounts.find((a) => a.id === accountId);
+  let seedOB = 0;
+  if (acc?.encrypted_metadata) {
+    const meta = await decryptAccountMetadata(acc.encrypted_metadata, accountKey);
+    if (meta) seedOB = meta.opening_balance_cents / 100;
+  }
+  await recomputeFrom(accountId, txMonthEnd, { seedOpeningBalance: seedOB });
 }
 
 /**

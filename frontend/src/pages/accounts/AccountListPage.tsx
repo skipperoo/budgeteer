@@ -12,7 +12,9 @@ import { generateAccountKey, encryptAccountKeyForRecipient, bytesToBase64 } from
 import { encryptTransactionPayload, effectiveAmount } from "@/lib/crypto-transaction";
 import { getAccountKey, fetchAndDecryptTransactions } from "@/lib/decrypt-transactions";
 import { formatDate, CURRENCIES, getCurrencySymbol, formatNumber, parseLocaleNumber } from "@/lib/format";
-import { encryptAccountMetadata } from "@/lib/account-metadata";
+import { encryptAccountMetadata, decryptAccountMetadata } from "@/lib/account-metadata";
+import { useCheckpointStore } from "@/stores/checkpoint-store";
+import { currentMonthEnd } from "@/lib/crypto-transaction";
 import type { CreateTransactionRequest } from "@/types";
 
 type AccountType = "personal" | "joint" | "savings";
@@ -54,22 +56,44 @@ export default function AccountListPage() {
     }
   }, [location.state]);
 
-  // Fetch and calculate balances whenever accounts change
+  // Fetch and calculate balances whenever accounts change.
+  // Post-migration, each account's balance is its live current-month
+  // checkpoint or falling back to decrypted metadata opening balance.
   const fetchBalances = useCallback(async () => {
     if (accounts.length === 0) return;
     setLoadingBalances(true);
     const newBalances: Record<string, number> = {};
 
+    const curMonthEnd = currentMonthEnd();
+
     await Promise.all(
       accounts.map(async (acc) => {
         try {
+          const key = await getAccountKey(acc.id, privKeyBase64 ?? undefined, user?.public_key);
+          // Prefer checkpoint balance (fast — just reads the live checkpoint).
+          await useCheckpointStore.getState().loadCheckpoints(acc.id);
+          const cpBalance = useCheckpointStore.getState().balanceThrough(acc.id, curMonthEnd);
+          if (cpBalance !== null) {
+            newBalances[acc.id] = cpBalance;
+            return;
+          }
+          // Fall back to opening balance from encrypted metadata.
+          if (acc.encrypted_metadata) {
+            const meta = await decryptAccountMetadata(acc.encrypted_metadata, key);
+            if (meta) {
+              newBalances[acc.id] = meta.opening_balance_cents / 100;
+              return;
+            }
+          }
+          // Last resort: sum all transactions (legacy pre-migration path).
           const decrypted = await fetchAndDecryptTransactions(
             acc.id,
             privKeyBase64 ?? undefined,
             user?.public_key
           );
-          const bal = decrypted.reduce((sum, tx) => sum + (tx.payload ? effectiveAmount(tx.payload) : 0), 0);
-          newBalances[acc.id] = bal;
+          newBalances[acc.id] = decrypted.reduce(
+            (sum, tx) => sum + (tx.payload ? effectiveAmount(tx.payload) : 0), 0
+          );
         } catch {
           newBalances[acc.id] = 0;
         }

@@ -51,6 +51,12 @@ func migrationSQL() (string, error) {
 		"0010_add_budgets.sql",
 		"0011_add_budget_name.sql",
 		"0012_add_access_secrets.sql",
+		"0013_add_transaction_entity_type.sql",
+		"0014_add_category_color_icon.sql",
+		"0015_add_pending_migrations.sql",
+		"0016_increase_category_color_width.sql",
+		"0018_add_admin_users.sql",
+		"0019_add_checkpoints.sql",
 	}
 
 	var allSQL strings.Builder
