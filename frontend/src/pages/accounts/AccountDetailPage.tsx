@@ -806,16 +806,15 @@ export default function AccountDetailPage() {
   // All-time balance for this account
   // Live balance: the latest checkpoint balance + any current-month
   // transactions that aren't yet reflected in a checkpoint.
-  // This catches the case where the current-month checkpoint doesn't
-  // exist yet (July transparent) and only June's checkpoint is available.
+  // Falls back to metadata opening balance when checkpoint blobs
+  // couldn't be decrypted (chart already does this).
   const totalBalance = (() => {
     const ckpts = id ? useCheckpointStore.getState().getEntries(id) : [];
     if (ckpts.length > 0) {
       const lastCp = ckpts[ckpts.length - 1];
+      const baseBalance = lastCp.blob?.balance ?? metadataOpeningBalance ?? 0;
+      // Add any transactions whose month is AFTER the last checkpoint month.
       const lastMonthEnd = lastCp.checkpoint_month;
-      const baseBalance = lastCp.blob?.balance ?? 0;
-      // Add any transactions whose month is AFTER the last checkpoint month
-      // (i.e., the current open month).
       let extra = 0;
       for (const tx of transactions) {
         if (tx.payload && tx.time.slice(0, 7) > lastMonthEnd.slice(0, 7)) {
@@ -824,8 +823,8 @@ export default function AccountDetailPage() {
       }
       return baseBalance + extra;
     }
-    // Pre-migration fallback: sum all decrypted transactions.
-    return transactions
+    // Pre-migration: metadata OB + sum of all decrypted transactions.
+    return (metadataOpeningBalance ?? 0) + transactions
       .filter((tx) => tx.payload)
       .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
   })();
