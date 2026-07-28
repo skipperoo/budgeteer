@@ -821,7 +821,9 @@ export default function AccountDetailPage() {
 
   // Category colors are now sourced from the category store (user-defined or deterministic fallback)
 
-  // Expenses by category — applies display filters + excludes "Opening Balance" and transfers
+  // Expenses by category — applies display filters + excludes transfers.
+  // (category !== "Opening Balance" guard is a defense for unmigrated
+  // accounts; no-op post-migration.)
   const expenseChartData = (() => {
     const groups = new Map<string, { id?: string; name: string; value: number }>();
     displayFilteredTxs.forEach((tx) => {
@@ -844,7 +846,9 @@ export default function AccountDetailPage() {
       .sort((a, b) => b.value - a.value);
   })();
 
-  // Income by category — applies display filters + excludes "Opening Balance" and transfers
+  // Income by category — applies display filters + excludes transfers.
+  // (category !== "Opening Balance" guard is a defense for unmigrated
+  // accounts; no-op post-migration.)
   const incomeChartData = (() => {
     const groups = new Map<string, { id?: string; name: string; value: number }>();
     displayFilteredTxs.forEach((tx) => {
@@ -931,7 +935,8 @@ export default function AccountDetailPage() {
       ? metadataOpeningBalance
       : legacyOBTransactions.reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
 
-  // Regular transactions: exclude "Opening Balance" and transfers from stats
+  // Regular transactions: exclude transfers from stats.
+  // (category !== "Opening Balance" guard is a defense for unmigrated accounts.)
   const regularFilteredTxs = filteredTxs.filter(
     (tx) => tx.payload && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)
   );
@@ -945,7 +950,8 @@ export default function AccountDetailPage() {
   const expenseAvgAcc = expenseTxFromFiltered.length > 0
     ? Math.abs(expenseTxFromFiltered.reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0)) / expenseTxFromFiltered.length
     : 0;
-  // For display: apply display filters + exclude Opening Balance
+  // For display: apply display filters.
+  // (category !== "Opening Balance" guard defends unmigrated accounts.)
   const displayAccountTxs = displayFilteredTxs.filter(
     (tx) => tx.payload && tx.payload.category !== "Opening Balance"
   );
