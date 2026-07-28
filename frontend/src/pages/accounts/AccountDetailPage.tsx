@@ -198,8 +198,10 @@ export default function AccountDetailPage() {
       while (true) {
         let url = `${ENDPOINTS.transactions(id)}?limit=${TRANSACTION_PAGE_SIZE}&offset=${offset}`;
         if (hasCheckpoints) {
-          // Only fetch what's needed: the active window.
-          url += `&from=${encodeURIComponent(new Date(rangeStart + "T00:00:00.000Z").toISOString())}`;
+          // Fetch from the 1st of the start-month so the §4.5 partial-month
+          // sum (transactions before windowStart within the start month) works.
+          const fromDate = rangeStart.slice(0, 8) + "01";
+          url += `&from=${encodeURIComponent(new Date(fromDate + "T00:00:00.000Z").toISOString())}`;
           url += `&to=${encodeURIComponent(new Date(dateRange.end + "T23:59:59.999Z").toISOString())}`;
         }
         const page = await apiFetch<Transaction[]>(url);
@@ -893,13 +895,17 @@ export default function AccountDetailPage() {
     // Opening balance: prefer checkpoint (range-sum) when available; fall back
     // to the classic pre-window sum from downloaded transactions.
     const cpEntries = id ? useCheckpointStore.getState().getEntries(id) : [];
-    let openingBalance = 0;
+    let chartOpeningBalance = 0;
     if (cpEntries.length > 0) {
       // Spec §4.5: checkpoint of the month before window start + partial month.
+      // When the previous month's checkpoint is missing (window starts in the
+      // same month as the first checkpoint), use the metadata opening balance
+      // as the 0th prefix-sum element.
       const lastMonthEnd = previousMonthEnd(dateRange.start);
-      const checkpointBase = id
-        ? (useCheckpointStore.getState().balanceThrough(id, lastMonthEnd) ?? 0)
-        : 0;
+      const cpBefore = id
+        ? useCheckpointStore.getState().balanceThrough(id, lastMonthEnd)
+        : null;
+      const checkpointBase = cpBefore ?? metadataOpeningBalance ?? 0;
       const startMonth = transactionMonthEnd(new Date(windowStartEpoch).toISOString());
       let partialMonth = 0;
       for (const tx of transactions) {
@@ -909,12 +915,12 @@ export default function AccountDetailPage() {
           partialMonth += effectiveAmount(tx.payload);
         }
       }
-      openingBalance = checkpointBase + partialMonth;
+      chartOpeningBalance = checkpointBase + partialMonth;
     } else {
       // Classic fallback: sum all pre-window transactions from downloaded data.
       for (const tx of transactions) {
         if (tx.payload && new Date(tx.time).getTime() < windowStartEpoch) {
-          openingBalance += effectiveAmount(tx.payload);
+          chartOpeningBalance += effectiveAmount(tx.payload);
         }
       }
     }
@@ -935,7 +941,7 @@ export default function AccountDetailPage() {
 
     // Running total
     const sortedDates = Object.keys(dayTotals).sort();
-    let cumulative = openingBalance;
+    let cumulative = chartOpeningBalance;
     return sortedDates.map((date) => {
       cumulative += dayTotals[date];
       return {

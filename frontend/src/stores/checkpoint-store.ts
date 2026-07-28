@@ -137,6 +137,7 @@ export const useCheckpointStore = create<CheckpointState>((set, get) => ({
 
   balanceThrough: (accountId, monthEnd) => {
     const entries = get().byAccount[accountId] ?? [];
+    if (entries.length === 0) return null;
     // Find the latest checkpoint whose month <= monthEnd.
     let best: CheckpointEntry | null = null;
     for (const e of entries) {
