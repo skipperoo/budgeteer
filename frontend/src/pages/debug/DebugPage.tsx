@@ -25,7 +25,7 @@ import { useMigrationStore } from "@/stores/migration-store";
 import { useInvitationStore } from "@/stores/invitation-store";
 import { useDateRangeStore } from "@/stores/date-range-store";
 import { bytesToBase64 } from "@/lib/crypto";
-import { decryptTransactionPayload } from "@/lib/crypto-transaction";
+import { decryptTransactionPayload, decryptCheckpointBlob } from "@/lib/crypto-transaction";
 import { decryptECIESPayload } from "@/lib/crypto-rules";
 import { getAccountKey } from "@/lib/decrypt-transactions";
 import { apiFetch } from "@/lib/api";
@@ -406,6 +406,7 @@ function AccountsTab() {
       name: a.name,
       currency: a.currency,
       type: a.type,
+      encrypted_metadata: a.encrypted_metadata,
       created_at: a.created_at,
     })),
     accountUsers: state.accountUsers,
@@ -719,6 +720,11 @@ function CheckpointsTab() {
     setLoading(true);
     setError(null);
     try {
+      const authStore = useAuthStore.getState();
+      const privKey = authStore.plaintextPrivateKey;
+      const privKeyBase64 = privKey ? bytesToBase64(new Uint8Array(privKey)) : null;
+      const userPubKey = authStore.user?.public_key;
+
       const accStore = useAccountStore.getState();
       if (accStore.accounts.length === 0) await accStore.fetchAccounts();
       const accounts = accStore.accounts;
@@ -727,16 +733,41 @@ function CheckpointsTab() {
 
       for (const acc of accounts) {
         try {
+          let accountKey: string | null = null;
+          try {
+            accountKey = await getAccountKey(acc.id, privKeyBase64 ?? undefined, userPubKey);
+          } catch { /* skip decrypt */ }
+
           const resp = await apiFetch<{ checkpoints: Array<Record<string, unknown>> }>(
             ENDPOINTS.checkpoints(acc.id),
           );
           if (!resp?.checkpoints) continue;
           for (const cp of resp.checkpoints) {
+            // Decrypt the encrypted balance.
+            let decrypted: unknown = null;
+            let decryptErr: string | null = null;
+            if (accountKey && cp.encrypted_balance) {
+              try {
+                decrypted = await decryptCheckpointBlob(
+                  cp.encrypted_balance as string,
+                  accountKey,
+                );
+              } catch (e) {
+                decryptErr = e instanceof Error ? e.message : "decrypt failed";
+              }
+            } else {
+              decryptErr = accountKey ? "missing encrypted_balance" : "no account key";
+            }
+
             allRows.push({
               account_id: acc.id,
               account_name: acc.name,
-              account_currency: acc.currency,
-              ...cp,
+              checkpoint_month: cp.checkpoint_month,
+              balance: decrypted ? (decrypted as Record<string, unknown>).balance : decryptErr,
+              tx_count: decrypted ? (decrypted as Record<string, unknown>).tx_count : null,
+              encrypted_balance: cp.encrypted_balance,
+              updated_at: cp.updated_at,
+              created_at: cp.created_at,
             });
           }
         } catch {
@@ -756,8 +787,9 @@ function CheckpointsTab() {
     <div>
       <h2 className="text-lg font-semibold mb-3">Checkpoints</h2>
       <p className="text-xs text-muted-foreground mb-3">
-        Raw monthly balance checkpoints from the server (encrypted_balance is the
-        AES-GCM(account-key) ciphertext). Click a cell to inspect.
+        Monthly balance checkpoints (decrypted). <strong>balance</strong> is the
+        running cumulative balance &mdash; <strong>tx_count</strong> is the
+        cumulative transaction count through that month. Click a cell to inspect.
       </p>
 
       {!checkpoints && !loading && (
