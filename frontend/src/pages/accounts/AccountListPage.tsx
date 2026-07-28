@@ -69,20 +69,23 @@ export default function AccountListPage() {
     await Promise.all(
       accounts.map(async (acc) => {
         try {
+         
           const key = await getAccountKey(acc.id, privKeyBase64 ?? undefined, user?.public_key);
-          // Prefer checkpoint balance (fast — reads the live checkpoint).
-          await useCheckpointStore.getState().loadCheckpoints(acc.id);
-          const cpBalance = useCheckpointStore.getState().balanceThrough(acc.id, curMonthEnd);
-          if (cpBalance !== null) {
-            newBalances[acc.id] = cpBalance;
-            return;
-          }
-          // No usable checkpoint — fall back to OB + sum of all transactions.
           let ob = 0;
           if (acc.encrypted_metadata) {
             const meta = await decryptAccountMetadata(acc.encrypted_metadata, key);
             if (meta) ob = meta.opening_balance;
           }
+          // Prefer checkpoint balance (fast — reads the live checkpoint).
+          await useCheckpointStore.getState().loadCheckpoints(acc.id);
+          const cpBalance = useCheckpointStore.getState().balanceThrough(acc.id, curMonthEnd);
+          console.log(cpBalance);
+          if (cpBalance !== null) {
+            newBalances[acc.id] = ob + cpBalance;
+            return;
+          }
+          // No usable checkpoint — fall back to OB + sum of all transactions.
+
           const decrypted = await fetchAndDecryptTransactions(
             acc.id,
             privKeyBase64 ?? undefined,
