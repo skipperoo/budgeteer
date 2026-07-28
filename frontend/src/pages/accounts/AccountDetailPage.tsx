@@ -804,12 +804,35 @@ export default function AccountDetailPage() {
   const { selectedCategories, selectedTypes } = useFilterStore();
 
   // All-time balance for this account
-  // Live balance: opening balance (metadata or legacy OB txs) + sum of
-  // all decrypted transactions. This is the simplest correct formula:
-  // the OB is the base, and every non-OB transaction adds/subtracts from it.
-  const totalBalance = (metadataOpeningBalance ?? 0) + transactions
-    .filter((tx) => tx.payload && tx.payload.category !== "Opening Balance")
-    .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
+  // Live balance: read from the checkpoint the same way the chart does.
+  // The chart uses `balanceThrough(id, previousMonthEnd(dateRange.start))` to
+  // get the balance through the last CLOSED month before the window, and
+  // adds in-window txs on top. For the total balance (no window), we read
+  // `balanceThrough(id, currentMonthEnd())` (the live current-month checkpoint
+  // if it exists) and add any txs in the open current month that haven't been
+  // checkpointed yet. Falls back to metadata OB + tx sum when no checkpoint.
+  const curMonthEnd = currentMonthEnd();
+  const cpNow = id ? useCheckpointStore.getState().balanceThrough(id, curMonthEnd) : null;
+  const totalBalance = (() => {
+    if (cpNow !== null) {
+      // Determine which month the returned checkpoint corresponds to, so we
+      // can add txs after that month (the current open month delta).
+      const cpEntries = useCheckpointStore.getState().getEntries(id ?? "");
+      const lastCp = cpEntries[cpEntries.length - 1];
+      const lastCpMonth = lastCp?.checkpoint_month ?? curMonthEnd;
+      let extra = 0;
+      for (const tx of transactions) {
+        if (tx.payload && tx.time.slice(0, 7) > lastCpMonth.slice(0, 7)) {
+          extra += effectiveAmount(tx.payload);
+        }
+      }
+      return cpNow + extra;
+    }
+    // No usable checkpoint — fall back to OB + sum of all non-OB txs.
+    return (metadataOpeningBalance ?? 0) + transactions
+      .filter((tx) => tx.payload && tx.payload.category !== "Opening Balance")
+      .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
+  })();
 
   // Date-range-only filter (used for stats: counts, money flow, balance chart)
   const filteredTxs = transactions.filter((tx) => {
