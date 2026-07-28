@@ -148,9 +148,13 @@ export default function AccountDetailPage() {
       const key = await getAccountKey(id, privKeyBase64 ?? undefined, currentUser?.public_key);
       setAccountKeyBase64(key);
       // Decrypt account metadata (opening balance) and load + verify checkpoints.
+      // Use a local variable for the OB so recomputeFrom gets the correct value
+      // (React state is async and wouldn't be updated yet here).
+      let localOpeningBalance = 0;
       if (account?.encrypted_metadata) {
         const meta = await decryptAccountMetadata(account.encrypted_metadata, key);
-        setMetadataOpeningBalance(meta ? meta.opening_balance : 0);
+        localOpeningBalance = meta ? meta.opening_balance : 0;
+        setMetadataOpeningBalance(localOpeningBalance);
       } else {
         setMetadataOpeningBalance(null);
       }
@@ -160,7 +164,7 @@ export default function AccountDetailPage() {
         const res = await verifyCheckpoints(id);
         const firstBad = res?.stale[0] ?? res?.missing[0];
         if (firstBad) {
-          await recomputeFrom(id, firstBad, { seedOpeningBalance: metadataOpeningBalance ?? 0 });
+          await recomputeFrom(id, firstBad, { seedOpeningBalance: localOpeningBalance });
           await useCheckpointStore.getState().loadCheckpoints(id);
         }
       } catch { /* checkpoints optional */ }
@@ -800,9 +804,14 @@ export default function AccountDetailPage() {
   const { selectedCategories, selectedTypes } = useFilterStore();
 
   // All-time balance for this account
-  const totalBalance = transactions
-    .filter((tx) => tx.payload)
-    .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
+  // Live balance: the current-month checkpoint when available (post-migration),
+  // otherwise the sum of all decrypted transactions (pre-migration fallback).
+  const liveCheckpoint = id ? useCheckpointStore.getState().balanceThrough(id, currentMonthEnd()) : null;
+  const totalBalance = liveCheckpoint !== null
+    ? liveCheckpoint
+    : transactions
+        .filter((tx) => tx.payload)
+        .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
 
   // Date-range-only filter (used for stats: counts, money flow, balance chart)
   const filteredTxs = transactions.filter((tx) => {
