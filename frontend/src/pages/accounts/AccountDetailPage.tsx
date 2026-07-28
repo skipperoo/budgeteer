@@ -804,30 +804,12 @@ export default function AccountDetailPage() {
   const { selectedCategories, selectedTypes } = useFilterStore();
 
   // All-time balance for this account
-  // Live balance: the latest checkpoint balance + any current-month
-  // transactions that aren't yet reflected in a checkpoint.
-  // Falls back to metadata opening balance when checkpoint blobs
-  // couldn't be decrypted (chart already does this).
-  const totalBalance = (() => {
-    const ckpts = id ? useCheckpointStore.getState().getEntries(id) : [];
-    if (ckpts.length > 0) {
-      const lastCp = ckpts[ckpts.length - 1];
-      const baseBalance = lastCp.blob?.balance ?? metadataOpeningBalance ?? 0;
-      // Add any transactions whose month is AFTER the last checkpoint month.
-      const lastMonthEnd = lastCp.checkpoint_month;
-      let extra = 0;
-      for (const tx of transactions) {
-        if (tx.payload && tx.time.slice(0, 7) > lastMonthEnd.slice(0, 7)) {
-          extra += effectiveAmount(tx.payload);
-        }
-      }
-      return baseBalance + extra;
-    }
-    // Pre-migration: metadata OB + sum of all decrypted transactions.
-    return (metadataOpeningBalance ?? 0) + transactions
-      .filter((tx) => tx.payload)
-      .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
-  })();
+  // Live balance: opening balance (metadata or legacy OB txs) + sum of
+  // all decrypted transactions. This is the simplest correct formula:
+  // the OB is the base, and every non-OB transaction adds/subtracts from it.
+  const totalBalance = (metadataOpeningBalance ?? 0) + transactions
+    .filter((tx) => tx.payload && tx.payload.category !== "Opening Balance")
+    .reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
 
   // Date-range-only filter (used for stats: counts, money flow, balance chart)
   const filteredTxs = transactions.filter((tx) => {
