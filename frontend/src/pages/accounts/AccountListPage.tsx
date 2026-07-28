@@ -133,9 +133,10 @@ export default function AccountListPage() {
       setCurrency("EUR");
       setType("personal");
       setInitialBalance("");
-      
-      // Trigger balance refresh
-      fetchBalances();
+
+      // Re-fetch accounts so the store has the new encrypted_metadata,
+      // then let the useEffect re-trigger fetchBalances with fresh data.
+      await fetchAccounts();
     } catch (err) {
       console.error("Failed to create account or initial balance:", err);
     } finally {

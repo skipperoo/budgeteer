@@ -15,6 +15,7 @@ import { encryptTransactionPayload, effectiveAmount, isTransferPayload, transact
 import { encryptFile } from "@/lib/crypto-file";
 import { encryptForRecipient } from "@/lib/crypto-rules";
 import { fetchAndDecryptTransactions, getAccountKey, decryptTx } from "@/lib/decrypt-transactions";
+import { decryptAccountMetadata } from "@/lib/account-metadata";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { TransactionCard } from "@/components/transactions/TransactionCard";
@@ -85,6 +86,9 @@ export default function DashboardPage() {
 
   // Show All transactions overlay state (dashboard-wide, across all accounts)
   const [showAllOpen, setShowAllOpen] = useState(false);
+
+  // Pre-computed account opening balances (metadata decryption, keyed by account id).
+  const [accountOBs, setAccountOBs] = useState<Record<string, number>>({});
 
   const { getCategories, addCategory } = useCategoryStore();
 
@@ -210,8 +214,26 @@ export default function DashboardPage() {
     refreshTransactions();
   }, [refreshTransactions]);
 
-  // Regular transactions: exclude transfers only (opening balance is no
-  // longer a transaction after migration).
+  // Pre-compute opening balances for all accounts (from metadata, for the
+  // netWorth and chart calculations that need ob + cpBalance).
+  useEffect(() => {
+    (async () => {
+      const result: Record<string, number> = {};
+      for (const acc of accounts) {
+        result[acc.id] = 0;
+        if (!acc.encrypted_metadata) continue;
+        try {
+          const key = await getAccountKey(acc.id, privKeyBase64 ?? undefined, user?.public_key);
+          const meta = await decryptAccountMetadata(acc.encrypted_metadata, key);
+          if (meta) result[acc.id] = meta.opening_balance;
+        } catch {
+          // fallback 0
+        }
+      }
+      setAccountOBs(result);
+    })();
+  }, [accounts, privKeyBase64, user]);
+  // Regular transactions: exclude transfers only.
   const regularTxs = filteredTxs.filter(
     (tx) => tx.payload && !isTransferPayload(tx.payload)
   );
@@ -262,20 +284,20 @@ export default function DashboardPage() {
     const byCur: Record<string, number> = {};
     const curMonthEnd = transactionMonthEnd(new Date().toISOString());
     for (const acc of accounts) {
+      const ob = accountOBs[acc.id] ?? 0;
       const entries = useCheckpointStore.getState().getEntries(acc.id);
-      let balance: number | null = null;
+      let balance: number;
       if (entries.length > 0) {
-        balance = useCheckpointStore.getState().balanceThrough(acc.id, curMonthEnd);
-      }
-      if (balance === null) {
+        balance = ob + (useCheckpointStore.getState().balanceThrough(acc.id, curMonthEnd) ?? 0);
+      } else {
         // No usable checkpoint — sum account's window-transactions.
         const accountTxs = allTxs.filter((t) => t.account_id === acc.id);
-        balance = accountTxs.reduce(
+        balance = ob + accountTxs.reduce(
           (sum, tx) => sum + (tx.payload ? effectiveAmount(tx.payload) : 0), 0,
         );
       }
       const cur = acc.currency;
-      byCur[cur] = (byCur[cur] || 0) + (balance!);
+      byCur[cur] = (byCur[cur] || 0) + balance;
     }
     return byCur;
   })();
@@ -304,8 +326,9 @@ export default function DashboardPage() {
       const startMonthEnd = transactionMonthEnd(new Date(windowStartEpoch).toISOString());
       const lastMonthEnd = previousMonthEnd(dateRange.start);
       for (const acc of accounts) {
+        const ob = accountOBs[acc.id] ?? 0;
         const cp = useCheckpointStore.getState().balanceThrough(acc.id, lastMonthEnd);
-        openingBalance += cp ?? 0;
+        openingBalance += ob + (cp ?? 0);
       }
       for (const tx of allTxs) {
         const txTime = new Date(tx.time).getTime();
