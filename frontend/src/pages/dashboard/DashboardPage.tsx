@@ -11,10 +11,11 @@ import { useDateRangeStore } from "@/stores/date-range-store";
 import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64 } from "@/lib/crypto";
-import { encryptTransactionPayload, effectiveAmount, isTransferPayload } from "@/lib/crypto-transaction";
+import { encryptTransactionPayload, effectiveAmount, isTransferPayload, transactionMonthEnd, previousMonthEnd } from "@/lib/crypto-transaction";
 import { encryptFile } from "@/lib/crypto-file";
 import { encryptForRecipient } from "@/lib/crypto-rules";
-import { fetchAndDecryptTransactions, getAccountKey } from "@/lib/decrypt-transactions";
+import { fetchAndDecryptTransactions, getAccountKey, decryptTx } from "@/lib/decrypt-transactions";
+import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { TransactionCard } from "@/components/transactions/TransactionCard";
 import { TransactionDetailOverlay } from "@/components/transactions/TransactionDetailOverlay";
@@ -99,9 +100,17 @@ export default function DashboardPage() {
     loadData().finally(() => setLoading(false));
   }, [loadData]);
 
-  // Fetch and decrypt transactions when accounts are loaded
+  // Fetch and decrypt transactions when accounts are loaded. Only the active
+  // window is downloaded per account; balances for closed months come from
+  // checkpoints (loaded per account). See spec §5.2.
   const refreshTransactions = useCallback(async () => {
     if (accounts.length === 0) return;
+
+    // Window bounds; include the whole month containing window start so the
+    // §4.5 partial-month sum works; checkpoints cover the rest.
+    const winStart = dateRange.start;
+    const fromIso = new Date(winStart + "T00:00:00.000Z").toISOString();
+    const toIso = new Date(dateRange.end + "T23:59:59.999Z").toISOString();
 
     let accountCounts = 0;
     const allDecrypted: DecryptedTransaction[] = [];
@@ -109,40 +118,65 @@ export default function DashboardPage() {
     await Promise.all(
       accounts.map(async (acc) => {
         try {
-          const decrypted = await fetchAndDecryptTransactions(
-            acc.id,
-            privKeyBase64 ?? undefined,
-            user?.public_key
-          );
-          allDecrypted.push(...decrypted);
-          accountCounts += decrypted.length;
+          // Load checkpoints (lazy verify happens in AccountDetailPage; here we
+          // just load for the RangeSum in the chart).
+          await useCheckpointStore.getState().loadCheckpoints(acc.id);
+
+          // Fetch only the window transactions (paginated, decrypted).
+          let offset = 0;
+          const PAGE = 200;
+          const key = await getAccountKey(acc.id, privKeyBase64 ?? undefined, user?.public_key);
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const page = await apiFetch<Transaction[]>(
+              `${ENDPOINTS.transactions(acc.id)}?limit=${PAGE}&offset=${offset}&from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
+            );
+            if (!page || page.length === 0) break;
+            const results = await Promise.all(
+              page.map((tx) => decryptTx(tx, key, privKeyBase64 ?? undefined)),
+            );
+            for (const r of results) {
+              if (r.payload) {
+                allDecrypted.push({
+                  id: r.id,
+                  time: r.time,
+                  account_id: r.account_id,
+                  created_by: r.created_by,
+                  payload: r.payload,
+                });
+                accountCounts += 1;
+              }
+            }
+            if (page.length < PAGE) break;
+            offset += PAGE;
+          }
         } catch {
           // Skip accounts we can't decrypt
         }
       })
     );
 
-    // Count transactions excluding transfers and opening balance
+    // Count transactions excluding transfers (opening balance is no longer a
+    // transaction after migration).
     const nonTransferCount = allDecrypted.filter(
-      (tx) => tx.payload && !isTransferPayload(tx.payload) && tx.payload.category !== "Opening Balance"
+      (tx) => tx.payload && !isTransferPayload(tx.payload)
     ).length;
     setRawTxCount(nonTransferCount);
     allDecrypted.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
     setAllTxs(allDecrypted);
-  }, [accounts, privKeyBase64, user]);
+  }, [accounts, privKeyBase64, user, dateRange.start, dateRange.end]);
 
   useEffect(() => {
     refreshTransactions();
   }, [refreshTransactions]);
 
-  // Exclude "Opening Balance" and transfers from income/expense stats
+  // Regular transactions: exclude transfers only (opening balance is no
+  // longer a transaction after migration).
   const regularTxs = filteredTxs.filter(
-    (tx) => tx.payload && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)
+    (tx) => tx.payload && !isTransferPayload(tx.payload)
   );
-  // For display in the recent transactions list, apply category/type + exclude Opening Balance
-  const displayTxs = displayFilteredTxs.filter(
-    (tx) => tx.payload && tx.payload.category !== "Opening Balance"
-  );
+  // For display in the recent transactions list, apply category/type filters
+  const displayTxs = displayFilteredTxs.filter((tx) => tx.payload);
   // Deduplicate transfer pairs — show each pair only once (the expense side)
   const deduplicatedTxs = (() => {
     const seen = new Set<string>();
@@ -181,17 +215,16 @@ export default function DashboardPage() {
   const defaultCurrency = localStorage.getItem("budgeteer_default_currency") || "EUR";
   const defaultSymbol = getCurrencySymbol(defaultCurrency);
 
-  // Total net worth per currency (all-time, from all transactions)
+  // Total net worth per currency. The per-account balance is the live
+  // current-month checkpoint (the running balance) when available; otherwise
+  // the sum of downloaded window transactions (best-effort before a user runs
+  // the client-side migration / opens each account).
   const netWorthByCurrency = (() => {
-    const perAccount: Record<string, number> = {};
-    for (const tx of allTxs) {
-      if (tx.payload) {
-        perAccount[tx.account_id] = (perAccount[tx.account_id] || 0) + effectiveAmount(tx.payload);
-      }
-    }
     const byCur: Record<string, number> = {};
+    const curMonthEnd = transactionMonthEnd(new Date().toISOString());
     for (const acc of accounts) {
-      const balance = perAccount[acc.id] || 0;
+      const cp = useCheckpointStore.getState().balanceThrough(acc.id, curMonthEnd);
+      const balance = cp ?? 0;
       const cur = acc.currency;
       byCur[cur] = (byCur[cur] || 0) + balance;
     }
@@ -201,18 +234,27 @@ export default function DashboardPage() {
   // Category colors are now sourced from the category store (user-defined or deterministic fallback)
 
   // Group and compute balance over time — contiguous window from dateRange.start to dateRange.end.
-  // Cumulative starts from the day before the window (using all transactions) so the trajectory
-  // is a true balance, not just the net change within the window.
+  // Cumulative starts from the day before the window; the pre-window balance is
+  // Σ_accounts [ checkpoint(account, lastMonthEndBefore(windowStart))
+  //              + Σ in-month tx before windowStart ] (spec §4.5).
   const balanceChartData = (() => {
     const startDate = new Date(dateRange.start + "T12:00:00");
     const endDate = new Date(dateRange.end + "T12:00:00");
 
-    // 1. Compute the cumulative balance up to the day BEFORE the window starts
+    // 1. Compute the cumulative balance up to the day BEFORE the window starts,
+    //    using checkpoints + the partial start month (the downloaded window txs
+    //    include the start month, so we can sum those before windowStart).
     let openingBalance = 0;
     const windowStartEpoch = startDate.getTime();
+    const startMonthEnd = transactionMonthEnd(new Date(windowStartEpoch).toISOString());
+    const lastMonthEnd = previousMonthEnd(dateRange.start);
+    for (const acc of accounts) {
+      const cp = useCheckpointStore.getState().balanceThrough(acc.id, lastMonthEnd);
+      openingBalance += cp ?? 0;
+    }
     for (const tx of allTxs) {
       const txTime = new Date(tx.time).getTime();
-      if (txTime < windowStartEpoch) {
+      if (txTime < windowStartEpoch && transactionMonthEnd(tx.time) === startMonthEnd) {
         openingBalance += tx.payload ? effectiveAmount(tx.payload) : 0;
       }
     }
@@ -245,12 +287,12 @@ export default function DashboardPage() {
     });
   })();
 
-  // Expenses by category — applies display filters + excludes "Opening Balance" and transfers
+  // Expenses by category — applies display filters + excludes transfers
   const expenseChartData = (() => {
     // Group by category_id when available, fall back to name
     const groups = new Map<string, { id?: string; name: string; value: number }>();
     displayFilteredTxs.forEach((tx) => {
-      if (tx.payload && tx.payload.amount < 0 && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)) {
+      if (tx.payload && tx.payload.amount < 0 && !isTransferPayload(tx.payload)) {
         const key = tx.payload.category_id || tx.payload.category || "General";
         const existing = groups.get(key);
         if (existing) {
@@ -269,11 +311,11 @@ export default function DashboardPage() {
       .sort((a, b) => b.value - a.value);
   })();
 
-  // Income by category — applies display filters + excludes "Opening Balance" and transfers
+  // Income by category — applies display filters + excludes transfers
   const incomeChartData = (() => {
     const groups = new Map<string, { id?: string; name: string; value: number }>();
     displayFilteredTxs.forEach((tx) => {
-      if (tx.payload && tx.payload.amount > 0 && tx.payload.category !== "Opening Balance" && !isTransferPayload(tx.payload)) {
+      if (tx.payload && tx.payload.amount > 0 && !isTransferPayload(tx.payload)) {
         const key = tx.payload.category_id || tx.payload.category || "General";
         const existing = groups.get(key);
         if (existing) {

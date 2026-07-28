@@ -12,6 +12,7 @@ import { generateAccountKey, encryptAccountKeyForRecipient, bytesToBase64 } from
 import { encryptTransactionPayload, effectiveAmount } from "@/lib/crypto-transaction";
 import { getAccountKey, fetchAndDecryptTransactions } from "@/lib/decrypt-transactions";
 import { formatDate, CURRENCIES, getCurrencySymbol, formatNumber, parseLocaleNumber } from "@/lib/format";
+import { encryptAccountMetadata } from "@/lib/account-metadata";
 import type { CreateTransactionRequest } from "@/types";
 
 type AccountType = "personal" | "joint" | "savings";
@@ -87,24 +88,19 @@ export default function AccountListPage() {
     setIsCreating(true);
     try {
       const created = await createAccount(name, currency, type);
-      
-      // Handle initial balance if provided
+
+      // Opening balance is now account metadata (not a transaction).
       const rawAmount = parseLocaleNumber(initialBalance);
-      if (created?.id && !isNaN(rawAmount) && rawAmount > 0) {
-        const amount = rawAmount;
+      const amount = !isNaN(rawAmount) ? rawAmount : 0;
+      if (created?.id) {
         const accountKey = await getAccountKey(created.id, privKeyBase64 ?? undefined, user?.public_key);
-
-        const encryptedPayload = await encryptTransactionPayload(
-          { amount, category: "Opening Balance", notes: "Initial balance", counterparty: "Opening Balance" },
-          accountKey
+        const encMeta = await encryptAccountMetadata(
+          { opening_balance_cents: Math.round(amount * 100) },
+          accountKey,
         );
-
-        await apiFetch(ENDPOINTS.transactions(created.id), {
-          method: "POST",
-          body: JSON.stringify({ 
-            time: "1970-01-01T00:00:00.000Z", 
-            encrypted_payload: encryptedPayload 
-          } as CreateTransactionRequest),
+        await apiFetch(ENDPOINTS.account(created.id), {
+          method: "PUT",
+          body: JSON.stringify({ name, currency, type, encrypted_metadata: encMeta }),
         });
       }
 

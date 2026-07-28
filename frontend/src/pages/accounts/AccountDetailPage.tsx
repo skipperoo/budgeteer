@@ -15,11 +15,14 @@ import { apiFetch } from "@/lib/api";
 import { ENDPOINTS } from "@/lib/constants";
 import { bytesToBase64 } from "@/lib/crypto";
 import { encryptForRecipient, decryptECIESPayload } from "@/lib/crypto-rules";
-import { encryptTransactionPayload, decryptTransactionPayload, effectiveAmount, isTransferPayload } from "@/lib/crypto-transaction";
+import { encryptTransactionPayload, decryptTransactionPayload, effectiveAmount, isTransferPayload, transactionMonthEnd, previousMonthEnd, currentMonthEnd } from "@/lib/crypto-transaction";
 import { useFilterStore } from "@/stores/filter-store";
 import type { TransactionPayload } from "@/lib/crypto-transaction";
 import { encryptFile } from "@/lib/crypto-file";
 import { getAccountKey } from "@/lib/decrypt-transactions";
+import { decryptAccountMetadata, encryptAccountMetadata } from "@/lib/account-metadata";
+import { useCheckpointStore } from "@/stores/checkpoint-store";
+import { applyCheckpointUpdateAfterTxChange, verifyCheckpoints, recomputeFrom } from "@/lib/checkpoint-recompute";
 import { useRuleStore } from "@/stores/rule-store";
 import { TransactionCard, type TransactionDisplay } from "@/components/transactions/TransactionCard";
 import { TransactionDetailOverlay } from "@/components/transactions/TransactionDetailOverlay";
@@ -58,6 +61,9 @@ export default function AccountDetailPage() {
     ? bytesToBase64(new Uint8Array(plaintextPrivateKey))
     : null;
   const [accountKeyBase64, setAccountKeyBase64] = useState<string | null>(null);
+  // Opening balance read from accounts.encrypted_metadata (post-migration model).
+  // Falls back to summing legacy "Opening Balance" transactions for unmigrated accounts.
+  const [metadataOpeningBalance, setMetadataOpeningBalance] = useState<number | null>(null);
 
   // --- Transaction state ---
   const [transactions, setTransactions] = useState<TransactionDisplay[]>([]);
@@ -141,6 +147,23 @@ export default function AccountDetailPage() {
     try {
       const key = await getAccountKey(id, privKeyBase64 ?? undefined, currentUser?.public_key);
       setAccountKeyBase64(key);
+      // Decrypt account metadata (opening balance) and load + verify checkpoints.
+      if (account?.encrypted_metadata) {
+        const meta = await decryptAccountMetadata(account.encrypted_metadata, key);
+        setMetadataOpeningBalance(meta ? meta.opening_balance_cents / 100 : 0);
+      } else {
+        setMetadataOpeningBalance(null);
+      }
+      try {
+        await useCheckpointStore.getState().loadCheckpoints(id);
+        // Lazily verify; if a rule fired into a closed month, recompute (blocking).
+        const res = await verifyCheckpoints(id);
+        const firstBad = res?.stale[0] ?? res?.missing[0];
+        if (firstBad) {
+          await recomputeFrom(id, firstBad, { seedOpeningBalance: metadataOpeningBalance ?? 0 });
+          await useCheckpointStore.getState().loadCheckpoints(id);
+        }
+      } catch { /* checkpoints optional */ }
       return key;
     } catch {
       return null; /* no key available */
@@ -252,54 +275,38 @@ export default function AccountDetailPage() {
     setEditError("");
     setEditing(true);
     try {
-      await updateAccount(id, editName, editCurrency, editType);
-
-      // Handle opening balance change — edit the existing OB transaction or create one
+      // Opening balance is now account metadata (not a transaction). If the
+      // value changed, write encrypted_metadata and recompute checkpoints by
+      // adding the delta to every checkpoint's balance (propagated forward).
       const rawOB = parseLocaleNumber(editOpeningBalance);
+      let metaChanged = false;
+      let desiredOBCents = 0;
       if (!isNaN(rawOB) && rawOB >= 0) {
-        const desiredOB = rawOB;
-        const currentOB = openingBalance;
-        if (Math.abs(desiredOB - currentOB) >= 0.001 || (currentOB === 0 && desiredOB > 0)) {
-          const accountKeyBase64Val = accountKeyBase64;
-          if (accountKeyBase64Val) {
-            // Find existing Opening Balance transactions in this account
-            const obTxs = transactions.filter(
-              (tx) => tx.payload && tx.payload.category === "Opening Balance"
-            );
+        desiredOBCents = Math.round(rawOB * 100);
+        const currentOBCents = Math.round(openingBalance * 100);
+        metaChanged = desiredOBCents !== currentOBCents;
+      }
 
-            const obPayload = {
-              amount: desiredOB,
-              category: "Opening Balance",
-              notes: obTxs.length > 0 ? "Opening balance" : "Initial balance",
-              counterparty: "Opening Balance",
-            };
-            const encryptedPayload = await encryptTransactionPayload(obPayload, accountKeyBase64Val);
+      if (metaChanged && accountKeyBase64) {
+        const metaBlob = { opening_balance_cents: desiredOBCents };
+        const encMeta = await encryptAccountMetadata(metaBlob, accountKeyBase64);
+        await updateAccount(id, editName, editCurrency, editType, encMeta);
+        setMetadataOpeningBalance(desiredOBCents / 100);
 
-            if (obTxs.length > 0) {
-              // Update the primary opening balance transaction with the new amount
-              await apiFetch(ENDPOINTS.transaction(obTxs[0].id), {
-                method: "PUT",
-                body: JSON.stringify({
-                  time: "1970-01-01T00:00:00.000Z",
-                  encrypted_payload: encryptedPayload,
-                } as CreateTransactionRequest),
-              });
-              // Delete any additional adjustment transactions
-              for (let i = 1; i < obTxs.length; i++) {
-                await apiFetch(ENDPOINTS.transaction(obTxs[i].id), { method: "DELETE" });
-              }
-            } else {
-              // No existing opening balance — create a new one
-              await apiFetch(ENDPOINTS.transactions(id), {
-                method: "POST",
-                body: JSON.stringify({
-                  time: "1970-01-01T00:00:00.000Z",
-                  encrypted_payload: encryptedPayload,
-                } as CreateTransactionRequest),
-              });
-            }
+        // Recompute checkpoints from the first checkpoint month through current
+        // (the opening-balance base shifts; recomputeFrom re-sums from history
+        // or the prior verified checkpoint). The delta approach across
+        // existing checkpoints would also work, but a full recomputeFrom is
+        // simpler and obviously correct here since the base value changed.
+        try {
+          const entries = useCheckpointStore.getState().getEntries(id);
+          const firstMonth = entries[0]?.checkpoint_month;
+          if (firstMonth) {
+            await recomputeFrom(id, firstMonth, { seedOpeningBalance: desiredOBCents / 100 });
           }
-        }
+        } catch { /* checkpoints will reconcile on next open */ }
+      } else {
+        await updateAccount(id, editName, editCurrency, editType);
       }
 
       setEditOpen(false);
@@ -582,6 +589,12 @@ export default function AccountDetailPage() {
       setEditTxId(null);
       setEditTxInitialValues(undefined);
       await fetchTransactions();
+
+      // Propagate the edited transaction's month to its checkpoints.
+      if (id) {
+        const txMonth = transactionMonthEnd(new Date(data.date + "T12:00:00Z").toISOString());
+        await applyCheckpointUpdateAfterTxChange(id, txMonth);
+      }
     } catch (err: any) {
       setEditTxError(err.message);
     } finally {
@@ -687,6 +700,16 @@ export default function AccountDetailPage() {
 
       setCreateOpen(false);
       await fetchTransactions();
+
+      // Propagate the new transaction's month to the affected checkpoints.
+      // For transfers both legs live in different accounts; update both.
+      if (id) {
+        const txMonth = transactionMonthEnd(new Date(data.date + "T12:00:00Z").toISOString());
+        await applyCheckpointUpdateAfterTxChange(id, txMonth);
+        if (data.isTransfer && data.targetAccountId) {
+          await applyCheckpointUpdateAfterTxChange(data.targetAccountId, txMonth);
+        }
+      }
     } catch (err: any) {
       setTxCreateError(err.message);
     } finally {
@@ -713,44 +736,25 @@ export default function AccountDetailPage() {
     try {
       const accountKeyBase64Val = accountKeyBase64;
       if (!accountKeyBase64Val) throw new Error("Account key not available");
-      if (!account) throw new Error("Account not found");
+      if (!account || !id) throw new Error("Account not found");
 
-      // Find existing Opening Balance transactions
-      const obTxs = transactions.filter(
-        (tx) => tx.payload && tx.payload.category === "Opening Balance"
+      // Opening balance is now account metadata. Write encrypted_metadata and
+      // recompute checkpoints from the first checkpoint month (the base shifts).
+      const desiredOBCents = Math.round(desiredOB * 100);
+      const encMeta = await encryptAccountMetadata(
+        { opening_balance_cents: desiredOBCents },
+        accountKeyBase64Val,
       );
+      await updateAccount(id, account.name, account.currency, account.type, encMeta);
+      setMetadataOpeningBalance(desiredOBCents / 100);
 
-      const obPayload = {
-        amount: desiredOB,
-        category: "Opening Balance",
-        notes: obTxs.length > 0 ? "Opening balance" : "Initial balance",
-        counterparty: "Opening Balance",
-      };
-      const encryptedPayload = await encryptTransactionPayload(obPayload, accountKeyBase64Val);
-
-      if (obTxs.length > 0) {
-        // Update the primary opening balance transaction
-        await apiFetch(ENDPOINTS.transaction(obTxs[0].id), {
-          method: "PUT",
-          body: JSON.stringify({
-            time: "1970-01-01T00:00:00.000Z",
-            encrypted_payload: encryptedPayload,
-          } as CreateTransactionRequest),
-        });
-        // Delete any additional adjustment transactions
-        for (let i = 1; i < obTxs.length; i++) {
-          await apiFetch(ENDPOINTS.transaction(obTxs[i].id), { method: "DELETE" });
+      try {
+        const entries = useCheckpointStore.getState().getEntries(id);
+        const firstMonth = entries[0]?.checkpoint_month;
+        if (firstMonth) {
+          await recomputeFrom(id, firstMonth, { seedOpeningBalance: desiredOBCents / 100 });
         }
-      } else {
-        // No existing opening balance — create a new one
-        await apiFetch(ENDPOINTS.transactions(account.id), {
-          method: "POST",
-          body: JSON.stringify({
-            time: "1970-01-01T00:00:00.000Z",
-            encrypted_payload: encryptedPayload,
-          } as CreateTransactionRequest),
-        });
-      }
+      } catch { /* will reconcile on next open */ }
 
       setOpeningBalanceEditOpen(false);
       await fetchTransactions();
@@ -764,8 +768,12 @@ export default function AccountDetailPage() {
   const handleDeleteTransaction = async (txId: string) => {
     if (!confirm("Delete this transaction?")) return;
     try {
+      // Capture the tx's month before deleting (for checkpoint propagation).
+      const tx = transactions.find((t) => t.id === txId);
+      const txMonth = tx?.time ? transactionMonthEnd(tx.time) : null;
       await apiFetch(ENDPOINTS.transaction(txId), { method: "DELETE" });
       setTransactions((prev) => prev.filter((t) => t.id !== txId));
+      if (id && txMonth) await applyCheckpointUpdateAfterTxChange(id, txMonth);
     } catch (err: any) {
       setTxError(err.message);
     }
@@ -868,14 +876,22 @@ export default function AccountDetailPage() {
     const startDate = new Date(dateRange.start + "T12:00:00");
     const endDate = new Date(dateRange.end + "T12:00:00");
 
-    // Opening balance: sum of all transactions before the window
-    let openingBalance = 0;
+    // Opening balance for the window: checkpoint of the last month before the
+    // window start + sum of in-month transactions whose date is before the
+    // window start. (Spec §4.5 — the perf win; replaces the O(n) full scan.)
+    const lastMonthEnd = id ? useCheckpointStore.getState().balanceThrough(id, previousMonthEnd(dateRange.start)) : null;
+    const checkpointBase = lastMonthEnd ?? 0;
     const windowStartEpoch = startDate.getTime();
+    const startMonth = transactionMonthEnd(new Date(windowStartEpoch).toISOString());
+    let partialMonth = 0;
     for (const tx of transactions) {
-      if (new Date(tx.time).getTime() < windowStartEpoch && tx.payload) {
-        openingBalance += effectiveAmount(tx.payload);
+      if (!tx.payload) continue;
+      const txTime = new Date(tx.time).getTime();
+      if (txTime < windowStartEpoch && transactionMonthEnd(tx.time) === startMonth) {
+        partialMonth += effectiveAmount(tx.payload);
       }
     }
+    let openingBalance = checkpointBase + partialMonth;
 
     // Build contiguous calendar
     const dayTotals: Record<string, number> = {};
@@ -904,13 +920,16 @@ export default function AccountDetailPage() {
     });
   })();
 
-  // Opening balance: sum of all "Opening Balance" transactions
-  const openingTxs = transactions.filter(
+  // Opening balance — read from accounts.encrypted_metadata (post-migration);
+  // fall back to summing legacy "Opening Balance" transactions for accounts
+  // that haven't run the client-side migration yet.
+  const legacyOBTransactions = transactions.filter(
     (tx) => tx.payload && tx.payload.category === "Opening Balance"
   );
-  const openingBalance = openingTxs.reduce(
-    (sum, tx) => sum + effectiveAmount(tx.payload!), 0
-  );
+  const openingBalance =
+    metadataOpeningBalance != null
+      ? metadataOpeningBalance
+      : legacyOBTransactions.reduce((sum, tx) => sum + effectiveAmount(tx.payload!), 0);
 
   // Regular transactions: exclude "Opening Balance" and transfers from stats
   const regularFilteredTxs = filteredTxs.filter(
