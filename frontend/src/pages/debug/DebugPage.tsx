@@ -37,13 +37,15 @@ import type { Transaction } from "@/types";
 type TabKey =
   | "auth" | "accounts" | "categories" | "transactions"
   | "rules" | "budgets" | "notifications" | "invitations"
-  | "filters" | "sync" | "migrations" | "dateRange" | "dataManagement";
+  | "filters" | "sync" | "migrations" | "dateRange" | "dataManagement"
+  | "checkpoints";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "auth", label: "Auth" },
   { key: "accounts", label: "Accounts" },
   { key: "categories", label: "Categories" },
   { key: "transactions", label: "Transactions" },
+  { key: "checkpoints", label: "Checkpoints" },
   { key: "rules", label: "Rules" },
   { key: "budgets", label: "Budgets" },
   { key: "notifications", label: "Notifications" },
@@ -359,6 +361,7 @@ export default function DebugPage() {
         {activeTab === "accounts" && <AccountsTab />}
         {activeTab === "categories" && <CategoriesTab />}
         {activeTab === "transactions" && <TransactionsTab />}
+        {activeTab === "checkpoints" && <CheckpointsTab />}
         {activeTab === "rules" && <RulesTab />}
         {activeTab === "budgets" && <BudgetsTab />}
         {activeTab === "notifications" && <NotificationsTab />}
@@ -704,4 +707,118 @@ function DataManagementTab() {
     success: state.success,
   };
   return <CompoundTable data={safe} label="Data Management Store" />;
+}
+
+function CheckpointsTab() {
+  const [checkpoints, setCheckpoints] = useState<Record<string, unknown>[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [overlay, setOverlay] = useState<{ title: string; data: unknown } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const accStore = useAccountStore.getState();
+      if (accStore.accounts.length === 0) await accStore.fetchAccounts();
+      const accounts = accStore.accounts;
+
+      const allRows: Record<string, unknown>[] = [];
+
+      for (const acc of accounts) {
+        try {
+          const resp = await apiFetch<{ checkpoints: Array<Record<string, unknown>> }>(
+            ENDPOINTS.checkpoints(acc.id),
+          );
+          if (!resp?.checkpoints) continue;
+          for (const cp of resp.checkpoints) {
+            allRows.push({
+              account_id: acc.id,
+              account_name: acc.name,
+              account_currency: acc.currency,
+              ...cp,
+            });
+          }
+        } catch {
+          // skip accounts we can't access
+        }
+      }
+
+      setCheckpoints(allRows);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return (
+    <div>
+      <h2 className="text-lg font-semibold mb-3">Checkpoints</h2>
+      <p className="text-xs text-muted-foreground mb-3">
+        Raw monthly balance checkpoints from the server (encrypted_balance is the
+        AES-GCM(account-key) ciphertext). Click a cell to inspect.
+      </p>
+
+      {!checkpoints && !loading && (
+        <button
+          type="button"
+          onClick={load}
+          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+        >
+          Load Checkpoints
+        </button>
+      )}
+
+      {loading && <p className="text-sm text-muted-foreground">Loading checkpoints…</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {overlay && (
+        <ObjectOverlay
+          title={overlay.title}
+          data={overlay.data}
+          onClose={() => setOverlay(null)}
+        />
+      )}
+
+      {checkpoints && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground mb-2">
+            {checkpoints.length} checkpoint(s) loaded
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-border">
+                  {checkpoints.length > 0 &&
+                    Object.keys(checkpoints[0]).map((col) => (
+                      <th key={col} className="px-2 py-1 text-left font-medium text-muted-foreground whitespace-nowrap">
+                        {col}
+                      </th>
+                    ))}
+                </tr>
+              </thead>
+              <tbody>
+                {checkpoints.map((row, i) => (
+                  <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
+                    {Object.entries(row).map(([col, val]) => (
+                      <td
+                        key={col}
+                        className="px-2 py-1 max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap cursor-pointer hover:text-primary transition-colors"
+                        onClick={() =>
+                          setOverlay({ title: `${row.account_name ?? ""} — ${col}`, data: val })
+                        }
+                      >
+                        {preview(val)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
