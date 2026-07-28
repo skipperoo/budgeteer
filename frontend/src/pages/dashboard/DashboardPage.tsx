@@ -263,26 +263,19 @@ export default function DashboardPage() {
     const curMonthEnd = transactionMonthEnd(new Date().toISOString());
     for (const acc of accounts) {
       const entries = useCheckpointStore.getState().getEntries(acc.id);
-      let balance: number;
+      let balance: number | null = null;
       if (entries.length > 0) {
         balance = useCheckpointStore.getState().balanceThrough(acc.id, curMonthEnd);
-        if (balance === null) {
-          // Checkpoints exist but blobs couldn't be decrypted — fall back to
-          // sum of window txs (same as the no-checkpoint path).
-          const accountTxs = allTxs.filter((t) => t.account_id === acc.id);
-          balance = accountTxs.reduce(
-            (sum, tx) => sum + (tx.payload ? effectiveAmount(tx.payload) : 0), 0,
-          );
-        }
-      } else {
-        // Fallback: sum account's window-transactions (pre-migration or not yet loaded).
+      }
+      if (balance === null) {
+        // No usable checkpoint — sum account's window-transactions.
         const accountTxs = allTxs.filter((t) => t.account_id === acc.id);
         balance = accountTxs.reduce(
           (sum, tx) => sum + (tx.payload ? effectiveAmount(tx.payload) : 0), 0,
         );
       }
       const cur = acc.currency;
-      byCur[cur] = (byCur[cur] || 0) + balance;
+      byCur[cur] = (byCur[cur] || 0) + (balance!);
     }
     return byCur;
   })();
