@@ -338,6 +338,11 @@ export default function DashboardPage() {
       }
     } else {
       // Classic fallback: sum all pre-window transactions from downloaded data.
+      // Also add the opening balance for each account (OB isn't in the txs
+      // after migration, and may still be missing even in classic mode).
+      for (const acc of accounts) {
+        openingBalance += accountOBs[acc.id] ?? 0;
+      }
       for (const tx of allTxs) {
         if (tx.payload && new Date(tx.time).getTime() < windowStartEpoch) {
           openingBalance += effectiveAmount(tx.payload);
