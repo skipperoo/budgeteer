@@ -3,7 +3,7 @@
  *
  * `accounts.encrypted_metadata` is an AES-256-GCM blob (the same format used for
  * account-key-encrypted transactions) holding a JSON object whose first field is
- * `opening_balance_cents` (integer cents, signed). It is encrypted with the
+ * `opening_balance` (float, the account's base balance). It is encrypted with the
  * account key and can be read/written by the account owner and any joint member
  * (they share the key).
  *

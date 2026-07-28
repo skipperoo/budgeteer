@@ -150,7 +150,7 @@ export default function AccountDetailPage() {
       // Decrypt account metadata (opening balance) and load + verify checkpoints.
       if (account?.encrypted_metadata) {
         const meta = await decryptAccountMetadata(account.encrypted_metadata, key);
-        setMetadataOpeningBalance(meta ? meta.opening_balance_cents / 100 : 0);
+        setMetadataOpeningBalance(meta ? meta.opening_balance : 0);
       } else {
         setMetadataOpeningBalance(null);
       }
@@ -290,19 +290,15 @@ export default function AccountDetailPage() {
       // value changed, write encrypted_metadata and recompute checkpoints by
       // adding the delta to every checkpoint's balance (propagated forward).
       const rawOB = parseLocaleNumber(editOpeningBalance);
-      let metaChanged = false;
-      let desiredOBCents = 0;
-      if (!isNaN(rawOB) && rawOB >= 0) {
-        desiredOBCents = Math.round(rawOB * 100);
-        const currentOBCents = Math.round(openingBalance * 100);
-        metaChanged = desiredOBCents !== currentOBCents;
-      }
+      const desiredOB = !isNaN(rawOB) && rawOB >= 0 ? rawOB : null;
+      const currentOB = openingBalance;
+      const metaChanged = desiredOB !== null && Math.abs(desiredOB - currentOB) >= 0.001;
 
       if (metaChanged && accountKeyBase64) {
-        const metaBlob = { opening_balance_cents: desiredOBCents };
+        const metaBlob = { opening_balance: desiredOB! };
         const encMeta = await encryptAccountMetadata(metaBlob, accountKeyBase64);
         await updateAccount(id, editName, editCurrency, editType, encMeta);
-        setMetadataOpeningBalance(desiredOBCents / 100);
+        setMetadataOpeningBalance(desiredOB!);
 
         // Recompute checkpoints from the first checkpoint month through current
         // (the opening-balance base shifts; recomputeFrom re-sums from history
@@ -313,7 +309,7 @@ export default function AccountDetailPage() {
           const entries = useCheckpointStore.getState().getEntries(id);
           const firstMonth = entries[0]?.checkpoint_month;
           if (firstMonth) {
-            await recomputeFrom(id, firstMonth, { seedOpeningBalance: desiredOBCents / 100 });
+            await recomputeFrom(id, firstMonth, { seedOpeningBalance: desiredOB! });
           }
         } catch { /* checkpoints will reconcile on next open */ }
       } else {
@@ -749,21 +745,19 @@ export default function AccountDetailPage() {
       if (!accountKeyBase64Val) throw new Error("Account key not available");
       if (!account || !id) throw new Error("Account not found");
 
-      // Opening balance is now account metadata. Write encrypted_metadata and
-      // recompute checkpoints from the first checkpoint month (the base shifts).
-      const desiredOBCents = Math.round(desiredOB * 100);
+      // Opening balance is now account metadata.
       const encMeta = await encryptAccountMetadata(
-        { opening_balance_cents: desiredOBCents },
+        { opening_balance: desiredOB },
         accountKeyBase64Val,
       );
       await updateAccount(id, account.name, account.currency, account.type, encMeta);
-      setMetadataOpeningBalance(desiredOBCents / 100);
+      setMetadataOpeningBalance(desiredOB);
 
       try {
         const entries = useCheckpointStore.getState().getEntries(id);
         const firstMonth = entries[0]?.checkpoint_month;
         if (firstMonth) {
-          await recomputeFrom(id, firstMonth, { seedOpeningBalance: desiredOBCents / 100 });
+          await recomputeFrom(id, firstMonth, { seedOpeningBalance: desiredOB });
         }
       } catch { /* will reconcile on next open */ }
 

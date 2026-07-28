@@ -221,7 +221,7 @@ export async function applyCheckpointUpdateAfterTxChange(
   let seedOB = 0;
   if (acc?.encrypted_metadata) {
     const meta = await decryptAccountMetadata(acc.encrypted_metadata, accountKey);
-    if (meta) seedOB = meta.opening_balance_cents / 100;
+    if (meta) seedOB = meta.opening_balance;
   }
   await recomputeFrom(accountId, txMonthEnd, { seedOpeningBalance: seedOB });
 }

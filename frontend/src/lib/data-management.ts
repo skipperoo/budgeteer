@@ -436,7 +436,7 @@ export async function restoreFromDump(dump: UserDataDump): Promise<void> {
     // then PUT it (plaintext was restored as JSON by decryptDump).
     if (ad.account.encrypted_metadata) {
       try {
-        const meta = JSON.parse(ad.account.encrypted_metadata) as { opening_balance_cents: number };
+        const meta = JSON.parse(ad.account.encrypted_metadata) as { opening_balance: number };
         const encMeta = await encryptAccountMetadata(meta, newKey);
         await apiFetch(ENDPOINTS.account(created.id), {
           method: "PUT",

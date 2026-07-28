@@ -81,7 +81,7 @@ export default function AccountListPage() {
           if (acc.encrypted_metadata) {
             const meta = await decryptAccountMetadata(acc.encrypted_metadata, key);
             if (meta) {
-              newBalances[acc.id] = meta.opening_balance_cents / 100;
+              newBalances[acc.id] = meta.opening_balance;
               return;
             }
           }
@@ -119,7 +119,7 @@ export default function AccountListPage() {
       if (created?.id) {
         const accountKey = await getAccountKey(created.id, privKeyBase64 ?? undefined, user?.public_key);
         const encMeta = await encryptAccountMetadata(
-          { opening_balance_cents: Math.round(amount * 100) },
+          { opening_balance: amount },
           accountKey,
         );
         await apiFetch(ENDPOINTS.account(created.id), {

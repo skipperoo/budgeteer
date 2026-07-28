@@ -23,7 +23,7 @@ export interface Account {
   currency: string;
   type: AccountType;
   created_by: string;
-  /** AES-GCM(account-key) JSON {opening_balance_cents,...}. Nullable until migrated. */
+  /** AES-GCM(account-key) JSON {opening_balance,...}. Nullable until migrated. */
   encrypted_metadata?: string | null;
   created_at: string;
   updated_at: string;
@@ -130,7 +130,8 @@ export interface CheckpointBlob {
 
 /** Plaintext shape inside accounts.encrypted_metadata. */
 export interface AccountMetadataBlob {
-  opening_balance_cents: number;
+  /** Account's base balance (float, not cents). Replaces the legacy "Opening Balance" transaction. */
+  opening_balance: number;
 }
 
 export interface CreateTransactionRequest {

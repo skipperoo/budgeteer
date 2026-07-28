@@ -274,21 +274,19 @@ async function migrateBuildCheckpointsAndMoveOpeningBalance(_userId: string): Pr
     const obTxs = allRaw.filter((t) => t.payload?.category === "Opening Balance");
     const realTxs = allRaw.filter((t) => !(t.payload?.category === "Opening Balance"));
 
-    // 3. Compute opening_balance_cents from the OB transactions (signed sum).
+    // 3. Compute opening_balance from the OB transactions (signed float sum).
     let openingBalance = 0;
     for (const t of obTxs) {
       if (t.payload) openingBalance += t.payload.amount;
     }
-    const openingBalanceCents = Math.round(openingBalance * 100);
 
     // 4. Soft-delete each Opening Balance transaction.
     for (const t of obTxs) {
       await apiFetch(ENDPOINTS.transaction(t.id), { method: "DELETE" });
     }
 
-    // 5. Write encrypted_metadata on the account (idempotent: only if the
-    //    account doesn't already have metadata, or its value would change).
-    const metaBlob = { opening_balance_cents: openingBalanceCents };
+    // 5. Write encrypted_metadata on the account.
+    const metaBlob = { opening_balance: openingBalance };
     const encMeta = await encryptAccountMetadata(metaBlob, accountKey);
     await apiFetch(ENDPOINTS.account(acc.id), {
       method: "PUT",
