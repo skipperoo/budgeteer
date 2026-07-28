@@ -317,11 +317,16 @@ export default function DashboardPage() {
     // 1. Compute the cumulative balance up to the day BEFORE the window starts.
     let openingBalance = 0;
 
-    // Check if ANY account has loaded checkpoints. If all do, use checkpoint
-    // path; otherwise, fall back to the classic sum for all accounts.
+    // Check if all accounts have checkpoints or have been processed for
+    // metadata OB (accountOBs gets an entry for every account after the
+    // async effect resolves — value is 0 or the opening balance).
     const allHaveCheckpoints = accounts.every(
-      (acc) => useCheckpointStore.getState().getEntries(acc.id).length > 0,
+      (acc) =>
+        useCheckpointStore.getState().getEntries(acc.id).length > 0 ||
+        accountOBs[acc.id] !== undefined,
     );
+
+    console.log(`Using checkpoints: ${allHaveCheckpoints}`);
     if (allHaveCheckpoints) {
       const startMonthEnd = transactionMonthEnd(new Date(windowStartEpoch).toISOString());
       const lastMonthEnd = previousMonthEnd(dateRange.start);
