@@ -26,6 +26,7 @@ import { useInvitationStore } from "@/stores/invitation-store";
 import { useDateRangeStore } from "@/stores/date-range-store";
 import { bytesToBase64 } from "@/lib/crypto";
 import { decryptTransactionPayload, decryptCheckpointBlob } from "@/lib/crypto-transaction";
+import { decryptAccountMetadata } from "@/lib/account-metadata";
 import { decryptECIESPayload } from "@/lib/crypto-rules";
 import { getAccountKey } from "@/lib/decrypt-transactions";
 import { apiFetch } from "@/lib/api";
@@ -398,6 +399,34 @@ function AuthTab() {
 
 function AccountsTab() {
   const state = useAccountStore.getState();
+  const [decryptedMetas, setDecryptedMetas] = useState<Record<string, unknown>>({});
+
+  // Decrypt all account metadata blobs on mount.
+  useEffect(() => {
+    (async () => {
+      const authStore = useAuthStore.getState();
+      const privKey = authStore.plaintextPrivateKey;
+      const privKeyBase64 = privKey ? bytesToBase64(new Uint8Array(privKey)) : null;
+      const userPubKey = authStore.user?.public_key;
+
+      const result: Record<string, unknown> = {};
+      for (const a of state.accounts) {
+        if (!a.encrypted_metadata) {
+          result[a.id] = null;
+          continue;
+        }
+        try {
+          const key = await getAccountKey(a.id, privKeyBase64 ?? undefined, userPubKey);
+          const meta = await decryptAccountMetadata(a.encrypted_metadata, key);
+          result[a.id] = meta ?? null;
+        } catch {
+          result[a.id] = "(decrypt failed)";
+        }
+      }
+      setDecryptedMetas(result);
+    })();
+  }, [state.accounts]);
+
   const safe: Record<string, unknown> = {
     loading: state.loading,
     error: state.error,
@@ -407,6 +436,7 @@ function AccountsTab() {
       currency: a.currency,
       type: a.type,
       encrypted_metadata: a.encrypted_metadata,
+      decrypted_metadata: decryptedMetas[a.id] ?? "(loading)",
       created_at: a.created_at,
     })),
     accountUsers: state.accountUsers,
@@ -763,9 +793,9 @@ function CheckpointsTab() {
               account_id: acc.id,
               account_name: acc.name,
               checkpoint_month: cp.checkpoint_month,
-              balance: decrypted ? (decrypted as Record<string, unknown>).balance : decryptErr,
-              tx_count: decrypted ? (decrypted as Record<string, unknown>).tx_count : null,
+              decrypted: decrypted, // JSON {balance, tx_count} — clickable cell
               encrypted_balance: cp.encrypted_balance,
+              decrypt_error: decryptErr,
               updated_at: cp.updated_at,
               created_at: cp.created_at,
             });
