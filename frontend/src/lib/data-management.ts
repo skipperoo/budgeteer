@@ -11,9 +11,12 @@ import {
 import {
   decryptTransactionPayload,
   encryptTransactionPayload,
+  decryptCheckpointBlob,
+  encryptCheckpointBlob,
   type TransactionPayload,
 } from "./crypto-transaction";
 import { decryptECIESPayload, encryptForRecipient, isECIESPayload } from "./crypto-rules";
+import { decryptAccountMetadata, encryptAccountMetadata } from "./account-metadata";
 import { useAuthStore } from "../stores/auth-store";
 import type {
   Account,
@@ -63,6 +66,7 @@ export interface AccountDumpData {
   account_user: AccountUser;
   transactions: Transaction[];
   documents: TransactionDocument[];
+  checkpoints?: Array<{ account_id: string; checkpoint_month: string; encrypted_balance: string; created_at: string; updated_at: string }>;
 }
 
 export interface UserDataDump {
@@ -221,6 +225,28 @@ export async function decryptDump(dump: UserDataDump): Promise<void> {
     }
   }
   // Rule payloads are already decrypted server-side
+
+  // ---- Step 5: decrypt account metadata + checkpoints (account key) ----
+  for (const ad of dump.accounts ?? []) {
+    const accountKey = accountKeyMap.get(ad.account.id);
+    if (!accountKey) continue;
+    // Account metadata blob -> plaintext JSON string.
+    if (ad.account.encrypted_metadata) {
+      const meta = await decryptAccountMetadata(ad.account.encrypted_metadata, accountKey);
+      ad.account.encrypted_metadata = meta ? JSON.stringify(meta) : null;
+    }
+    // Checkpoints -> plaintext JSON {balance, tx_count} per row.
+    if (ad.checkpoints && ad.checkpoints.length > 0) {
+      for (const cp of ad.checkpoints) {
+        try {
+          const blob = await decryptCheckpointBlob(cp.encrypted_balance, accountKey);
+          cp.encrypted_balance = blob ? JSON.stringify(blob) : "";
+        } catch {
+          // keep as-is
+        }
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -405,6 +431,50 @@ export async function restoreFromDump(dump: UserDataDump): Promise<void> {
     });
 
     accountMap.set(ad.account.id, { newId: created.id, key: newKey });
+
+    // Re-encrypt account metadata (opening balance) with the new account key,
+    // then PUT it (plaintext was restored as JSON by decryptDump).
+    if (ad.account.encrypted_metadata) {
+      try {
+        const meta = JSON.parse(ad.account.encrypted_metadata) as { opening_balance_cents: number };
+        const encMeta = await encryptAccountMetadata(meta, newKey);
+        await apiFetch(ENDPOINTS.account(created.id), {
+          method: "PUT",
+          body: JSON.stringify({
+            name: ad.account.name,
+            currency: ad.account.currency,
+            type: ad.account.type,
+            encrypted_metadata: encMeta,
+          }),
+        });
+      } catch {
+        // metadata optional
+      }
+    }
+
+    // Re-encrypt checkpoints with the new account key and bulk-PUT them.
+    if (ad.checkpoints && ad.checkpoints.length > 0) {
+      const rows = [];
+      for (const cp of ad.checkpoints) {
+        try {
+          const blob = JSON.parse(cp.encrypted_balance) as { balance: number; tx_count: number };
+          const enc = await encryptCheckpointBlob(blob, newKey);
+          rows.push({ checkpoint_month: cp.checkpoint_month, encrypted_balance: enc });
+        } catch {
+          // skip undecryptable checkpoint
+        }
+      }
+      if (rows.length > 0) {
+        try {
+          await apiFetch(ENDPOINTS.checkpoints(created.id), {
+            method: "PUT",
+            body: JSON.stringify({ checkpoints: rows }),
+          });
+        } catch {
+          // checkpoints optional — restore continues
+        }
+      }
+    }
 
     // Create transactions for this account
     for (const tx of ad.transactions ?? []) {

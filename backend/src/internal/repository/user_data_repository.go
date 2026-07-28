@@ -3,11 +3,13 @@ package repository
 import (
 	"context"
 	"encoding/base64"
+	"time"
 
 	"budgeteer-backend/internal/database"
 	"budgeteer-backend/internal/model"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // UserDataRepository handles bulk data operations for user data
@@ -44,7 +46,7 @@ func (r *UserDataRepository) GetUserDumpInfo(ctx context.Context, userID string)
 // along with the user's account_user record for each.
 func (r *UserDataRepository) GetUserAccounts(ctx context.Context, userID string) ([]*model.Account, []*model.AccountUser, error) {
 	q := database.GetQuerier(ctx)
-	query := `SELECT a.id, a.name, a.currency, a.type, a.created_by, a.created_at, a.updated_at, a.deleted_at,
+	query := `SELECT a.id, a.name, a.currency, a.type, a.created_by, a.encrypted_metadata, a.created_at, a.updated_at, a.deleted_at,
 	                 au.account_id, au.user_id, au.encrypted_account_key, au.role, au.status, au.joined_at
 	          FROM accounts a
 	          JOIN account_users au ON au.account_id = a.id
@@ -61,17 +63,48 @@ func (r *UserDataRepository) GetUserAccounts(ctx context.Context, userID string)
 	for rows.Next() {
 		a := &model.Account{}
 		au := &model.AccountUser{}
-		err := rows.Scan(&a.ID, &a.Name, &a.Currency, &a.Type, &a.CreatedBy,
+		var meta pgtype.Text
+		err := rows.Scan(&a.ID, &a.Name, &a.Currency, &a.Type, &a.CreatedBy, &meta,
 			&a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
 			&au.AccountID, &au.UserID, &au.EncryptedAccountKey,
 			&au.Role, &au.Status, &au.JoinedAt)
 		if err != nil {
 			return nil, nil, err
 		}
+		if meta.Valid {
+			s := meta.String
+			a.EncryptedMetadata = &s
+		}
 		accounts = append(accounts, a)
 		accountUsers = append(accountUsers, au)
 	}
 	return accounts, accountUsers, nil
+}
+
+// GetAccountCheckpoints returns all monthly balance checkpoints for an account
+// (used by the dump so the frontend can re-upload them on restore).
+func (r *UserDataRepository) GetAccountCheckpoints(ctx context.Context, accountID string) ([]*model.Checkpoint, error) {
+	q := database.GetQuerier(ctx)
+	query := `SELECT account_id, checkpoint_month, encrypted_balance, created_at, updated_at
+	          FROM transactions_checkpoints WHERE account_id = $1
+	          ORDER BY checkpoint_month ASC`
+	rows, err := q.Query(ctx, query, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*model.Checkpoint
+	for rows.Next() {
+		c := &model.Checkpoint{}
+		var month time.Time
+		if err := rows.Scan(&c.AccountID, &month, &c.EncryptedBalance, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		c.CheckpointMonth = month.Format("2006-01-02")
+		out = append(out, c)
+	}
+	return out, nil
 }
 
 // GetAccountTransactions returns all non-deleted transactions for an account.

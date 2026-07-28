@@ -39,6 +39,7 @@ type AccountDump struct {
 	AccountUser      *AccountUser            `json:"account_user"`
 	Transactions     []*Transaction          `json:"transactions"`
 	Documents        []*TransactionDocument  `json:"documents"`
+	Checkpoints      []*Checkpoint           `json:"checkpoints,omitempty"`
 }
 
 // ============================================================

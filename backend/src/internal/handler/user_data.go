@@ -75,6 +75,13 @@ func buildDump(ctx context.Context, userID, email string) (*model.UserDataDump, 
 			ad.Documents = append(ad.Documents, docs...)
 		}
 
+		// Monthly balance checkpoints
+		cps, err := userDataRepo.GetAccountCheckpoints(ctx, a.ID)
+		if err != nil {
+			return nil, err
+		}
+		ad.Checkpoints = cps
+
 		dump.Accounts = append(dump.Accounts, ad)
 	}
 
