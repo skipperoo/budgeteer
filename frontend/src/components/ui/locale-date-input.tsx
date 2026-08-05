@@ -9,7 +9,7 @@
  * shows dd/mm/yyyy (IT), mm/dd/yyyy (EN), etc.
  */
 
-import React from "react";
+import React, { useRef } from "react";
 import { getStoredLocale } from "@/lib/format";
 
 export function formatDateInput(value: string): string {
@@ -37,16 +37,39 @@ export function LocaleDateInput({
   className = "",
   ...rest
 }: LocaleDateInputProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Native date inputs only open the picker from their calendar icon (right
+  // side) in some browsers. Make the whole container open the picker via
+  // showPicker(), so clicking anywhere works.
+  const openPicker = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (typeof (el as HTMLInputElement & { showPicker?: () => void }).showPicker === "function") {
+      try {
+        (el as HTMLInputElement & { showPicker: () => void }).showPicker();
+        return;
+      } catch {
+        // fall through to focus/click fallback
+      }
+    }
+    el.focus();
+    el.click();
+  };
+
   return (
     <div
       className={`relative h-8 rounded-md border border-input bg-background text-foreground ${className}`}
+      onClick={openPicker}
     >
       {/* Formatted locale label behind (non-interactive). */}
       <span className="pointer-events-none absolute inset-0 flex items-center px-2 text-sm">
         {formatDateInput(value)}
       </span>
-      {/* Native picker on top, transparent so the label shows through. */}
+      {/* Native picker covering the whole area, transparent so the label shows
+          through. The container onClick calls showPicker() on any click. */}
       <input
+        ref={inputRef}
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
