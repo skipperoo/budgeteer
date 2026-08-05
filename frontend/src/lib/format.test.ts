@@ -190,14 +190,14 @@ describe("expression result round-trips through parseLocaleNumber", () => {
     const result = parseLocaleExpression("100,5 + 20 - 10");
     expect(result).toBe(110.5);
     // The form saves formatNumber(result); the parent parses it back.
-    const saved = formatNumber(result); // "110,50" in IT
+    const saved = formatNumber(result!); // "110,50" in IT
     expect(parseLocaleNumber(saved)).toBe(110.5);
   });
 
   it("EN: same expression round-trips too", () => {
     localStorage.setItem(STORAGE_KEY, "en");
     const result = parseLocaleExpression("100.5 + 20 - 10");
-    const saved = formatNumber(result); // "110.50" in EN
+    const saved = formatNumber(result!); // "110.50" in EN
     expect(parseLocaleNumber(saved)).toBe(110.5);
   });
 
@@ -205,6 +205,6 @@ describe("expression result round-trips through parseLocaleNumber", () => {
     localStorage.setItem(STORAGE_KEY, "it");
     const result = parseLocaleExpression("10 + 15");
     expect(result).toBe(25);
-    expect(parseLocaleNumber(formatNumber(result))).toBe(25);
+    expect(parseLocaleNumber(formatNumber(result!))).toBe(25);
   });
 });
