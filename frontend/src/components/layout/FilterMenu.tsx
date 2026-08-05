@@ -31,6 +31,22 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** First day of the current month ("YYYY-MM-01"). */
+function firstOfMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+/** Monday of the current week ("YYYY-MM-DD"). */
+function mondayOfThisWeek(): string {
+  const d = new Date();
+  const day = d.getDay(); // 0=Sun .. 6=Sat
+  const mondayOffset = (day + 6) % 7; // Mon=0, Tue=1, ..., Sun=6
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - mondayOffset);
+  return monday.toISOString().slice(0, 10);
+}
+
 const QUICK_PRESETS = [
   { label: "7d", days: 7 },
   { label: "30d", days: 30 },
@@ -111,6 +127,14 @@ export function FilterMenu() {
 
   const handleQuickPreset = (days: number) => {
     setRange({ start: daysAgo(days), end: today() });
+  };
+
+  const handleThisMonth = () => {
+    setRange({ start: firstOfMonth(), end: today() });
+  };
+
+  const handleThisWeek = () => {
+    setRange({ start: mondayOfThisWeek(), end: today() });
   };
 
   // Apply custom range when the second date is selected (both are set)
@@ -199,6 +223,30 @@ export function FilterMenu() {
                   {preset.label}
                 </button>
               ))}
+            </div>
+            <div className="flex gap-1.5 pt-1.5">
+              <button
+                type="button"
+                onClick={handleThisMonth}
+                className={`flex-1 text-xs font-medium py-1.5 rounded-md border transition-colors ${
+                  range.start === firstOfMonth() && range.end === today()
+                    ? "bg-primary/10 text-primary border-primary/20"
+                    : "bg-transparent text-muted-foreground border-border hover:bg-secondary hover:text-foreground"
+                }`}
+              >
+                This month
+              </button>
+              <button
+                type="button"
+                onClick={handleThisWeek}
+                className={`flex-1 text-xs font-medium py-1.5 rounded-md border transition-colors ${
+                  range.start === mondayOfThisWeek() && range.end === today()
+                    ? "bg-primary/10 text-primary border-primary/20"
+                    : "bg-transparent text-muted-foreground border-border hover:bg-secondary hover:text-foreground"
+                }`}
+              >
+                This week
+              </button>
             </div>
             <div className="flex items-center gap-1.5 pt-1">
               <Input

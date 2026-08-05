@@ -83,6 +83,132 @@ export function parseLocaleNumber(text: string): number {
 }
 
 /**
+ * Evaluate a locale-aware arithmetic expression like "10,50 + 20" (IT) or
+ * "10.50 + 20" (EN). Supports + - * / and parentheses with standard
+ * precedence, e.g. "(10 + 15) * 2" → 50.
+ *
+ * Thousand separators are stripped and the locale decimal separator is
+ * normalised to "." before tokenising, so IT input "1.000,50 + 5" →
+ * 1000.50 + 5 and EN "1,000.50 + 5" → 1000.50 + 5.
+ *
+ * Returns the evaluated number, or null if the expression is not a valid
+ * arithmetic expression.
+ */
+export function parseLocaleExpression(text: string): number | null {
+  if (!text || !text.trim()) return null;
+  const locale = getStoredLocale();
+  const testFormat = (1.1).toLocaleString(locale);
+  const decimalSep = testFormat.includes(",") ? "," : ".";
+  const thousandSep = decimalSep === "." ? "," : ".";
+
+  let expr = text.trim();
+  // Strip thousand separators (they are never meaningful inside an
+  // expression operand; e.g. EN "1,000" → "1000").
+  expr = expr.split(thousandSep).join("");
+  // Normalise the locale decimal separator to ".".
+  if (decimalSep !== ".") {
+    expr = expr.split(decimalSep).join(".");
+  }
+  // Allow only digits, operators, parens, dots and spaces.
+  if (!/^[\d\s+\-*/().]+$/.test(expr)) return null;
+
+  try {
+    const parser = new ExprParser(expr);
+    const value = parser.parse();
+    if (!parser.atEnd()) return null; // trailing garbage
+    return Number.isFinite(value) ? round2(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Minimal recursive-descent arithmetic parser (no eval). */
+class ExprParser {
+  private i = 0;
+  constructor(private src: string) {}
+
+  atEnd(): boolean {
+    this.skipWs();
+    return this.i >= this.src.length;
+  }
+
+  parse(): number {
+    const v = this.parseExpression();
+    this.skipWs();
+    return v;
+  }
+
+  private skipWs(): void {
+    while (this.i < this.src.length && /\s/.test(this.src[this.i])) this.i++;
+  }
+
+  private peek(): string {
+    this.skipWs();
+    return this.src[this.i] ?? "";
+  }
+
+  // expression := term (('+' | '-') term)*
+  private parseExpression(): number {
+    let left = this.parseTerm();
+    for (;;) {
+      const op = this.peek();
+      if (op === "+" || op === "-") {
+        this.i++;
+        const right = this.parseTerm();
+        left = op === "+" ? left + right : left - right;
+      } else {
+        return left;
+      }
+    }
+  }
+
+  // term := factor (('*' | '/') factor)*
+  private parseTerm(): number {
+    let left = this.parseFactor();
+    for (;;) {
+      const op = this.peek();
+      if (op === "*" || op === "/") {
+        this.i++;
+        const right = this.parseFactor();
+        left = op === "*" ? left * right : left / right;
+      } else {
+        return left;
+      }
+    }
+  }
+
+  // factor := number | '(' expression ')' | '-' factor | '+' factor
+  private parseFactor(): number {
+    this.skipWs();
+    const ch = this.src[this.i] ?? "";
+    if (ch === "(") {
+      this.i++;
+      const v = this.parseExpression();
+      this.skipWs();
+      if (this.src[this.i] !== ")") throw new Error("unbalanced parens");
+      this.i++;
+      return v;
+    }
+    if (ch === "-" || ch === "+") {
+      this.i++;
+      const v = this.parseFactor();
+      return ch === "-" ? -v : v;
+    }
+    const start = this.i;
+    while (this.i < this.src.length && /[\d.]/.test(this.src[this.i])) this.i++;
+    if (start === this.i) throw new Error("expected number");
+    const numStr = this.src.slice(start, this.i);
+    const value = parseFloat(numStr);
+    if (isNaN(value)) throw new Error("bad number");
+    return value;
+  }
+}
+
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/**
  * Format a number using the user's stored locale.
  * Falls back to "en" if the stored locale is not supported.
  */

@@ -6,6 +6,7 @@ import {
   formatDateLabel,
   formatDateTime,
   syncLocaleFromPreferences,
+  parseLocaleExpression,
 } from "./format";
 
 const STORAGE_KEY = "budgeteer_locale";
@@ -141,5 +142,43 @@ describe("formatDateTime", () => {
     // en locale, shows something like "Jun 15, 2024, 2:30 PM"
     expect(result).toContain("2024");
     expect(result).toMatch(/\d/); // contains digits for time
+  });
+});
+
+describe("parseLocaleExpression", () => {
+  it("parses simple addition (EN dot locale)", () => {
+    localStorage.setItem(STORAGE_KEY, "en");
+    expect(parseLocaleExpression("10 + 15")).toBe(25);
+    expect(parseLocaleExpression("10.50 + 20")).toBe(30.5);
+  });
+
+  it("parses with comma decimal separator (IT locale)", () => {
+    localStorage.setItem(STORAGE_KEY, "it");
+    expect(parseLocaleExpression("10,50 + 20")).toBe(30.5);
+    expect(parseLocaleExpression("10,50 + 20,25")).toBe(30.75);
+  });
+
+  it("supports + - * / and parentheses with precedence", () => {
+    localStorage.setItem(STORAGE_KEY, "en");
+    expect(parseLocaleExpression("(10 + 15) * 2")).toBe(50);
+    expect(parseLocaleExpression("10 + 5 * 3")).toBe(25);
+    expect(parseLocaleExpression("20 / 4 - 1")).toBe(4);
+    expect(parseLocaleExpression("2 + 3 * 4 - 1")).toBe(13);
+  });
+
+  it("strips thousand separators per locale", () => {
+    localStorage.setItem(STORAGE_KEY, "en");
+    expect(parseLocaleExpression("1,000 + 5")).toBe(1005);
+    localStorage.setItem(STORAGE_KEY, "it");
+    expect(parseLocaleExpression("1.000 + 5")).toBe(1005);
+  });
+
+  it("returns null for invalid expressions", () => {
+    localStorage.setItem(STORAGE_KEY, "en");
+    expect(parseLocaleExpression("hello")).toBeNull();
+    expect(parseLocaleExpression("10 +")).toBeNull();
+    expect(parseLocaleExpression("(10 + 15")).toBeNull();
+    expect(parseLocaleExpression("")).toBeNull();
+    expect(parseLocaleExpression("10 + 15 +")).toBeNull();
   });
 });

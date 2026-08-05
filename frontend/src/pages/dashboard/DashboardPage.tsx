@@ -326,7 +326,6 @@ export default function DashboardPage() {
         accountOBs[acc.id] !== undefined,
     );
 
-    console.log(`Using checkpoints: ${allHaveCheckpoints}`);
     if (allHaveCheckpoints) {
       const startMonthEnd = transactionMonthEnd(new Date(windowStartEpoch).toISOString());
       const lastMonthEnd = previousMonthEnd(dateRange.start);

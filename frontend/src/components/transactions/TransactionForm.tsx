@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CategoryType } from "@/stores/category-store";
 import type { DocumentMetadata } from "@/types";
+import { parseLocaleExpression, formatNumber } from "@/lib/format";
 
 export interface TransactionFormData {
   accountId: string;
@@ -159,10 +160,17 @@ export function TransactionForm({
   };
 
   const handleSubmit = () => {
+    // Evaluate arithmetic expressions in the amount field (e.g. "10 + 15" → 25),
+    // otherwise keep the raw number as-is. Only the amount field supports this.
+    const exprResult = parseLocaleExpression(amount);
+    const finalAmount =
+      exprResult !== null && /[+\-*/()]/.test(amount.trim())
+        ? String(exprResult)
+        : amount;
     onSave({
       accountId,
       type,
-      amount,
+      amount: finalAmount,
       commission,
       interest_amount: interestAmount,
       date,
@@ -176,6 +184,14 @@ export function TransactionForm({
       targetAccountId: isTransfer ? targetAccountId : undefined,
     });
   };
+
+  // Live-evaluate the amount expression for the hint below the field.
+  const amountExprResult = useMemo(() => {
+    const trimmed = amount.trim();
+    if (!trimmed) return null;
+    if (!/[+\-*/()]/.test(trimmed)) return null; // plain number, no hint needed
+    return parseLocaleExpression(trimmed);
+  }, [amount]);
 
   return (
     <div className="space-y-4">
@@ -246,6 +262,11 @@ export function TransactionForm({
               required
             />
           </div>
+          {amountExprResult !== null && (
+            <p className="text-xs text-muted-foreground mt-1">
+              = {formatNumber(amountExprResult)}
+            </p>
+          )}
         </div>
         {isTransfer && (
           <p className="text-xs text-muted-foreground">
