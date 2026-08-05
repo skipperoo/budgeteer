@@ -39,6 +39,11 @@ export default function DashboardPage() {
   const [allTxs, setAllTxs] = useState<DecryptedTransaction[]>([]);
   const [rawTxCount, setRawTxCount] = useState(0);
 
+  // Subscribe reactively to the checkpoint store so net worth / charts
+  // re-render when checkpoints are recomputed (after add/edit/delete).
+  const checkpointData = useCheckpointStore((s) => s.byAccount);
+  void checkpointData;
+
   // Date range (affects all components)
   const dateRange = useDateRangeStore((s) => s.range);
   const { selectedCategories, selectedTypes } = useFilterStore();

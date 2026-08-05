@@ -65,6 +65,12 @@ export default function AccountDetailPage() {
   // Falls back to summing legacy "Opening Balance" transactions for unmigrated accounts.
   const [metadataOpeningBalance, setMetadataOpeningBalance] = useState<number | null>(null);
 
+  // Subscribe reactively to the checkpoint store so that any recompute
+  // (add/edit/delete) re-renders this page — otherwise balance/chart reads
+  // via getState() would stay stale after a delete (non-reactive).
+  const checkpointData = useCheckpointStore((s) => s.byAccount);
+  void checkpointData;
+
   // --- Transaction state ---
   const [transactions, setTransactions] = useState<TransactionDisplay[]>([]);
   const [txLoading, setTxLoading] = useState(false);
