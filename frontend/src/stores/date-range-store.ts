@@ -2,7 +2,7 @@
  * DateRangeStore — shared date-range state used by the header's
  * DateRangePicker and consumed by dashboard / account charts.
  *
- * Defaults to the last 30 days (today – 30 days → today).
+ * Defaults to the current month (1st of month → today).
  */
 
 import { create } from "zustand";
@@ -17,21 +17,20 @@ interface DateRangeState {
   setRange: (range: DateRange) => void;
   /** Convenience: shift the window by `days` (preserving width). */
   shiftDays: (days: number) => void;
-  /** Reset to the default 30-day window ending today. */
+  /** Reset to the default current-month window ending today. */
   resetToDefault: () => void;
-}
-
-function daysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
 }
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-const defaultRange: DateRange = { start: daysAgo(30), end: today() };
+function firstOfMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+const defaultRange: DateRange = { start: firstOfMonth(), end: today() };
 
 export const useDateRangeStore = create<DateRangeState>((set, get) => ({
   range: defaultRange,

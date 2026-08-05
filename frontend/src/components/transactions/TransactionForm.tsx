@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import type { CategoryType } from "@/stores/category-store";
 import type { DocumentMetadata } from "@/types";
 import { parseLocaleExpression, formatNumber } from "@/lib/format";
+import { LocaleDateInput } from "@/components/ui/locale-date-input";
 
 export interface TransactionFormData {
   accountId: string;
@@ -162,10 +163,13 @@ export function TransactionForm({
   const handleSubmit = () => {
     // Evaluate arithmetic expressions in the amount field (e.g. "10 + 15" → 25),
     // otherwise keep the raw number as-is. Only the amount field supports this.
+    // NOTE: format the result with the locale number format (formatNumber) so it
+    // round-trips through parseLocaleNumber on the parent side — e.g. IT
+    // "100,5 + 20" → "110,50" (not "110.5", which IT would read as 1105).
     const exprResult = parseLocaleExpression(amount);
     const finalAmount =
       exprResult !== null && /[+\-*/()]/.test(amount.trim())
-        ? String(exprResult)
+        ? formatNumber(exprResult)
         : amount;
     onSave({
       accountId,
@@ -304,10 +308,9 @@ export function TransactionForm({
       {/* Date */}
       <div className="space-y-2">
         <label className="text-sm font-medium">Date</label>
-        <Input
-          type="date"
+        <LocaleDateInput
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={(v) => setDate(v)}
           required
         />
       </div>

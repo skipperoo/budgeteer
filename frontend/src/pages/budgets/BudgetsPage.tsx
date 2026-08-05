@@ -11,6 +11,7 @@ import { useCategoryStore, type CategoryType } from "@/stores/category-store";
 import { encryptForRecipient, decryptECIESPayload } from "@/lib/crypto-rules";
 import { bytesToBase64 } from "@/lib/crypto";
 import { formatDate, parseLocaleNumber, formatNumber } from "@/lib/format";
+import { LocaleDateInput } from "@/components/ui/locale-date-input";
 import { Plus, Trash2, Pencil, Loader2 } from "lucide-react";
 import { BudgetProgressBar } from "@/components/shared/BudgetProgressBar";
 import type { Budget, BudgetPayload } from "@/types";
@@ -448,22 +449,18 @@ export default function BudgetsPage() {
 
           <div className="space-y-2">
             <Label htmlFor="budget-start">Start Date</Label>
-            <Input
-              id="budget-start"
-              type="date"
+            <LocaleDateInput
               value={formStartDate}
-              onChange={(e) => setFormStartDate(e.target.value)}
+              onChange={(v) => setFormStartDate(v)}
               required
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="budget-end">End Date (optional)</Label>
-            <Input
-              id="budget-end"
-              type="date"
+            <LocaleDateInput
               value={formEndDate}
-              onChange={(e) => setFormEndDate(e.target.value)}
+              onChange={(v) => setFormEndDate(v)}
             />
           </div>
 

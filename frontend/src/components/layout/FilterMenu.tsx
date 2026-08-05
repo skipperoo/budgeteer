@@ -8,8 +8,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { Filter, X, ChevronDown } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { LocaleDateInput } from "@/components/ui/locale-date-input";
 import { formatDateLabel } from "@/lib/format";
 import {
   DropdownMenu,
@@ -249,28 +249,22 @@ export function FilterMenu() {
               </button>
             </div>
             <div className="flex items-center gap-1.5 pt-1">
-              <Input
-                type="date"
+              <LocaleDateInput
                 value={customStart}
-                onChange={(e) => {
-                  const v = e.target.value;
+                onChange={(v) => {
                   setCustomStart(v);
                   if (v && customEnd) applyCustomIfReady(v, customEnd);
                 }}
-                className="flex-1 px-1 py-1 leading-none"
-                style={{ fontSize: "0.688rem" }}
+                className="flex-1 h-7"
               />
               <span className="text-s text-muted-foreground shrink-0">→</span>
-              <Input
-                type="date"
+              <LocaleDateInput
                 value={customEnd}
-                onChange={(e) => {
-                  const v = e.target.value;
+                onChange={(v) => {
                   setCustomEnd(v);
                   if (customStart && v) applyCustomIfReady(customStart, v);
                 }}
-                className="flex-1 px-1 py-1 leading-none"
-                style={{ fontSize: "0.688rem" }}
+                className="flex-1 h-7"
               />
             </div>
           </div>

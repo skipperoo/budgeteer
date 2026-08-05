@@ -7,6 +7,7 @@ import {
   formatDateTime,
   syncLocaleFromPreferences,
   parseLocaleExpression,
+  parseLocaleNumber,
 } from "./format";
 
 const STORAGE_KEY = "budgeteer_locale";
@@ -180,5 +181,30 @@ describe("parseLocaleExpression", () => {
     expect(parseLocaleExpression("(10 + 15")).toBeNull();
     expect(parseLocaleExpression("")).toBeNull();
     expect(parseLocaleExpression("10 + 15 +")).toBeNull();
+  });
+});
+
+describe("expression result round-trips through parseLocaleNumber", () => {
+  it("IT: evaluated '100,5 + 20 - 10' survives parseLocaleNumber without becoming 1105", () => {
+    localStorage.setItem(STORAGE_KEY, "it");
+    const result = parseLocaleExpression("100,5 + 20 - 10");
+    expect(result).toBe(110.5);
+    // The form saves formatNumber(result); the parent parses it back.
+    const saved = formatNumber(result); // "110,50" in IT
+    expect(parseLocaleNumber(saved)).toBe(110.5);
+  });
+
+  it("EN: same expression round-trips too", () => {
+    localStorage.setItem(STORAGE_KEY, "en");
+    const result = parseLocaleExpression("100.5 + 20 - 10");
+    const saved = formatNumber(result); // "110.50" in EN
+    expect(parseLocaleNumber(saved)).toBe(110.5);
+  });
+
+  it("integer results keep value through the round-trip", () => {
+    localStorage.setItem(STORAGE_KEY, "it");
+    const result = parseLocaleExpression("10 + 15");
+    expect(result).toBe(25);
+    expect(parseLocaleNumber(formatNumber(result))).toBe(25);
   });
 });

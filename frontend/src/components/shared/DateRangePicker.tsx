@@ -5,6 +5,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useDateRangeStore } from "@/stores/date-range-store";
+import { LocaleDateInput } from "@/components/ui/locale-date-input";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 
 /* ─── Presets ─────────────────────────────────────────── */
@@ -110,25 +111,19 @@ export function DateRangePicker() {
           <div className="flex flex-col gap-2.5">
             <label className="flex flex-col gap-1">
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">From</span>
-              <input
-                type="date"
+              <LocaleDateInput
                 value={range.start}
-                onChange={(e) =>
-                  setRange({ ...range, start: e.target.value })
-                }
-                className="h-8 px-2 text-xs rounded-md border border-input bg-background text-foreground"
+                onChange={(v) => setRange({ ...range, start: v })}
+                className="h-8"
               />
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">To</span>
-              <input
-                type="date"
+              <LocaleDateInput
                 value={range.end}
-                onChange={(e) =>
-                  setRange({ ...range, end: e.target.value })
-                }
+                onChange={(v) => setRange({ ...range, end: v })}
                 max={today()}
-                className="h-8 px-2 text-xs rounded-md border border-input bg-background text-foreground"
+                className="h-8"
               />
             </label>
             <div className="flex gap-1.5 pt-1">

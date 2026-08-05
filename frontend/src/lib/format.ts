@@ -16,7 +16,7 @@ export function syncLocaleFromPreferences(locale?: string) {
   }
 }
 
-function getStoredLocale(): string {
+export function getStoredLocale(): string {
   try {
     return localStorage.getItem(STORAGE_KEY) ?? "en";
   } catch {
