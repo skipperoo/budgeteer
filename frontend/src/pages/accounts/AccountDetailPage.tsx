@@ -72,6 +72,12 @@ export default function AccountDetailPage() {
 
   // --- Create transaction state ---
   const [createOpen, setCreateOpen] = useState(false);
+  // --- Rebalance state ---
+  const [rebalanceOpen, setRebalanceOpen] = useState(false);
+  const [rebalanceAmount, setRebalanceAmount] = useState("");
+  const [rebalanceNotes, setRebalanceNotes] = useState("");
+  const [rebalanceSaving, setRebalanceSaving] = useState(false);
+  const [rebalanceError, setRebalanceError] = useState("");
   const [txType, setTxType] = useState<"income" | "expense">("expense");
   const [txAmount, setTxAmount] = useState("");
   const [txCommission, setTxCommission] = useState(() => {
@@ -613,6 +619,63 @@ export default function AccountDetailPage() {
     }
   };
 
+  // --- Rebalance: create an adjustment transaction that brings the account
+  // balance to the user-specified amount. Tagged with the reserved "Rebalance"
+  // category (not a user category, no category_id).
+  const handleRebalance = async () => {
+    if (!id) return;
+    setRebalanceError("");
+    const desired = parseLocaleNumber(rebalanceAmount);
+    if (isNaN(desired) || desired < 0) {
+      setRebalanceError("Please enter a valid positive amount");
+      return;
+    }
+    const current = totalBalance;
+    const diff = desired - current;
+    if (Math.abs(diff) < 0.005) {
+      setRebalanceError("Amount matches current balance");
+      return;
+    }
+
+    setRebalanceSaving(true);
+    try {
+      const accountKeyBase64Val = accountKeyBase64;
+      if (!accountKeyBase64Val) throw new Error("Account key not available");
+
+      const time = new Date().toISOString();
+      // Signed amount: positive (income) when the balance needs to increase,
+      // negative (expense) when it needs to decrease.
+      const amount = Math.round(diff * 100) / 100;
+      const encryptedPayload = await encryptTransactionPayload(
+        {
+          amount,
+          category: "Rebalance",
+          notes: rebalanceNotes.trim(),
+          counterparty: "Rebalance",
+        },
+        accountKeyBase64Val,
+      );
+
+      await apiFetch<Transaction>(ENDPOINTS.transactions(id), {
+        method: "POST",
+        body: JSON.stringify({ time, encrypted_payload: encryptedPayload } as CreateTransactionRequest),
+      });
+
+      setRebalanceOpen(false);
+      setRebalanceAmount("");
+      setRebalanceNotes("");
+      await fetchTransactions();
+
+      // Propagate the rebalance month to the affected checkpoints.
+      const txMonth = transactionMonthEnd(time);
+      await applyCheckpointUpdateAfterTxChange(id, txMonth);
+    } catch (err: any) {
+      setRebalanceError(err.message);
+    } finally {
+      setRebalanceSaving(false);
+    }
+  };
+
   // --- Create transaction ---
   const handleCreateTransaction = async (data: TransactionFormData) => {
     if (!id) return;
@@ -1092,6 +1155,10 @@ export default function AccountDetailPage() {
           </div>
         </div>
         <div className="flex gap-2 self-start sm:self-auto shrink-0">
+          {/* Rebalance — outline button to the left of Add Transaction */}
+          <Button variant="outline" onClick={() => { setRebalanceError(""); setRebalanceAmount(""); setRebalanceNotes(""); setRebalanceOpen(true); }}>
+            Rebalance
+          </Button>
           {/* Create Transaction — using shared TransactionForm */}
           <ResponsiveDialog open={createOpen} onOpenChange={setCreateOpen} title="New Transaction" trigger={<Button>Add Transaction</Button>}>
             <TransactionForm
@@ -1105,6 +1172,44 @@ export default function AccountDetailPage() {
               saving={txCreating}
               error={txCreateError}
             />
+          </ResponsiveDialog>
+
+          {/* Rebalance Dialog */}
+          <ResponsiveDialog open={rebalanceOpen} onOpenChange={setRebalanceOpen} title="Rebalance Account">
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Set the current balance of this account. A transaction will be created (category "Rebalance")
+                that adjusts the balance to match. Current balance:{" "}
+                <span className="font-semibold text-foreground">{formatCurrency(totalBalance, account?.currency ?? "EUR", true)}</span>
+              </p>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">New Balance</label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={rebalanceAmount}
+                  onChange={(e) => setRebalanceAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Notes (optional)</label>
+                <Input
+                  value={rebalanceNotes}
+                  onChange={(e) => setRebalanceNotes(e.target.value)}
+                  placeholder="Optional notes"
+                />
+              </div>
+              {rebalanceError && <p className="text-sm text-destructive">{rebalanceError}</p>}
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setRebalanceOpen(false)}>
+                  Cancel
+                </Button>
+                <Button className="flex-1" onClick={handleRebalance} disabled={rebalanceSaving}>
+                  {rebalanceSaving ? "Rebalancing..." : "Rebalance"}
+                </Button>
+              </div>
+            </div>
           </ResponsiveDialog>
 
           {/* Edit Transaction Dialog (shared TransactionForm) */}
@@ -1123,6 +1228,7 @@ export default function AccountDetailPage() {
                 saving={editTxSaving}
                 error={editTxError}
                 submitLabel="Save"
+                lockedCategory={editTxInitialValues.category === "Rebalance" ? "Rebalance" : undefined}
               />
             )}
           </ResponsiveDialog>

@@ -51,6 +51,9 @@ interface TransactionFormProps {
   error?: string;
   /** Label for the submit button (default "Create") */
   submitLabel?: string;
+  /** Reserved category that can't be changed while editing (e.g. "Rebalance").
+   *  Hides the category selector and forces the category on submit. */
+  lockedCategory?: string;
 }
 
 export function TransactionForm({
@@ -64,17 +67,18 @@ export function TransactionForm({
   saving,
   error,
   submitLabel = "Create",
+  lockedCategory,
 }: TransactionFormProps) {
   const [type, setType] = useState<"income" | "expense">(
     initialValues?.type ?? "expense"
   );
   const [amount, setAmount] = useState(initialValues?.amount ?? "");
   const [commission, setCommission] = useState(initialValues?.commission ?? "");
+  const [category, setCategory] = useState(lockedCategory ?? initialValues?.category ?? "");
   const [interestAmount, setInterestAmount] = useState(initialValues?.interest_amount ?? "");
   const [date, setDate] = useState(
     initialValues?.date ?? new Date().toISOString().slice(0, 10)
   );
-  const [category, setCategory] = useState(initialValues?.category ?? "");
   const [counterparty, setCounterparty] = useState(
     initialValues?.counterparty ?? ""
   );
@@ -178,7 +182,7 @@ export function TransactionForm({
       commission,
       interest_amount: interestAmount,
       date,
-      category: isTransfer ? "Transfer" : category,
+      category: isTransfer ? "Transfer" : lockedCategory ?? category,
       counterparty,
       notes,
       file,
@@ -373,59 +377,69 @@ export function TransactionForm({
         </div>
       )}
 
-      {/* Category — hidden when in transfer mode */}
-      {!isTransfer && (
+      {/* Category — hidden when in transfer mode or when the category is
+          reserved (lockedCategory, e.g. Rebalance). Show a read-only label. */}
+      {lockedCategory ? (
         <div className="space-y-2">
           <label className="text-sm font-medium">Category</label>
-          {!showCategoryInput ? (
-            <div className="flex gap-2">
-              <select
-                value={category}
-                onChange={(e) => {
-                  if (e.target.value === "__new__") {
-                    setShowCategoryInput(true);
-                  } else {
-                    setCategory(e.target.value);
-                  }
-                }}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-              >
-                <option value="">Select category...</option>
-                {getCategories(type as CategoryType).map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-                <option value="__new__">+ Add new category...</option>
-              </select>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <Input
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                placeholder="New category name"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddNewCategory();
-                  }
-                }}
-              />
-              <Button type="button" size="sm" onClick={handleAddNewCategory}>
-                Add
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setShowCategoryInput(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          )}
+          <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 py-1 text-sm text-muted-foreground">
+            {lockedCategory}
+          </div>
         </div>
+      ) : (
+        !isTransfer && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Category</label>
+            {!showCategoryInput ? (
+              <div className="flex gap-2">
+                <select
+                  value={category}
+                  onChange={(e) => {
+                    if (e.target.value === "__new__") {
+                      setShowCategoryInput(true);
+                    } else {
+                      setCategory(e.target.value);
+                    }
+                  }}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                >
+                  <option value="">Select category...</option>
+                  {getCategories(type as CategoryType).map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                  <option value="__new__">+ Add new category...</option>
+                </select>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  placeholder="New category name"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddNewCategory();
+                    }
+                  }}
+                />
+                <Button type="button" size="sm" onClick={handleAddNewCategory}>
+                  Add
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowCategoryInput(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+        )
       )}
 
       {/* Counterparty */}

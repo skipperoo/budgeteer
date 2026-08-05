@@ -48,7 +48,7 @@ services:
       context: ./admin-panel
       dockerfile: Dockerfile
     ports:
-      - "5174:80"
+      - "5175:80"
     depends_on:
       - backend
     restart: unless-stopped
