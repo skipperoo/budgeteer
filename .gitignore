@@ -19,3 +19,4 @@ budgeteer-backend
 certs/
 # TypeScript incremental build cache
 *.tsbuildinfo
+scratchpad

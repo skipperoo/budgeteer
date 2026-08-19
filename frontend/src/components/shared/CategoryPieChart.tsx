@@ -145,17 +145,6 @@ export function CategoryPieChart({
               {symbol}
               {formatNumber(total)}
             </text>
-            <text
-              x="50%"
-              y="50%"
-              dy={16}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              className="fill-muted-foreground"
-              style={{ fontSize: 9, fontWeight: 500, fontFamily: "DM Sans, system-ui, sans-serif" }}
-            >
-              {type === "expense" ? "expenses" : "income"}
-            </text>
           </PieChart>
         </ResponsiveContainer>
       </div>
