@@ -78,6 +78,9 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_FROM=${SMTP_FROM:-}
       - SMTP_SSL=${SMTP_SSL:-false}
+      # External DNS for SMTP host lookups — bypasses Docker's embedded
+      # 127.0.0.11 resolver, which can get stuck after a network disruption.
+      - SMTP_DNS_SERVER=${SMTP_DNS_SERVER:-1.1.1.1}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RULES_CHECK_INTERVAL=${RULES_CHECK_INTERVAL:-10}
     ports:

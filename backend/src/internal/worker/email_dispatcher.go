@@ -83,17 +83,35 @@ func toLower(b byte) byte {
 
 // smtpDialer creates a net.Dialer with sensible timeouts for SMTP connections.
 // This mirrors the working implementation used in production for Aruba SMTP.
+//
+// When SMTP_DNS_SERVER is set (recommended in Docker), the dialer uses that
+// external resolver directly for SMTP host lookups, bypassing Docker's embedded
+// DNS (127.0.0.11) which can get stuck after a host network disruption
+// ("server misbehaving"). This only affects SMTP resolution — the rest of the
+// app keeps using Docker's internal DNS for postgres/redis.
 func smtpDialer() *net.Dialer {
-	return &net.Dialer{
+	dialer := &net.Dialer{
 		Timeout: 15 * time.Second,
-		Resolver: &net.Resolver{
-			PreferGo: true,
-			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-				d := net.Dialer{Timeout: 10 * time.Second}
-				return d.DialContext(ctx, network, address)
-			},
-		},
 	}
+	if dnsServer := config.Cfg.SMTPDNSServer; dnsServer != "" {
+		dialer.Resolver = &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				d := net.Dialer{Timeout: 10 * time.Second}
+				return d.DialContext(ctx, network, ensureDNSPort(dnsServer))
+			},
+		}
+	}
+	return dialer
+}
+
+// ensureDNSPort appends the default DNS port (53) when the configured server
+// doesn't already carry a port.
+func ensureDNSPort(server string) string {
+	if _, _, err := net.SplitHostPort(server); err == nil {
+		return server
+	}
+	return net.JoinHostPort(server, "53")
 }
 
 type EmailDispatcher struct {

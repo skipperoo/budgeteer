@@ -22,6 +22,7 @@ type Config struct {
 	SMTPPassword         string
 	SMTPFrom             string
 	SMTPUseSSL           bool
+	SMTPDNSServer        string // external DNS resolver for SMTP lookups (avoids Docker's embedded 127.0.0.11)
 	JWTSecret            string
 	JWTSecretPath        string
 	ServerEncryptionKey  string // X25519 private key (base64), from docker secret
@@ -48,6 +49,7 @@ func LoadConfig() {
 		SMTPPassword:  readSecret("smtp_password"),
 		SMTPFrom:      getenvOrDefault("SMTP_FROM", "noreply@budgeteer.app"),
 		SMTPUseSSL:    getenvOrDefault("SMTP_SSL", "false") == "true" || getenvOrDefault("SMTP_PORT", "587") == "465",
+		SMTPDNSServer: getenvOrDefault("SMTP_DNS_SERVER", ""),
 		JWTSecret:           readSecret("jwt_secret"),
 		JWTSecretPath:       "/run/secrets/jwt_secret",
 		ServerEncryptionKey: readSecret("server_encryption_key"),
